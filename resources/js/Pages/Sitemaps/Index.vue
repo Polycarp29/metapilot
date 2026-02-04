@@ -151,6 +151,41 @@
           </form>
         </div>
       </div>
+
+      <!-- Delete Confirmation Modal -->
+      <div v-if="showDeleteModal" class="fixed inset-0 z-[110] flex items-center justify-center p-6 bg-slate-900/60 backdrop-blur-md">
+        <div class="bg-white w-full max-w-md rounded-[3rem] shadow-premium p-10 relative scale-in-center overflow-hidden">
+          <div class="absolute top-0 left-0 w-full h-2 bg-red-500"></div>
+          
+          <div class="flex flex-col items-center text-center space-y-6">
+            <div class="w-20 h-20 bg-red-50 rounded-3xl flex items-center justify-center text-red-500 shadow-lg shadow-red-100/50">
+              <svg class="w-10 h-10" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+              </svg>
+            </div>
+            
+            <div>
+              <h2 class="text-2xl font-black text-slate-900 mb-2">Are you sure?</h2>
+              <p class="text-slate-500 font-medium px-4">You are about to delete <span class="text-slate-900 font-bold">"{{ sitemapToDelete?.name }}"</span>. All links within this sitemap will be permanently removed.</p>
+            </div>
+
+            <div class="flex flex-col w-full gap-3 pt-4">
+              <button 
+                @click="confirmDelete"
+                class="w-full bg-red-600 text-white py-4 rounded-2xl font-black shadow-xl shadow-red-100 hover:bg-red-700 transition-standard active:scale-95"
+              >
+                Yes, Delete It
+              </button>
+              <button 
+                @click="showDeleteModal = false"
+                class="w-full bg-slate-100 text-slate-500 py-4 rounded-2xl font-black hover:bg-slate-200 transition-standard active:scale-95"
+              >
+                No, Keep It
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
     </div>
   </AppLayout>
 </template>
@@ -165,8 +200,10 @@ const props = defineProps({
 })
 
 const showCreateModal = ref(false)
+const showDeleteModal = ref(false)
 const isEditing = ref(false)
 const editingId = ref(null)
+const sitemapToDelete = ref(null)
 
 const form = useForm({
   name: '',
@@ -205,9 +242,19 @@ const submitForm = () => {
 }
 
 const deleteSitemap = (sitemap) => {
-  if (confirm(`Are you sure you want to delete "${sitemap.name}"? All associated links will be lost.`)) {
-    router.delete(route('sitemaps.destroy', sitemap.id))
-  }
+  sitemapToDelete.value = sitemap
+  showDeleteModal.value = true
+}
+
+const confirmDelete = () => {
+  if (!sitemapToDelete.value) return
+  
+  router.delete(route('sitemaps.destroy', sitemapToDelete.value.id), {
+    onSuccess: () => {
+      showDeleteModal.value = false
+      sitemapToDelete.value = null
+    }
+  })
 }
 </script>
 

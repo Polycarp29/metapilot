@@ -234,6 +234,58 @@
         </form>
       </div>
     </div>
+
+    <!-- Confirm Delete Link Modal -->
+    <div v-if="showDeleteLinkModal" class="fixed inset-0 z-[110] flex items-center justify-center p-6 bg-slate-900/60 backdrop-blur-md">
+      <div class="bg-white w-full max-w-md rounded-[3rem] shadow-premium p-10 relative scale-in-center overflow-hidden">
+        <div class="absolute top-0 left-0 w-full h-2 bg-red-500"></div>
+        <div class="flex flex-col items-center text-center space-y-6">
+          <div class="w-20 h-20 bg-red-50 rounded-3xl flex items-center justify-center text-red-500 shadow-lg shadow-red-100/50">
+            <svg class="w-10 h-10" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+            </svg>
+          </div>
+          <div>
+            <h2 class="text-2xl font-black text-slate-900 mb-2">Remove Link?</h2>
+            <p class="text-slate-500 font-medium px-4">This will remove <span class="text-slate-900 font-bold break-all">{{ linkToDelete?.url }}</span> from the sitemap.</p>
+          </div>
+          <div class="flex flex-col w-full gap-3 pt-4">
+            <button @click="confirmDeleteLink" class="w-full bg-red-600 text-white py-4 rounded-2xl font-black shadow-xl shadow-red-100 hover:bg-red-700 transition-standard active:scale-95">
+              Confirm Removal
+            </button>
+            <button @click="showDeleteLinkModal = false" class="w-full bg-slate-100 text-slate-500 py-4 rounded-2xl font-black hover:bg-slate-200 transition-standard active:scale-95">
+              Cancel
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Confirm Delete Container Modal -->
+    <div v-if="showDeleteContainerModal" class="fixed inset-0 z-[110] flex items-center justify-center p-6 bg-slate-900/60 backdrop-blur-md">
+      <div class="bg-white w-full max-w-md rounded-[3rem] shadow-premium p-10 relative scale-in-center overflow-hidden">
+        <div class="absolute top-0 left-0 w-full h-2 bg-red-500"></div>
+        <div class="flex flex-col items-center text-center space-y-6">
+          <div class="w-20 h-20 bg-red-50 rounded-3xl flex items-center justify-center text-red-500 shadow-lg shadow-red-100/50">
+            <svg class="w-10 h-10" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+            </svg>
+          </div>
+          <div>
+            <h2 class="text-2xl font-black text-slate-900 mb-2">Delete Entire Sitemap?</h2>
+            <p class="text-slate-500 font-medium px-4">All links within <span class="text-slate-900 font-bold">"{{ sitemap.name }}"</span> will be permanently lost. This action is irreversible.</p>
+          </div>
+          <div class="flex flex-col w-full gap-3 pt-4">
+            <button @click="confirmDeleteContainer" class="w-full bg-red-600 text-white py-4 rounded-2xl font-black shadow-xl shadow-red-100 hover:bg-red-700 transition-standard active:scale-95">
+              Yes, Delete Container
+            </button>
+            <button @click="showDeleteContainerModal = false" class="w-full bg-slate-100 text-slate-500 py-4 rounded-2xl font-black hover:bg-slate-200 transition-standard active:scale-95">
+              Cancel
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
   </AppLayout>
 </template>
 
@@ -252,7 +304,10 @@ const generating = ref(false)
 const importing = ref(false)
 const selectedFile = ref(null)
 const showEditLinkModal = ref(false)
+const showDeleteLinkModal = ref(false)
+const showDeleteContainerModal = ref(false)
 const editingLinkId = ref(null)
+const linkToDelete = ref(null)
 
 const linkForm = useForm({
   url: '',
@@ -317,15 +372,31 @@ const updateLink = () => {
 }
 
 const deleteLink = (link) => {
-  if (confirm(`Remove this URL from the sitemap?\n${link.url}`)) {
-    router.delete(route('sitemaps.links.destroy', link.id))
-  }
+  linkToDelete.value = link
+  showDeleteLinkModal.value = true
+}
+
+const confirmDeleteLink = () => {
+  if (!linkToDelete.value) return
+  
+  router.delete(route('sitemaps.links.destroy', linkToDelete.value.id), {
+    onSuccess: () => {
+      showDeleteLinkModal.value = false
+      linkToDelete.value = null
+    }
+  })
 }
 
 const deleteSitemap = () => {
-  if (confirm(`Are you sure you want to delete "${props.sitemap.name}"? This action cannot be undone.`)) {
-    router.delete(route('sitemaps.destroy', props.sitemap.id))
-  }
+  showDeleteContainerModal.value = true
+}
+
+const confirmDeleteContainer = () => {
+  router.delete(route('sitemaps.destroy', props.sitemap.id), {
+    onSuccess: () => {
+      showDeleteContainerModal.value = false
+    }
+  })
 }
 
 const generateXml = () => {
