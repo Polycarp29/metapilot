@@ -15,8 +15,8 @@ return new class extends Migration
             $table->id();
             $table->foreignId('schema_id')->constrained()->onDelete('cascade');
             $table->foreignId('parent_field_id')->nullable()->constrained('schema_fields')->onDelete('cascade');
-            $table->string('field_path');
-            $table->string('field_type');
+            $table->string('field_path')->nullable();
+            $table->string('field_type')->nullable();
             $table->text('field_value')->nullable();
             $table->json('field_config')->nullable();
             $table->integer('sort_order')->default(0);
