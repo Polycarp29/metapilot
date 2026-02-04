@@ -1,0 +1,172 @@
+<template>
+  <AppLayout title="Sitemap Dashboard">
+    <div class="max-w-7xl mx-auto space-y-10 pb-20">
+      <!-- Header Section -->
+      <div class="flex flex-col md:flex-row justify-between items-start md:items-center gap-6">
+        <div>
+          <h1 class="text-4xl font-black text-slate-900 tracking-tight">Sitemap Intelligence</h1>
+          <p class="text-slate-500 font-medium mt-2 text-lg">Manage, generate, and optimize your XML sitemaps for maximum indexing.</p>
+        </div>
+        <button 
+          @click="showCreateModal = true"
+          class="bg-blue-600 hover:bg-blue-500 text-white px-8 py-4 rounded-2xl font-black transition-standard shadow-xl shadow-blue-100 flex items-center gap-3 active:scale-95"
+        >
+          <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
+          </svg>
+          New Sitemap
+        </button>
+      </div>
+
+      <!-- Sitemap Grid -->
+      <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+        <div 
+          v-for="sitemap in sitemaps" 
+          :key="sitemap.id"
+          class="group bg-white rounded-[2.5rem] border border-slate-100 p-8 shadow-premium hover:shadow-2xl transition-all duration-500 relative overflow-hidden"
+        >
+          <div class="absolute top-0 right-0 p-6 opacity-5 group-hover:opacity-10 transition-opacity">
+            <svg class="w-24 h-24" fill="currentColor" viewBox="0 0 24 24">
+              <path d="M12 2L4.5 20.29l.71.71L12 18l6.79 3 .71-.71z" />
+            </svg>
+          </div>
+
+          <div class="relative z-10 flex flex-col h-full">
+            <div class="flex justify-between items-start mb-6">
+              <div :class="sitemap.is_index ? 'bg-indigo-500' : 'bg-blue-600'" class="w-14 h-14 rounded-2xl flex items-center justify-center text-white shadow-lg shadow-blue-100">
+                <svg v-if="sitemap.is_index" class="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16m-7 6h7" />
+                </svg>
+                <svg v-else class="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101" />
+                </svg>
+              </div>
+              <span v-if="sitemap.is_index" class="bg-indigo-50 text-indigo-600 px-4 py-1.5 rounded-full text-[10px] font-black uppercase tracking-widest">Master Index</span>
+            </div>
+
+            <h3 class="text-2xl font-black text-slate-900 group-hover:text-blue-600 transition-colors mb-2">{{ sitemap.name }}</h3>
+            <code class="text-xs font-mono text-slate-400 mb-6 block">/{{ sitemap.filename }}</code>
+
+            <div class="grid grid-cols-2 gap-4 mt-auto border-t border-slate-50 pt-6">
+              <div>
+                <span class="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-1">Total Links</span>
+                <span class="text-xl font-bold text-slate-900">{{ sitemap.links_count }}</span>
+              </div>
+              <div>
+                <span class="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-1">Last Build</span>
+                <span class="text-xs font-medium text-slate-500">{{ sitemap.last_generated_at ? new Date(sitemap.last_generated_at).toLocaleDateString() : 'Never' }}</span>
+              </div>
+            </div>
+
+            <Link 
+              :href="route('sitemaps.show', sitemap.id)"
+              class="mt-8 bg-slate-900 text-white w-full py-4 rounded-2xl font-bold text-center group-hover:bg-blue-600 transition-standard active:scale-95"
+            >
+              Manage Sitemap
+            </Link>
+          </div>
+        </div>
+      </div>
+
+      <!-- Empty State -->
+      <div v-if="sitemaps.length === 0" class="text-center py-32 bg-slate-50 rounded-[4rem] border-4 border-dashed border-slate-200">
+         <div class="w-24 h-24 bg-white rounded-3xl shadow-xl flex items-center justify-center mx-auto mb-8 text-slate-300">
+           <svg class="w-12 h-12" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7l5-2.5 5.553 2.776a1 1 0 01.447.894v10.764a1 1 0 01-1.447.894L15 17l-6 3z" />
+           </svg>
+         </div>
+         <h2 class="text-3xl font-black text-slate-900 tracking-tight mb-4">No sitemaps generated yet</h2>
+         <p class="text-slate-500 font-medium max-w-sm mx-auto mb-10 leading-relaxed">Create your first sitemap container to start importing links and building your XML structure.</p>
+         <button 
+           @click="showCreateModal = true"
+           class="bg-blue-600 text-white px-10 py-5 rounded-[2rem] font-black shadow-2xl shadow-blue-200 hover:scale-105 active:scale-95 transition-standard"
+         >
+           Initialize First Sitemap
+         </button>
+      </div>
+
+      <!-- Create Modal -->
+      <div v-if="showCreateModal" class="fixed inset-0 z-[100] flex items-center justify-center p-6 bg-slate-900/60 backdrop-blur-md">
+        <div class="bg-white w-full max-w-xl rounded-[3rem] shadow-premium p-12 relative">
+          <button @click="showCreateModal = false" class="absolute top-10 right-10 text-slate-300 hover:text-slate-900">
+            <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </button>
+          
+          <h2 class="text-3xl font-black text-slate-900 mb-8 tracking-tight">Init Sitemap</h2>
+          
+          <form @submit.prevent="createSitemap" class="space-y-8">
+            <div class="space-y-3">
+              <label class="block text-[10px] font-black text-slate-400 uppercase tracking-widest ml-4">Internal Label</label>
+              <input v-model="form.name" type="text" placeholder="e.g., SEO Game Pages" class="w-full px-8 py-4 rounded-2xl bg-slate-50 border-transparent focus:bg-white focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 transition-standard font-bold" required />
+            </div>
+
+            <div class="space-y-3">
+              <label class="block text-[10px] font-black text-slate-400 uppercase tracking-widest ml-4">XML Filename</label>
+              <div class="relative">
+                <input v-model="form.filename" type="text" placeholder="sitemap-pages.xml" class="w-full px-8 py-4 rounded-2xl bg-slate-50 border-transparent focus:bg-white focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 transition-standard font-bold" required />
+              </div>
+            </div>
+
+            <div 
+              @click="form.is_index = !form.is_index"
+              class="flex items-center gap-6 p-6 rounded-2xl border-2 cursor-pointer transition-standard"
+              :class="form.is_index ? 'bg-indigo-50 border-indigo-200 shadow-sm' : 'bg-white border-slate-100'"
+            >
+              <div :class="form.is_index ? 'bg-indigo-500 text-white' : 'bg-slate-100 text-slate-400'" class="w-12 h-12 rounded-xl flex items-center justify-center transition-standard shadow-lg">
+                <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16m-7 6h7" />
+                </svg>
+              </div>
+              <div>
+                <p class="font-black text-slate-900 text-sm">Sitemap Index File</p>
+                <p class="text-xs text-slate-500 font-medium">Link other sitemaps to this master file.</p>
+              </div>
+            </div>
+
+            <button :disabled="form.processing" type="submit" class="w-full bg-blue-600 text-white py-5 rounded-[2rem] font-black text-lg shadow-xl shadow-blue-100 hover:scale-105 active:scale-95 transition-standard mt-4">
+              Create Container
+            </button>
+          </form>
+        </div>
+      </div>
+    </div>
+  </AppLayout>
+</template>
+
+<script setup>
+import { ref } from 'vue'
+import { Link, useForm } from '@inertiajs/vue3'
+import AppLayout from '../../Layouts/AppLayout.vue'
+
+const props = defineProps({
+  sitemaps: Array
+})
+
+const showCreateModal = ref(false)
+
+const form = useForm({
+  name: '',
+  filename: '',
+  is_index: false
+})
+
+const createSitemap = () => {
+  form.post(route('sitemaps.store'), {
+    onSuccess: () => {
+      showCreateModal.value = false
+      form.reset()
+    }
+  })
+}
+</script>
+
+<style scoped>
+.transition-standard {
+  transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+}
+.shadow-premium {
+  box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.05);
+}
+</style>
