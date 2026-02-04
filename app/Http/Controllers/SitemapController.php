@@ -37,6 +37,31 @@ class SitemapController extends Controller
             ->with('message', 'Sitemap container created!');
     }
 
+    public function update(Request $request, Sitemap $sitemap)
+    {
+        $validated = $request->validate([
+            'name' => 'required|string|max:255',
+            'filename' => 'required|string|max:255|unique:sitemaps,filename,' . $sitemap->id,
+            'is_index' => 'boolean'
+        ]);
+
+        if (!str_ends_with($validated['filename'], '.xml')) {
+            $validated['filename'] .= '.xml';
+        }
+
+        $sitemap->update($validated);
+
+        return back()->with('message', 'Sitemap updated!');
+    }
+
+    public function destroy(Sitemap $sitemap)
+    {
+        $sitemap->links()->delete();
+        $sitemap->delete();
+
+        return redirect()->route('sitemaps.index')->with('message', 'Sitemap deleted!');
+    }
+
     public function show(Sitemap $sitemap)
     {
         // Basic duplicate detection for the view
@@ -59,32 +84,82 @@ class SitemapController extends Controller
         ]);
 
         $file = $request->file('file');
-        $handle = fopen($file->getRealPath(), 'r');
+        $extension = $file->getClientOriginalExtension();
+        $content = file_get_contents($file->getRealPath());
         
+        // Strip BOM if present
+        $content = preg_replace('/^[\xEF\xBB\xBF\xFE\xFF\xFF\xFE]*/', '', $content);
+        
+        $urls = [];
+
+        if ($extension === 'xml' || str_contains($content, '<?xml') || str_contains($content, '<urlset')) {
+            try {
+                $xml = simplexml_load_string($content);
+                if ($xml) {
+                    // Handle standard sitemap
+                    if ($xml->url) {
+                        foreach ($xml->url as $urlNode) {
+                            if (isset($urlNode->loc)) {
+                                $urls[] = (string)$urlNode->loc;
+                            }
+                        }
+                    } 
+                    // Handle sitemap index
+                    elseif ($xml->sitemap) {
+                        foreach ($xml->sitemap as $sitemapNode) {
+                            if (isset($sitemapNode->loc)) {
+                                $urls[] = (string)$sitemapNode->loc;
+                            }
+                        }
+                    }
+                }
+            } catch (\Exception $e) {
+                // Fallback to regex if XML parsing fails
+                preg_match_all('/<loc>(.*?)<\/loc>/', $content, $matches);
+                $urls = array_merge($urls, $matches[1] ?? []);
+            }
+        } else {
+            // Treat as CSV or TXT - split by common delimiters and newlines
+            $lines = preg_split('/\r\n|\r|\n/', $content);
+            foreach ($lines as $line) {
+                // Try to get first column if CSV
+                $parts = str_getcsv($line);
+                $url = trim($parts[0] ?? '');
+                
+                if ($url) {
+                    $urls[] = $url;
+                }
+            }
+        }
+
         $imported = 0;
-        $row = 0;
-        while (($data = fgetcsv($handle)) !== false) {
-            $row++;
-            $url = trim($data[0] ?? '');
+        foreach (array_unique($urls) as $url) {
+            $url = trim($url);
             
-            // Skip header or invalid URLs
-            if (empty($url) || !filter_var($url, FILTER_VALIDATE_URL) || strtolower($url) === 'url') {
+            // Skip empty or common header names
+            if (empty($url) || in_array(strtolower($url), ['url', 'loc', 'location'])) {
                 continue;
             }
 
-            SitemapLink::updateOrCreate([
-                'sitemap_id' => $sitemap->id,
-                'url' => $url
-            ], [
-                'lastmod' => now()->format('Y-m-d'),
-                'changefreq' => 'daily',
-                'priority' => 0.7
-            ]);
-            $imported++;
-        }
-        fclose($handle);
+            // Basic protocol check/fix - if it looks like a domain but lacks protocol
+            if (!preg_match('/^https?:\/\//', $url) && preg_match('/^[a-z0-9][a-z0-9-]*(\.[a-z0-9][a-z0-9-]*)+/i', $url)) {
+                $url = 'https://' . $url;
+            }
 
-        return back()->with('message', "Successfully synced $imported links!");
+            if (filter_var($url, FILTER_VALIDATE_URL)) {
+                SitemapLink::updateOrCreate([
+                    'sitemap_id' => $sitemap->id,
+                    'url' => $url
+                ], [
+                    'lastmod' => now()->format('Y-m-d'),
+                    'changefreq' => 'daily',
+                    'priority' => 0.7
+                ]);
+                $imported++;
+            }
+        }
+
+        return back()->with('message', "Successfully imported $imported unique links!");
     }
 
     public function addLink(Request $request, Sitemap $sitemap)
@@ -98,6 +173,26 @@ class SitemapController extends Controller
         SitemapLink::create(array_merge($validated, ['sitemap_id' => $sitemap->id]));
 
         return back()->with('message', 'Link added to sitemap!');
+    }
+
+    public function updateLink(Request $request, SitemapLink $link)
+    {
+        $validated = $request->validate([
+            'url' => 'required|url',
+            'priority' => 'numeric|min:0|max:1',
+            'changefreq' => 'string'
+        ]);
+
+        $link->update($validated);
+
+        return back()->with('message', 'Link updated!');
+    }
+
+    public function destroyLink(SitemapLink $link)
+    {
+        $link->delete();
+
+        return back()->with('message', 'Link removed!');
     }
 
     public function generate(Sitemap $sitemap)

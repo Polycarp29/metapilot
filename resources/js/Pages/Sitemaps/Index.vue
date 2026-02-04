@@ -41,7 +41,27 @@
                   <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101" />
                 </svg>
               </div>
-              <span v-if="sitemap.is_index" class="bg-indigo-50 text-indigo-600 px-4 py-1.5 rounded-full text-[10px] font-black uppercase tracking-widest">Master Index</span>
+              <div class="flex items-center gap-2">
+                <button 
+                  @click="editSitemap(sitemap)"
+                  class="p-2 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-xl transition-standard"
+                  title="Edit Sitemap"
+                >
+                  <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                  </svg>
+                </button>
+                <button 
+                  @click="deleteSitemap(sitemap)"
+                  class="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-xl transition-standard"
+                  title="Delete Sitemap"
+                >
+                  <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                  </svg>
+                </button>
+                <span v-if="sitemap.is_index" class="bg-indigo-50 text-indigo-600 px-4 py-1.5 rounded-full text-[10px] font-black uppercase tracking-widest">Master Index</span>
+              </div>
             </div>
 
             <h3 class="text-2xl font-black text-slate-900 group-hover:text-blue-600 transition-colors mb-2">{{ sitemap.name }}</h3>
@@ -87,16 +107,16 @@
 
       <!-- Create Modal -->
       <div v-if="showCreateModal" class="fixed inset-0 z-[100] flex items-center justify-center p-6 bg-slate-900/60 backdrop-blur-md">
-        <div class="bg-white w-full max-w-xl rounded-[3rem] shadow-premium p-12 relative">
-          <button @click="showCreateModal = false" class="absolute top-10 right-10 text-slate-300 hover:text-slate-900">
+        <div class="bg-white w-full max-w-xl rounded-[3rem] shadow-premium p-12 relative scale-in-center">
+          <button @click="closeModal" class="absolute top-10 right-10 text-slate-300 hover:text-slate-900 transition-colors">
             <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
             </svg>
           </button>
           
-          <h2 class="text-3xl font-black text-slate-900 mb-8 tracking-tight">Init Sitemap</h2>
+          <h2 class="text-3xl font-black text-slate-900 mb-8 tracking-tight">{{ isEditing ? 'Edit Sitemap' : 'Init Sitemap' }}</h2>
           
-          <form @submit.prevent="createSitemap" class="space-y-8">
+          <form @submit.prevent="submitForm" class="space-y-8">
             <div class="space-y-3">
               <label class="block text-[10px] font-black text-slate-400 uppercase tracking-widest ml-4">Internal Label</label>
               <input v-model="form.name" type="text" placeholder="e.g., SEO Game Pages" class="w-full px-8 py-4 rounded-2xl bg-slate-50 border-transparent focus:bg-white focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 transition-standard font-bold" required />
@@ -126,7 +146,7 @@
             </div>
 
             <button :disabled="form.processing" type="submit" class="w-full bg-blue-600 text-white py-5 rounded-[2rem] font-black text-lg shadow-xl shadow-blue-100 hover:scale-105 active:scale-95 transition-standard mt-4">
-              Create Container
+              {{ isEditing ? 'Save Changes' : 'Create Container' }}
             </button>
           </form>
         </div>
@@ -137,7 +157,7 @@
 
 <script setup>
 import { ref } from 'vue'
-import { Link, useForm } from '@inertiajs/vue3'
+import { Link, useForm, router } from '@inertiajs/vue3'
 import AppLayout from '../../Layouts/AppLayout.vue'
 
 const props = defineProps({
@@ -145,6 +165,8 @@ const props = defineProps({
 })
 
 const showCreateModal = ref(false)
+const isEditing = ref(false)
+const editingId = ref(null)
 
 const form = useForm({
   name: '',
@@ -152,13 +174,40 @@ const form = useForm({
   is_index: false
 })
 
-const createSitemap = () => {
-  form.post(route('sitemaps.store'), {
-    onSuccess: () => {
-      showCreateModal.value = false
-      form.reset()
-    }
-  })
+const editSitemap = (sitemap) => {
+  isEditing.value = true
+  editingId.value = sitemap.id
+  form.name = sitemap.name
+  form.filename = sitemap.filename
+  form.is_index = !!sitemap.is_index
+  showCreateModal.value = true
+}
+
+const closeModal = () => {
+  showCreateModal.value = false
+  setTimeout(() => {
+    isEditing.value = false
+    editingId.value = null
+    form.reset()
+  }, 400)
+}
+
+const submitForm = () => {
+  if (isEditing.value) {
+    form.put(route('sitemaps.update', editingId.value), {
+      onSuccess: () => closeModal()
+    })
+  } else {
+    form.post(route('sitemaps.store'), {
+      onSuccess: () => closeModal()
+    })
+  }
+}
+
+const deleteSitemap = (sitemap) => {
+  if (confirm(`Are you sure you want to delete "${sitemap.name}"? All associated links will be lost.`)) {
+    router.delete(route('sitemaps.destroy', sitemap.id))
+  }
 }
 </script>
 
@@ -168,5 +217,12 @@ const createSitemap = () => {
 }
 .shadow-premium {
   box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.05);
+}
+.scale-in-center {
+  animation: scale-in-center 0.4s cubic-bezier(0.250, 0.460, 0.450, 0.940) both;
+}
+@keyframes scale-in-center {
+  0% { transform: scale(0.9); opacity: 0; }
+  100% { transform: scale(1); opacity: 1; }
 }
 </style>

@@ -17,6 +17,15 @@
         
         <div class="flex items-center gap-4 w-full md:w-auto">
           <button 
+            @click="deleteSitemap"
+            class="flex-grow md:flex-grow-0 group flex items-center justify-center gap-3 bg-red-50 hover:bg-red-100 text-red-600 px-8 py-4 rounded-2xl font-black transition-standard active:scale-95 border border-red-100"
+          >
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+            </svg>
+            Delete Container
+          </button>
+          <button 
             @click="generateXml"
             :disabled="generating"
             class="flex-grow md:flex-grow-0 group flex items-center justify-center gap-3 bg-slate-900 hover:bg-slate-800 text-white px-8 py-4 rounded-2xl font-black transition-standard active:scale-95"
@@ -139,7 +148,27 @@
                         </div>
                      </td>
                      <td class="px-8 py-5 text-right">
-                       <span class="text-xs font-semibold text-slate-400">{{ new Date(link.created_at).toLocaleDateString() }}</span>
+                       <div class="flex items-center justify-end gap-2">
+                         <button 
+                           @click="editLink(link)"
+                           class="p-2 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-xl transition-standard"
+                           title="Edit Link"
+                         >
+                           <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                           </svg>
+                         </button>
+                         <button 
+                           @click="deleteLink(link)"
+                           class="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-xl transition-standard"
+                           title="Remove Link"
+                         >
+                           <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                           </svg>
+                         </button>
+                         <span class="text-[10px] font-bold text-slate-400 ml-2">{{ new Date(link.created_at).toLocaleDateString() }}</span>
+                       </div>
                      </td>
                    </tr>
                  </tbody>
@@ -166,6 +195,45 @@
         </div>
       </div>
     </div>
+
+    <!-- Edit Link Modal -->
+    <div v-if="showEditLinkModal" class="fixed inset-0 z-[100] flex items-center justify-center p-6 bg-slate-900/60 backdrop-blur-md">
+      <div class="bg-white w-full max-w-xl rounded-[3rem] shadow-premium p-12 relative scale-in-center">
+        <button @click="closeEditModal" class="absolute top-10 right-10 text-slate-300 hover:text-slate-900 transition-colors">
+          <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+          </svg>
+        </button>
+        
+        <h2 class="text-3xl font-black text-slate-900 mb-8 tracking-tight">Edit Link</h2>
+        
+        <form @submit.prevent="updateLink" class="space-y-8">
+          <div class="space-y-3">
+            <label class="block text-[10px] font-black text-slate-400 uppercase tracking-widest ml-4">URL</label>
+            <input v-model="editLinkForm.url" type="url" placeholder="https://..." class="w-full px-8 py-4 rounded-2xl bg-slate-50 border-transparent focus:bg-white focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 transition-standard font-bold" required />
+          </div>
+
+          <div class="grid grid-cols-2 gap-6">
+            <div class="space-y-3">
+              <label class="block text-[10px] font-black text-slate-400 uppercase tracking-widest ml-4">Change Frequency</label>
+              <select v-model="editLinkForm.changefreq" class="w-full px-8 py-4 rounded-2xl bg-slate-50 border-transparent focus:bg-white focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 transition-standard font-bold appearance-none">
+                <option value="daily">Daily</option>
+                <option value="weekly">Weekly</option>
+                <option value="monthly">Monthly</option>
+              </select>
+            </div>
+            <div class="space-y-3">
+              <label class="block text-[10px] font-black text-slate-400 uppercase tracking-widest ml-4">Priority</label>
+              <input v-model="editLinkForm.priority" type="number" step="0.1" min="0" max="1" class="w-full px-8 py-4 rounded-2xl bg-slate-50 border-transparent focus:bg-white focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 transition-standard font-bold" />
+            </div>
+          </div>
+
+          <button :disabled="editLinkForm.processing" type="submit" class="w-full bg-blue-600 text-white py-5 rounded-[2rem] font-black text-lg shadow-xl shadow-blue-100 hover:scale-105 active:scale-95 transition-standard mt-4">
+            Save Link
+          </button>
+        </form>
+      </div>
+    </div>
   </AppLayout>
 </template>
 
@@ -183,8 +251,16 @@ const props = defineProps({
 const generating = ref(false)
 const importing = ref(false)
 const selectedFile = ref(null)
+const showEditLinkModal = ref(false)
+const editingLinkId = ref(null)
 
 const linkForm = useForm({
+  url: '',
+  changefreq: 'daily',
+  priority: 0.7
+})
+
+const editLinkForm = useForm({
   url: '',
   changefreq: 'daily',
   priority: 0.7
@@ -218,6 +294,40 @@ const addSingleLink = () => {
   })
 }
 
+const editLink = (link) => {
+  editingLinkId.value = link.id
+  editLinkForm.url = link.url
+  editLinkForm.changefreq = link.changefreq
+  editLinkForm.priority = link.priority
+  showEditLinkModal.value = true
+}
+
+const closeEditModal = () => {
+  showEditLinkModal.value = false
+  setTimeout(() => {
+    editingLinkId.value = null
+    editLinkForm.reset()
+  }, 400)
+}
+
+const updateLink = () => {
+  editLinkForm.put(route('sitemaps.links.update', editingLinkId.value), {
+    onSuccess: () => closeEditModal()
+  })
+}
+
+const deleteLink = (link) => {
+  if (confirm(`Remove this URL from the sitemap?\n${link.url}`)) {
+    router.delete(route('sitemaps.links.destroy', link.id))
+  }
+}
+
+const deleteSitemap = () => {
+  if (confirm(`Are you sure you want to delete "${props.sitemap.name}"? This action cannot be undone.`)) {
+    router.delete(route('sitemaps.destroy', props.sitemap.id))
+  }
+}
+
 const generateXml = () => {
   window.location.href = route('sitemaps.generate', props.sitemap.id)
 }
@@ -229,5 +339,12 @@ const generateXml = () => {
 }
 .shadow-premium {
   box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.05);
+}
+.scale-in-center {
+  animation: scale-in-center 0.4s cubic-bezier(0.250, 0.460, 0.450, 0.940) both;
+}
+@keyframes scale-in-center {
+  0% { transform: scale(0.9); opacity: 0; }
+  100% { transform: scale(1); opacity: 1; }
 }
 </style>
