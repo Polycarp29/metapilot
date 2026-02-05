@@ -1,7 +1,7 @@
 @php
     // Get title with fallback - prioritizes admin-configured SEO
     $seoService = app(\App\Services\Admin\SEOService::class);
-    $pageTitle = $seoService->getTitle($title ?? 'VervioDesk');
+    $pageTitle = $seoService->getTitle($title ?? 'Metapilot – The All-in-One SEO, Schema, and GEO Optimization Platform');
 @endphp
 
 {{-- Basic Meta Tags --}}
