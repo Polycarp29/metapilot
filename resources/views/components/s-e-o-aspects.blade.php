@@ -1,6 +1,6 @@
 @php
     // Get title with fallback - prioritizes admin-configured SEO
-    $seoService = app(\App\Services\SEOService::class);
+    $seoService = app(\App\Services\Admin\SEOService::class);
     $pageTitle = $seoService->getTitle($title ?? 'VervioDesk');
 @endphp
 
