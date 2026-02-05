@@ -18,7 +18,7 @@
     <link rel="icon" type="{{ $seoService->getFaviconType() }}" href="{{ $seoService->getFaviconUrl() }}">
 @else
     {{-- Default favicon --}}
-    <link rel="icon" type="image/x-icon" href="{{ asset('assets/Assets/favicon.png') }}">
+    <link rel="icon" type="image/x-icon" href="{{ asset('assets/default.jpg') }}">
 @endif
 
 {{-- Canonical URL --}}
