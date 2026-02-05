@@ -19,9 +19,7 @@ class SEOAspects extends Component
 
 
 
-    public function getSEOAspects(){
-        $seoAspects = SEOConfigurations::where('is_active', true)->get();
-    }
+   
 
     /**
      * Get the view / contents that represent the component.
