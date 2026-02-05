@@ -3,8 +3,9 @@
 namespace App\View\Components;
 
 use Closure;
-use Illuminate\Contracts\View\View;
 use Illuminate\View\Component;
+use Illuminate\Contracts\View\View;
+use App\Models\Admin\Settings\SEOConfigurations;
 
 class SEOAspects extends Component
 {
@@ -14,6 +15,12 @@ class SEOAspects extends Component
     public function __construct()
     {
         //
+    }
+
+
+
+    public function getSEOAspects(){
+        $seoAspects = SEOConfigurations::where('is_active', true)->get();
     }
 
     /**
