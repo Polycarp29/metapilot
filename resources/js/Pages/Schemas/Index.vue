@@ -84,8 +84,13 @@
           <tbody class="divide-y divide-slate-100">
             <tr v-for="schema in schemas.data" :key="schema.id" class="group hover:bg-slate-50/30 transition-standard">
               <td class="px-8 py-7">
-                <div class="font-bold text-slate-900 text-lg tracking-tight">{{ schema.name }}</div>
-                <div class="text-xs text-slate-400 mt-1 font-mono uppercase">{{ schema.schema_id }}</div>
+                <div class="flex items-center gap-2 mb-1">
+                  <div class="font-bold text-slate-900 text-lg tracking-tight">{{ schema.name }}</div>
+                  <span v-if="schema.container" class="px-2 py-0.5 rounded-md bg-slate-100 text-slate-500 text-[10px] font-black uppercase tracking-tight" :title="schema.container.identifier">
+                    Part of Container
+                  </span>
+                </div>
+                <div class="text-xs text-slate-400 font-mono uppercase">{{ schema.schema_id }}</div>
               </td>
               <td class="px-8 py-7">
                 <span class="inline-flex items-center px-4 py-1.5 rounded-xl bg-blue-50 text-blue-700 text-xs font-bold ring-1 ring-blue-100">

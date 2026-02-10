@@ -17,7 +17,7 @@ class SchemaController extends Controller
 {
     public function index(Request $request)
     {
-        $schemas = Schema::with('schemaType')
+        $schemas = Schema::with(['schemaType', 'container'])
             ->when($request->search, function ($query, $search) {
                 return $query->where('name', 'like', "%{$search}%")
                     ->orWhereHas('schemaType', function ($q) use ($search) {
@@ -55,7 +55,18 @@ class SchemaController extends Controller
 
     public function store(StoreSchemaRequest $request)
     {
-        $schema = Schema::create($request->validated());
+        $data = $request->validated();
+
+        // 1. Manage Container
+        if (!empty($data['schema_id'])) {
+            $container = SchemaContainer::firstOrCreate(
+                ['identifier' => $data['schema_id']],
+                ['name' => $data['name']]
+            );
+            $data['schema_container_id'] = $container->id;
+        }
+
+        $schema = Schema::create($data);
 
         // Pre-populate fields from the schema type templates
         if ($schema->schemaType && !empty($schema->schemaType->required_fields)) {
@@ -409,17 +420,23 @@ class SchemaController extends Controller
         }
 
         $pageLink = rtrim($validated['page_link'], '/');
-        $pageLinkWithSlash = $pageLink . '/';
+        
+        DB::transaction(function () use ($pageLink, $primaryTypeId, $validated, $fields) {
+            // 1. Find or Create Container
+            $container = SchemaContainer::firstOrCreate(
+                ['identifier' => $pageLink],
+                ['name' => $validated['brand_name'] ?? $validated['name']]
+            );
 
-        DB::transaction(function () use ($pageLink, $pageLinkWithSlash, $primaryTypeId, $validated, $fields) {
+            // 2. Find or Create the primary Schema record inside this container
             $schema = Schema::withTrashed()
-                ->whereIn('schema_id', [$pageLink, $pageLinkWithSlash])
+                ->where('schema_container_id', $container->id)
+                ->where('schema_type_id', $primaryTypeId)
                 ->first();
 
             if ($schema) {
                 $schema->update([
                     'schema_id' => $pageLink,
-                    'schema_type_id' => $primaryTypeId,
                     'name' => $validated['name'],
                     'url' => $validated['page_link'],
                     'is_active' => true
@@ -429,6 +446,7 @@ class SchemaController extends Controller
                 }
             } else {
                 $schema = Schema::create([
+                    'schema_container_id' => $container->id,
                     'schema_id' => $pageLink,
                     'schema_type_id' => $primaryTypeId,
                     'name' => $validated['name'],
@@ -437,7 +455,7 @@ class SchemaController extends Controller
                 ]);
             }
 
-            // Clean existing and create new in one go
+            // 3. Clean existing and create new fields for THIS schema
             $schema->fields()->delete();
             $this->createFieldsFromData($schema->id, null, $fields);
             

@@ -10,7 +10,7 @@ class Schema extends Model
 {
     use SoftDeletes;
 
-    protected $fillable = ['schema_type_id', 'name', 'schema_id', 'url', 'is_active', 'published_at'];
+    protected $fillable = ['schema_type_id', 'schema_container_id', 'name', 'schema_id', 'url', 'is_active', 'published_at'];
 
     protected $casts = [
         'is_active' => 'boolean',
@@ -20,6 +20,11 @@ class Schema extends Model
     public function schemaType()
     {
         return $this->belongsTo(SchemaType::class);
+    }
+
+    public function container()
+    {
+        return $this->belongsTo(SchemaContainer::class, 'schema_container_id');
     }
 
     public function fields()
