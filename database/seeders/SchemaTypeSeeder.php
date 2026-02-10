@@ -16,12 +16,10 @@ class SchemaTypeSeeder extends Seeder
             [
                 'name' => 'Product',
                 'type_key' => 'product',
-                'description' => 'Product schema for sports betting and gaming products',
+                'description' => 'Comprehensive product schema for e-commerce, digital goods, and marketplaces',
                 'required_fields' => json_encode([
                     'name' => 'Required',
-                    'offers' => 'Required (one of: offers, review, or aggregateRating)',
-                    'review' => 'Alternative to offers',
-                    'aggregateRating' => 'Alternative to offers',
+                    'offers' => 'Required (offers, review, or aggregateRating)',
                     'image' => 'Recommended',
                     'description' => 'Recommended',
                     'brand' => 'Recommended'
@@ -30,12 +28,9 @@ class SchemaTypeSeeder extends Seeder
             [
                 'name' => 'VideoGame',
                 'type_key' => 'videogame',
-                'description' => 'For specific games like Aviator, slots, and other video games',
+                'description' => 'Detailed schema for software applications and digital games',
                 'required_fields' => json_encode([
                     'name' => 'Required',
-                    'offers' => 'Required (one of: offers, review, or aggregateRating)',
-                    'review' => 'Alternative to offers',
-                    'aggregateRating' => 'Alternative to offers',
                     'applicationCategory' => 'Recommended',
                     'operatingSystem' => 'Recommended',
                     'publisher' => 'Recommended'
@@ -44,22 +39,18 @@ class SchemaTypeSeeder extends Seeder
             [
                 'name' => 'Game',
                 'type_key' => 'game',
-                'description' => 'For general games and casino games',
+                'description' => 'General gaming and recreational activity schema',
                 'required_fields' => json_encode([
                     'name' => 'Required',
-                    'numberOfPlayers' => 'Recommended',
-                    'gameItem' => 'Recommended'
+                    'numberOfPlayers' => 'Recommended'
                 ])
             ],
             [
                 'name' => 'Service',
                 'type_key' => 'service',
-                'description' => 'For betting and gaming services',
+                'description' => 'Professional service offerings and consulting schemas',
                 'required_fields' => json_encode([
                     'name' => 'Required',
-                    'offers' => 'Required (one of: offers, review, or aggregateRating)',
-                    'review' => 'Alternative to offers',
-                    'aggregateRating' => 'Alternative to offers',
                     'provider' => 'Recommended',
                     'areaServed' => 'Recommended'
                 ])
@@ -67,56 +58,77 @@ class SchemaTypeSeeder extends Seeder
             [
                 'name' => 'HowTo',
                 'type_key' => 'howto',
-                'description' => 'Step-by-step instructions for withdrawals, deposits, etc.',
+                'description' => 'Step-by-step documentation and guide instructions',
                 'required_fields' => json_encode([
                     'name' => 'Required',
                     'step' => 'Required (array of HowToStep objects)',
-                    'description' => 'Recommended',
-                    'image' => 'Recommended',
-                    'totalTime' => 'Recommended'
+                    'description' => 'Recommended'
                 ])
             ],
             [
                 'name' => 'FAQPage',
                 'type_key' => 'faq',
-                'description' => 'Frequently Asked Questions pages',
+                'description' => 'Organized list of frequently asked questions and answers',
                 'required_fields' => json_encode([
-                    'mainEntity' => 'Required (array of Question objects with acceptedAnswer)'
+                    'mainEntity' => 'Required (array of Questions)'
                 ])
             ],
             [
                 'name' => 'Organization',
                 'type_key' => 'organization',
-                'description' => 'Organization details and contact information',
+                'description' => 'Primary corporate and brand identity information',
                 'required_fields' => json_encode([
                     'name' => 'Required',
                     'url' => 'Recommended',
-                    'logo' => 'Recommended',
-                    'contactPoint' => 'Recommended',
-                    'address' => 'Recommended'
+                    'logo' => 'Recommended'
                 ])
             ],
             [
                 'name' => 'LocalBusiness',
                 'type_key' => 'localbusiness',
-                'description' => 'Local business information',
+                'description' => 'Physical store and regional business location details',
                 'required_fields' => json_encode([
                     'name' => 'Required',
                     'address' => 'Required',
-                    'telephone' => 'Recommended',
-                    'openingHours' => 'Recommended',
-                    'priceRange' => 'Recommended'
+                    'telephone' => 'Recommended'
                 ])
             ],
             [
                 'name' => 'WebSite',
                 'type_key' => 'website',
-                'description' => 'Website and homepage information',
+                'description' => 'High-level website structure and sitewide search info',
                 'required_fields' => json_encode([
                     'name' => 'Required',
-                    'url' => 'Required',
-                    'description' => 'Recommended',
-                    'publisher' => 'Recommended'
+                    'url' => 'Required'
+                ])
+            ],
+            [
+                'name' => 'Article',
+                'type_key' => 'article',
+                'description' => 'Blog posts, news reports, and detailed content marketing entries',
+                'required_fields' => json_encode([
+                    'headline' => 'Required',
+                    'author' => 'Required',
+                    'datePublished' => 'Required',
+                    'image' => 'Recommended'
+                ])
+            ],
+            [
+                'name' => 'BreadcrumbList',
+                'type_key' => 'breadcrumb',
+                'description' => 'Navigation hierarchy for improved search visibility',
+                'required_fields' => json_encode([
+                    'itemListElement' => 'Required (array of ListItems)'
+                ])
+            ],
+            [
+                'name' => 'Event',
+                'type_key' => 'event',
+                'description' => 'Scheduled events, webinars, conferences, and exhibitions',
+                'required_fields' => json_encode([
+                    'name' => 'Required',
+                    'startDate' => 'Required',
+                    'location' => 'Required'
                 ])
             ]
         ];

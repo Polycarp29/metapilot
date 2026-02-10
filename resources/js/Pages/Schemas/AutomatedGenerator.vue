@@ -93,6 +93,32 @@
                     </button>
                   </div>
                   <p v-if="errors.page_link" class="text-red-500 text-[10px] font-black uppercase tracking-widest ml-4 mt-2">{{ errors.page_link }}</p>
+                  
+                  <!-- Quality Score Indicator -->
+                  <Transition 
+                    enter-active-class="transition duration-700 ease-out" 
+                    enter-from-class="opacity-0 translate-y-4" 
+                    enter-to-class="opacity-100 translate-y-0"
+                  >
+                    <div v-if="scanScore !== null" class="mt-8 flex items-center justify-between bg-blue-50/50 p-6 rounded-3xl border border-blue-100/50">
+                      <div class="flex items-center gap-4">
+                        <div class="w-12 h-12 rounded-full border-4 border-blue-100 flex items-center justify-center relative">
+                          <svg class="w-full h-full -rotate-90 absolute">
+                            <circle cx="24" cy="24" r="20" fill="transparent" stroke="currentColor" stroke-width="4" class="text-blue-200" style="cx: 50%; cy: 50%; r: 40%;" />
+                            <circle cx="24" cy="24" r="20" fill="transparent" stroke="currentColor" stroke-width="4" class="text-blue-500" :style="{ strokeDasharray: '100', strokeDashoffset: 100 - scanScore, cx: '50%', cy: '50%', r: '40%' }" />
+                          </svg>
+                          <span class="text-[10px] font-black text-blue-700">{{ scanScore }}%</span>
+                        </div>
+                        <div>
+                          <h5 class="text-xs font-black text-blue-900 uppercase tracking-widest">SEO Quality Score</h5>
+                          <p class="text-[10px] text-blue-600 font-medium">Auto-derived from URL metadata analysis.</p>
+                        </div>
+                      </div>
+                      <div class="text-xs font-bold" :class="scanScore > 70 ? 'text-emerald-600' : 'text-amber-600'">
+                        {{ scanScore > 70 ? 'Excellent Match' : 'Manual Refinement Recommended' }}
+                      </div>
+                    </div>
+                  </Transition>
                 </div>
               </div>
             </div>
@@ -583,6 +609,87 @@
                         </div>
                     </div>
 
+                    <!-- Article Module Guided -->
+                    <div v-else-if="getTypeKey(module.schema_type_id) === 'article'" class="space-y-8">
+                      <div class="bg-white p-10 rounded-[2.5rem] border border-slate-100 shadow-premium space-y-8">
+                        <div class="space-y-4">
+                          <label class="block text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">Article Headline</label>
+                          <input v-model="module.data.items[0].name" placeholder="How to Professionalize your Brand..." class="block w-full px-8 py-5 rounded-2xl border-slate-200 bg-slate-50/50 focus:bg-white transition-standard text-slate-900 font-bold text-lg" />
+                        </div>
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-8">
+                          <div class="space-y-4">
+                            <label class="block text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">Author Name</label>
+                            <input v-model="module.data.items[0].author" placeholder="John Doe" class="block w-full px-6 py-4 rounded-xl border-slate-200 bg-slate-50/50 focus:bg-white transition-standard text-slate-900 font-bold" />
+                          </div>
+                          <div class="space-y-4">
+                            <label class="block text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">Publish Date</label>
+                            <input v-model="module.data.items[0].datePublished" type="date" class="block w-full px-6 py-4 rounded-xl border-slate-200 bg-slate-50/50 focus:bg-white transition-standard text-slate-900 font-bold" />
+                          </div>
+                        </div>
+                        <div class="space-y-4 pt-6 border-t border-slate-50">
+                          <label class="block text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">Full Content Body</label>
+                          <textarea v-model="module.data.items[0].description" rows="5" placeholder="The main content of the article..." class="block w-full px-8 py-5 rounded-2xl border-slate-200 bg-slate-50/50 focus:bg-white transition-standard text-slate-900 font-medium"></textarea>
+                        </div>
+                      </div>
+                    </div>
+
+                    <!-- Breadcrumb Module Guided -->
+                    <div v-else-if="getTypeKey(module.schema_type_id) === 'breadcrumb'" class="space-y-8">
+                       <div class="flex justify-between items-center">
+                        <label class="text-[10px] font-black text-slate-400 uppercase tracking-widest">Assistant: "Add your site navigation hierarchy below."</label>
+                        <button @click.prevent="addBreadcrumb(mIdx)" class="text-blue-600 font-bold text-[10px] uppercase tracking-widest">+ Add Breadcrumb</button>
+                      </div>
+
+                      <div v-for="(b, bIdx) in module.data.items" :key="bIdx" class="relative group">
+                        <div class="bg-white p-10 rounded-[2.5rem] border border-slate-100 shadow-sm transition-all hover:shadow-xl flex gap-8">
+                          <div class="w-12 h-12 rounded-2xl bg-indigo-50 text-indigo-600 flex items-center justify-center font-black text-lg shrink-0 border border-indigo-100">{{ bIdx + 1 }}</div>
+                          <div class="flex-grow grid grid-cols-1 md:grid-cols-2 gap-6">
+                            <div class="space-y-2">
+                              <label class="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Crumbs Title</label>
+                              <input v-model="b.name" placeholder="Home..." class="w-full bg-slate-50/50 border-slate-200 rounded-xl px-5 py-3 text-sm font-bold" />
+                            </div>
+                            <div class="space-y-2">
+                                <label class="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Destination URL</label>
+                                <input v-model="b.url" placeholder="/" class="w-full bg-slate-50/50 border-slate-200 rounded-xl px-5 py-3 text-sm font-medium" />
+                            </div>
+                          </div>
+                          <button @click.prevent="removeBreadcrumb(mIdx, bIdx)" class="w-10 h-10 rounded-full bg-red-50 text-red-400 border border-red-100 flex items-center justify-center hover:bg-red-500 hover:text-white transition-all shadow-sm">
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+                            </svg>
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+
+                    <!-- Event Module Guided -->
+                    <div v-else-if="getTypeKey(module.schema_type_id) === 'event'" class="space-y-8">
+                      <div class="bg-white p-10 rounded-[2.5rem] border border-slate-100 shadow-premium space-y-8">
+                        <div class="space-y-4">
+                          <label class="block text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">Event Name</label>
+                          <input v-model="module.data.items[0].name" placeholder="Global SEO Summit 2026..." class="block w-full px-8 py-5 rounded-2xl border-slate-200 bg-slate-50/50 focus:bg-white transition-standard text-slate-900 font-bold text-lg" />
+                        </div>
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-8">
+                          <div class="space-y-4">
+                            <label class="block text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">Start Date & Time</label>
+                            <input v-model="module.data.items[0].startDate" type="datetime-local" class="block w-full px-6 py-4 rounded-xl border-slate-200 bg-slate-50/50 focus:bg-white transition-standard text-slate-900 font-bold" />
+                          </div>
+                          <div class="space-y-4">
+                            <label class="block text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">Location / Venue</label>
+                            <input v-model="module.data.items[0].location" placeholder="Convention Center or Online" class="block w-full px-6 py-4 rounded-xl border-slate-200 bg-slate-50/50 focus:bg-white transition-standard text-slate-900 font-bold" />
+                          </div>
+                        </div>
+                        <div class="space-y-4 pt-6 border-t border-slate-50">
+                          <label class="block text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">Location Address</label>
+                          <input v-model="module.data.items[0].address" placeholder="123 Summit Way, NY" class="block w-full px-6 py-4 rounded-xl border-slate-200 bg-slate-50/50 focus:bg-white transition-standard text-slate-900 font-medium" />
+                        </div>
+                        <div class="space-y-4 pt-6 border-t border-slate-50">
+                          <label class="block text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">Event Description</label>
+                          <textarea v-model="module.data.items[0].description" rows="3" placeholder="Brief overview of the event..." class="block w-full px-8 py-5 rounded-2xl border-slate-200 bg-slate-50/50 focus:bg-white transition-standard text-slate-900 font-medium"></textarea>
+                        </div>
+                      </div>
+                    </div>
+
                     <div v-else class="text-center py-10 bg-white rounded-[2rem] border border-slate-100">
                       <p class="text-slate-400 font-bold text-xs italic tracking-tight uppercase tracking-widest leading-loose">
                         Guided logic for {{ getTypeName(module.schema_type_id) }} is evolving.<br/>
@@ -632,6 +739,7 @@ const props = defineProps({
 
 const currentStep = ref(0)
 const isAnalyzing = ref(false)
+const scanScore = ref(null)
 const steps = [
   { label: 'Foundation', title: 'SEO Context' },
   { label: 'Modular', title: 'Schema Blocks' },
@@ -687,14 +795,27 @@ const analyzeUrl = async () => {
       form.brand_logo = response.data.og_image
     }
 
+    scanScore.value = response.data.quality_score
+
     // Handle suggestions
     if (response.data.suggestions && response.data.suggestions.length > 0) {
       response.data.suggestions.forEach(suggestionKey => {
         const type = props.schemaTypes.find(t => t.type_key === suggestionKey)
         if (type && !form.modules.find(m => m.schema_type_id === type.id)) {
+          // Default data structure for new modules
+          let defaultData = { items: [{ name: '', description: '' }] }
+          
+          if (suggestionKey === 'localbusiness') {
+            defaultData = { items: [] }
+          } else if (suggestionKey === 'breadcrumb') {
+            defaultData = { items: [{ name: 'Home', url: '/' }] }
+          } else if (suggestionKey === 'event') {
+            defaultData = { items: [{ name: '', description: '', startDate: '', location: '' }] }
+          }
+
           form.modules.push({
             schema_type_id: type.id,
-            data: { items: suggestionKey === 'localbusiness' ? [] : [{ name: '', description: '' }] }
+            data: defaultData
           })
           
           // Auto-initialize if localbusiness
@@ -788,6 +909,14 @@ const removeHowToStep = (mIdx, sIdx) => {
   form.modules[mIdx].data.items.splice(sIdx, 1)
 }
 
+const addBreadcrumb = (mIdx) => {
+  form.modules[mIdx].data.items.push({ name: '', url: '' })
+}
+
+const removeBreadcrumb = (mIdx, bIdx) => {
+  form.modules[mIdx].data.items.splice(bIdx, 1)
+}
+
 const setupLocalBusiness = (mIdx) => {
   form.modules[mIdx].data.items = [{
     address: '',
@@ -826,7 +955,19 @@ const prevStep = () => {
 }
 
 const submit = () => {
-  form.post('/schemas/automated')
+  form.post('/schemas/automated', {
+    onSuccess: () => {
+      toastStore.success('Modular Schema successfully generated and saved!')
+    },
+    onError: (errs) => {
+      errors.value = errs
+      toastStore.error("Failed to save. Please check the required fields in the 'Foundation' step.")
+      // Shift back to first step if foundation errors exist
+      if (errs.name || errs.meta_description || errs.page_link) {
+        currentStep.value = 0
+      }
+    }
+  })
 }
 </script>
 

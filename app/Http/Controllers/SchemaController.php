@@ -409,6 +409,41 @@ class SchemaController extends Controller
                     'telephone' => $business['phone'] ?? '',
                     'priceRange' => $business['price_range'] ?? '$$'
                 ]);
+            } elseif ($type->type_key === 'article') {
+                $article = $items[0] ?? [];
+                $fields = array_merge($fields, [
+                    '@type' => 'Article',
+                    'headline' => $article['name'] ?? $validated['name'],
+                    'articleBody' => $article['description'] ?? '',
+                    'datePublished' => $article['datePublished'] ?? now()->toIso8601String(),
+                    'author' => [
+                        '@type' => 'Person',
+                        'name' => $article['author'] ?? ($validated['brand_name'] ?? 'Admin')
+                    ]
+                ]);
+            } elseif ($type->type_key === 'breadcrumb') {
+                $fields['itemListElement'] = array_map(function($item, $index) {
+                    return [
+                        '@type' => 'ListItem',
+                        'position' => $index + 1,
+                        'name' => $item['name'] ?? '',
+                        'item' => $item['url'] ?? ''
+                    ];
+                }, $items, array_keys($items));
+                $fields['@type'] = array_merge((array)($fields['@type'] ?? []), ['BreadcrumbList']);
+            } elseif ($type->type_key === 'event') {
+                $event = $items[0] ?? [];
+                $fields = array_merge($fields, [
+                    '@type' => 'Event',
+                    'name' => $event['name'] ?? $validated['name'],
+                    'description' => $event['description'] ?? '',
+                    'startDate' => $event['startDate'] ?? now()->addDays(7)->toIso8601String(),
+                    'location' => [
+                        '@type' => 'Place',
+                        'name' => $event['location'] ?? 'Online',
+                        'address' => $event['address'] ?? ''
+                    ]
+                ]);
             } else {
                 $fields[$type->type_key] = array_merge($fields[$type->type_key] ?? [], $items);
             }
@@ -475,18 +510,21 @@ class SchemaController extends Controller
     {
         return [
             '@type' => ['Organization', 'WebSite'],
-            'name' => $overrides['name'] ?? 'Universal Brand',
+            'name' => $overrides['name'] ?? 'Official Brand',
             'alternateName' => $overrides['alternateName'] ?? '',
             'description' => $description,
             'url' => $url,
             'logo' => $overrides['logo'] ?? '',
-            'address' => [
-                'addressRegion' => 'Global'
+            'sameAs' => [
+                $url
             ],
             'potentialAction' => [
-                '@type' => 'ViewAction',
-                'name' => 'Visit Official Site',
-                'target' => $url
+                '@type' => 'SearchAction',
+                'target' => [
+                    '@type' => 'EntryPoint',
+                    'urlTemplate' => $url . '?s={search_term_string}'
+                ],
+                'query-input' => 'required name=search_term_string'
             ]
         ];
     }
@@ -509,19 +547,23 @@ class SchemaController extends Controller
             $response = $client->get($url);
             $html = (string) $response->getBody();
 
-            // Use mb_convert_encoding if needed for domestic handling
+            // Use HTML-ENTITIES to handle UTF-8 robustly in DOMDocument
             $doc = new \DOMDocument();
-            @$doc->loadHTML('<?xml encoding="UTF-8">' . $html);
+            @$doc->loadHTML(mb_convert_encoding($html, 'HTML-ENTITIES', 'UTF-8'));
             
-            // 1. Title
+            // 1. Title Extraction with Fallbacks
+            $title = '';
             $titles = $doc->getElementsByTagName('title');
-            $title = $titles->length > 0 ? $titles->item(0)->nodeValue : '';
+            if ($titles->length > 0) {
+                $title = trim($titles->item(0)->nodeValue);
+            }
             
             // 2. Meta Tags (Description, Keywords, OG)
             $description = '';
             $keywords = '';
             $ogType = '';
             $ogImage = '';
+            $ogTitle = '';
             
             $metas = $doc->getElementsByTagName('meta');
             foreach ($metas as $meta) {
@@ -529,7 +571,7 @@ class SchemaController extends Controller
                 $property = strtolower($meta->getAttribute('property'));
                 $content = $meta->getAttribute('content');
 
-                if ($name === 'description' || $property === 'og:description') {
+                if ($name === 'description' || $property === 'og:description' || $name === 'twitter:description') {
                     if (empty($description)) $description = $content;
                 }
                 if ($name === 'keywords') {
@@ -538,17 +580,32 @@ class SchemaController extends Controller
                 if ($property === 'og:type') {
                     $ogType = $content;
                 }
-                if ($property === 'og:image') {
-                    $ogImage = $content;
+                if ($property === 'og:image' || $name === 'twitter:image') {
+                    if (empty($ogImage)) $ogImage = $content;
                 }
-                if ($property === 'og:title' && empty($title)) {
-                    $title = $content;
+                if ($property === 'og:title' || $name === 'twitter:title') {
+                    if (empty($ogTitle)) $ogTitle = $content;
                 }
             }
 
-            // 3. H1 Header
+            // Fallback for Title
+            if (empty($title)) {
+                $title = $ogTitle;
+            }
+
+            // 3. H1 Header with Fallbacks
+            $h1 = '';
             $h1s = $doc->getElementsByTagName('h1');
-            $h1 = $h1s->length > 0 ? trim($h1s->item(0)->nodeValue) : '';
+            if ($h1s->length > 0) {
+                // Find the first non-empty H1
+                foreach ($h1s as $node) {
+                    $val = trim($node->nodeValue);
+                    if (!empty($val)) {
+                        $h1 = $val;
+                        break;
+                    }
+                }
+            }
 
             // Simple type detection logic
             $suggestedModules = [];
@@ -563,6 +620,20 @@ class SchemaController extends Controller
             if ($ogType === 'business.business' || str_contains($path, '/contact') || str_contains($path, '/about-us')) {
                 $suggestedModules[] = 'localbusiness';
             }
+            
+            // New Enterprise Detection Patterns
+            if (str_contains($path, '/blog/') || str_contains($path, '/news/') || str_contains($path, '/article/')) {
+                $suggestedModules[] = 'article';
+            }
+            if ($ogType === 'product' || str_contains($path, '/product/') || str_contains($path, '/shop/')) {
+                $suggestedModules[] = 'product';
+            }
+            if (str_contains($html, 'breadcrumb')) {
+                $suggestedModules[] = 'breadcrumb';
+            }
+            if (str_contains($path, '/event/') || str_contains($html, 'registration')) {
+                $suggestedModules[] = 'event';
+            }
 
             return response()->json([
                 'title' => $title,
@@ -572,7 +643,8 @@ class SchemaController extends Controller
                 'canonical' => $url,
                 'og_type' => $ogType,
                 'og_image' => $ogImage,
-                'suggestions' => array_unique($suggestedModules)
+                'suggestions' => array_unique($suggestedModules),
+                'quality_score' => $this->calculateQualityScore($title, $description, $ogImage)
             ]);
         } catch (\Exception $e) {
             return response()->json(['error' => 'Failed to reach site: ' . $e->getMessage()], 422);
@@ -586,12 +658,12 @@ class SchemaController extends Controller
     {
         return [
             '@type' => $data['@type'] ?? 'Product',
-            'name' => $data['name'] ?? 'Unnamed Product',
+            'name' => $data['name'] ?? 'Unnamed Item',
             'description' => $data['description'] ?? '',
             'offers' => [
                 '@type' => 'Offer',
                 'url' => $data['url'] ?? '',
-                'priceCurrency' => 'KES',
+                'priceCurrency' => 'USD',
                 'price' => '0',
                 'availability' => 'https://schema.org/InStock'
             ]
@@ -624,5 +696,18 @@ class SchemaController extends Controller
             }
         }
         return array_values($unique);
+    }
+
+    /**
+     * Calculate Schema Quality Score (Simple heuristic)
+     */
+    private function calculateQualityScore(string $title, string $description, string $ogImage): int
+    {
+        $score = 20; // Base score for having a URL
+        if (!empty($title)) $score += 25;
+        if (!empty($description)) $score += 25;
+        if (!empty($ogImage)) $score += 30;
+        
+        return min($score, 100);
     }
 }
