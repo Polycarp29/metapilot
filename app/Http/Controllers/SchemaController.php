@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Http\Requests\StoreSchemaRequest;
 use App\Http\Requests\UpdateSchemaRequest;
 use App\Models\Schema;
+use App\Models\SchemaContainer;
 use App\Models\SchemaField;
 use App\Models\SchemaType;
 use App\Services\SchemaValidationService;
