@@ -455,51 +455,60 @@ class SchemaController extends Controller
             $primaryTypeId = SchemaType::where('type_key', 'webpage')->first()?->id;
         }
 
-        $pageLink = rtrim($validated['page_link'], '/');
+        $pageLink = strtolower(rtrim(trim($validated['page_link']), '/'));
         
-        DB::transaction(function () use ($pageLink, $primaryTypeId, $validated, $fields) {
-            // 1. Find or Create Container
-            $container = SchemaContainer::firstOrCreate(
-                ['identifier' => $pageLink],
-                ['name' => $validated['brand_name'] ?? $validated['name']]
-            );
+        try {
+            DB::transaction(function () use ($pageLink, $primaryTypeId, $validated, $fields) {
+                // 1. Find or Create Container (Unique check)
+                $container = SchemaContainer::firstOrCreate(
+                    ['identifier' => $pageLink],
+                    ['name' => $validated['brand_name'] ?? $validated['name']]
+                );
 
-            // 2. Find or Create the primary Schema record inside this container
-            $schema = Schema::withTrashed()
-                ->where('schema_container_id', $container->id)
-                ->where('schema_type_id', $primaryTypeId)
-                ->first();
+                // 2. Find or Create the primary Schema record inside this container
+                $schema = Schema::withTrashed()
+                    ->where('schema_container_id', $container->id)
+                    ->where('schema_type_id', $primaryTypeId)
+                    ->first();
 
-            if ($schema) {
-                $schema->update([
-                    'schema_id' => $pageLink,
-                    'name' => $validated['name'],
-                    'url' => $validated['page_link'],
-                    'is_active' => true
-                ]);
-                if ($schema->trashed()) {
-                    $schema->restore();
+                if ($schema) {
+                    $schema->update([
+                        'schema_id' => $pageLink,
+                        'name' => $validated['name'],
+                        'url' => $validated['page_link'],
+                        'is_active' => true
+                    ]);
+                    if ($schema->trashed()) {
+                        $schema->restore();
+                    }
+                } else {
+                    $schema = Schema::create([
+                        'schema_container_id' => $container->id,
+                        'schema_id' => $pageLink,
+                        'schema_type_id' => $primaryTypeId,
+                        'name' => $validated['name'],
+                        'url' => $validated['page_link'],
+                        'is_active' => true
+                    ]);
                 }
-            } else {
-                $schema = Schema::create([
-                    'schema_container_id' => $container->id,
-                    'schema_id' => $pageLink,
-                    'schema_type_id' => $primaryTypeId,
-                    'name' => $validated['name'],
-                    'url' => $validated['page_link'],
-                    'is_active' => true
-                ]);
-            }
 
-            // 3. Clean existing and create new fields for THIS schema
-            $schema->fields()->delete();
-            $this->createFieldsFromData($schema->id, null, $fields);
-            
-            $this->lastGeneratedSchema = $schema;
-        });
+                // 3. Clean existing and create new fields for THIS schema
+                $schema->fields()->delete();
+                $this->createFieldsFromData($schema->id, null, $fields);
+                
+                $this->lastGeneratedSchema = $schema;
+            });
 
-        return redirect()->route('schemas.edit', $this->lastGeneratedSchema)
-            ->with('message', 'Modular automated schema generated successfully!');
+            return redirect()->route('schemas.edit', $this->lastGeneratedSchema)
+                ->with('message', 'Modular automated schema generated successfully!');
+        } catch (\Exception $e) {
+            \Log::error('Automated Storage Failed: ' . $e->getMessage(), [
+                'stack' => $e->getTraceAsString(),
+                'data' => $validated
+            ]);
+            return back()->withErrors(['page_link' => 'Database error during automated build. Check logs for details.'])
+                ->withInput();
+        }
     }
 
     private $lastGeneratedSchema;
@@ -537,12 +546,14 @@ class SchemaController extends Controller
 
         try {
             $client = new \GuzzleHttp\Client([
-                'timeout' => 10,
+                'timeout' => 15,
                 'headers' => [
                     'User-Agent' => 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
                     'Accept' => 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8',
                     'Accept-Language' => 'en-US,en;q=0.9',
-                ]
+                ],
+                'verify' => false, // Bypass SSL for internal/tricky sites
+                'allow_redirects' => true
             ]);
             
             $response = $client->get($url);
@@ -550,7 +561,10 @@ class SchemaController extends Controller
 
             // Use HTML-ENTITIES to handle UTF-8 robustly in DOMDocument
             $doc = new \DOMDocument();
-            @$doc->loadHTML(mb_convert_encoding($html, 'HTML-ENTITIES', 'UTF-8'));
+            // Suppress warnings for malformed HTML
+            libxml_use_internal_errors(true);
+            $doc->loadHTML('<?xml encoding="UTF-8">' . $html);
+            libxml_clear_errors();
             
             // 1. Title Extraction with Fallbacks
             $title = '';
@@ -570,13 +584,13 @@ class SchemaController extends Controller
             foreach ($metas as $meta) {
                 $name = strtolower($meta->getAttribute('name'));
                 $property = strtolower($meta->getAttribute('property'));
-                $content = $meta->getAttribute('content');
+                $content = trim($meta->getAttribute('content'));
 
                 if ($name === 'description' || $property === 'og:description' || $name === 'twitter:description') {
                     if (empty($description)) $description = $content;
                 }
-                if ($name === 'keywords') {
-                    $keywords = $content;
+                if ($name === 'keywords' || $property === 'keywords') {
+                    if (empty($keywords)) $keywords = $content;
                 }
                 if ($property === 'og:type') {
                     $ogType = $content;
@@ -598,9 +612,8 @@ class SchemaController extends Controller
             $h1 = '';
             $h1s = $doc->getElementsByTagName('h1');
             if ($h1s->length > 0) {
-                // Find the first non-empty H1
                 foreach ($h1s as $node) {
-                    $val = trim($node->nodeValue);
+                    $val = trim($node->textContent);
                     if (!empty($val)) {
                         $h1 = $val;
                         break;
@@ -611,28 +624,28 @@ class SchemaController extends Controller
             // Simple type detection logic
             $suggestedModules = [];
             $path = parse_url($url, PHP_URL_PATH);
+            $htmlLower = strtolower($html);
             
-            if (str_contains($path, '/faq') || str_contains($html, 'frequently asked questions')) {
+            if (str_contains($path, '/faq') || str_contains($htmlLower, 'frequently asked questions') || str_contains($htmlLower, 'faq')) {
                 $suggestedModules[] = 'faq';
             }
-            if (str_contains($path, '/how-to') || str_contains($path, '/guide') || str_contains($html, 'step-by-step')) {
+            if (str_contains($path, '/how-to') || str_contains($path, '/guide') || str_contains($path, '/tutorial') || str_contains($htmlLower, 'step-by-step')) {
                 $suggestedModules[] = 'howto';
             }
-            if ($ogType === 'business.business' || str_contains($path, '/contact') || str_contains($path, '/about-us')) {
+            if ($ogType === 'business.business' || str_contains($path, '/contact') || str_contains($path, '/about') || str_contains($htmlLower, 'address') || str_contains($htmlLower, 'phone')) {
                 $suggestedModules[] = 'localbusiness';
             }
             
-            // New Enterprise Detection Patterns
             if (str_contains($path, '/blog/') || str_contains($path, '/news/') || str_contains($path, '/article/')) {
                 $suggestedModules[] = 'article';
             }
-            if ($ogType === 'product' || str_contains($path, '/product/') || str_contains($path, '/shop/')) {
+            if ($ogType === 'product' || str_contains($path, '/product/') || str_contains($path, '/shop/') || str_contains($path, '/p/')) {
                 $suggestedModules[] = 'product';
             }
-            if (str_contains($html, 'breadcrumb')) {
+            if (str_contains($htmlLower, 'breadcrumb')) {
                 $suggestedModules[] = 'breadcrumb';
             }
-            if (str_contains($path, '/event/') || str_contains($html, 'registration')) {
+            if (str_contains($path, '/event/') || str_contains($path, '/booking') || str_contains($htmlLower, 'registration')) {
                 $suggestedModules[] = 'event';
             }
 
@@ -648,6 +661,7 @@ class SchemaController extends Controller
                 'quality_score' => $this->calculateQualityScore($title, $description, $ogImage)
             ]);
         } catch (\Exception $e) {
+            \Log::error('Analyze URL Failed: ' . $e->getMessage(), ['url' => $url]);
             return response()->json(['error' => 'Failed to reach site: ' . $e->getMessage()], 422);
         }
     }

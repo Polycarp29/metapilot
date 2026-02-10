@@ -48,7 +48,8 @@
             <div 
               class="w-12 h-12 rounded-2xl flex items-center justify-center font-black text-lg transition-standard"
               :class="[
-                currentStep === idx ? 'bg-blue-600 text-white shadow-lg shadow-blue-200 scale-110' : 'bg-slate-200 text-slate-500'
+                currentStep === idx ? 'bg-blue-600 text-white shadow-lg shadow-blue-200 scale-110' : 
+                (hasStepErrors(idx) ? 'bg-red-500 text-white' : 'bg-slate-200 text-slate-500')
               ]"
             >
               {{ idx + 1 }}
@@ -73,7 +74,8 @@
                 </div>
                 <div class="space-y-4">
                   <label class="block text-xs font-black text-slate-400 uppercase tracking-[0.2em] ml-2">Contextual Meta Description</label>
-                  <textarea v-model="form.meta_description" rows="4" placeholder="Description for this specific page..." class="block w-full px-8 py-5 rounded-3xl border-slate-200 bg-slate-50/50 focus:bg-white transition-standard text-slate-900 font-medium"></textarea>
+                  <textarea v-model="form.meta_description" rows="4" placeholder="Description for this specific page..." class="block w-full px-8 py-5 rounded-3xl border-slate-200 bg-slate-50/50 focus:bg-white transition-standard text-slate-900 font-medium" :class="{'ring-2 ring-red-500 border-red-500': errors.meta_description}"></textarea>
+                  <p v-if="errors.meta_description" class="text-red-500 text-[10px] font-black uppercase tracking-widest ml-4 mt-2">{{ errors.meta_description }}</p>
                 </div>
                 <div class="space-y-4">
                   <label class="block text-xs font-black text-slate-400 uppercase tracking-[0.2em] ml-2">Canonical Link Destination</label>
@@ -776,7 +778,17 @@ const analyzeUrl = async () => {
     
     // Priority: H1 -> Title -> Fallback
     form.name = response.data.h1 || response.data.title || 'Dynamic Page'
-    form.meta_description = response.data.description || ''
+    
+    // Combine description and keywords for better SEO context if needed
+    let derivedDescription = response.data.description || ''
+    if (response.data.keywords && !derivedDescription.includes(response.data.keywords)) {
+      if (derivedDescription) {
+        derivedDescription += " | Keywords: " + response.data.keywords
+      } else {
+        derivedDescription = response.data.keywords
+      }
+    }
+    form.meta_description = derivedDescription
     
     // Improved brand detection
     if (response.data.title) {
@@ -928,6 +940,20 @@ const setupLocalBusiness = (mIdx) => {
   }]
 }
 
+const hasStepErrors = (idx) => {
+  if (idx === 0) {
+    return !!(errors.value.name || errors.value.page_link || errors.value.meta_description)
+  }
+  if (idx === 1) {
+    return !!(errors.value.brand_name || errors.value.brand_logo)
+  }
+  if (idx === 2) {
+    // Check modules errors (e.g., modules.0.data.items.0.name)
+    return Object.keys(errors.value).some(k => k.startsWith('modules.'))
+  }
+  return false
+}
+
 const getTypeName = (id) => props.schemaTypes.find(t => t.id === id)?.name || 'Custom'
 const getTypeKey = (id) => props.schemaTypes.find(t => t.id === id)?.type_key || ''
 
@@ -942,6 +968,9 @@ const nextStep = () => {
     }
     if (!form.page_link || !form.page_link.startsWith('http')) {
       errors.value.page_link = "Assistant: 'Please provide a valid URL for the canonical link.'"
+    }
+    if (!form.meta_description || form.meta_description.length < 10) {
+      errors.value.meta_description = "Assistant: 'I need a meta description for this page (at least 10 chars).'"
     }
     
     if (Object.keys(errors.value).length > 0) return
