@@ -479,48 +479,85 @@ class SchemaController extends Controller
         $url = $request->url;
 
         try {
-            $client = new \GuzzleHttp\Client();
-            $response = $client->get($url, ['timeout' => 5]);
+            $client = new \GuzzleHttp\Client([
+                'timeout' => 10,
+                'headers' => [
+                    'User-Agent' => 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+                    'Accept' => 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8',
+                    'Accept-Language' => 'en-US,en;q=0.9',
+                ]
+            ]);
+            
+            $response = $client->get($url);
             $html = (string) $response->getBody();
 
+            // Use mb_convert_encoding if needed for domestic handling
             $doc = new \DOMDocument();
-            @$doc->loadHTML($html);
+            @$doc->loadHTML('<?xml encoding="UTF-8">' . $html);
+            
+            // 1. Title
             $titles = $doc->getElementsByTagName('title');
             $title = $titles->length > 0 ? $titles->item(0)->nodeValue : '';
             
+            // 2. Meta Tags (Description, Keywords, OG)
             $description = '';
+            $keywords = '';
             $ogType = '';
+            $ogImage = '';
+            
             $metas = $doc->getElementsByTagName('meta');
             foreach ($metas as $meta) {
-                if ($meta->getAttribute('name') === 'description') {
-                    $description = $meta->getAttribute('content');
+                $name = strtolower($meta->getAttribute('name'));
+                $property = strtolower($meta->getAttribute('property'));
+                $content = $meta->getAttribute('content');
+
+                if ($name === 'description' || $property === 'og:description') {
+                    if (empty($description)) $description = $content;
                 }
-                if ($meta->getAttribute('property') === 'og:type') {
-                    $ogType = $meta->getAttribute('content');
+                if ($name === 'keywords') {
+                    $keywords = $content;
+                }
+                if ($property === 'og:type') {
+                    $ogType = $content;
+                }
+                if ($property === 'og:image') {
+                    $ogImage = $content;
+                }
+                if ($property === 'og:title' && empty($title)) {
+                    $title = $content;
                 }
             }
 
-            // Simple type detection
+            // 3. H1 Header
+            $h1s = $doc->getElementsByTagName('h1');
+            $h1 = $h1s->length > 0 ? trim($h1s->item(0)->nodeValue) : '';
+
+            // Simple type detection logic
             $suggestedModules = [];
-            if (str_contains($url, '/faq') || str_contains($url, 'frequently-asked')) {
+            $path = parse_url($url, PHP_URL_PATH);
+            
+            if (str_contains($path, '/faq') || str_contains($html, 'frequently asked questions')) {
                 $suggestedModules[] = 'faq';
             }
-            if (str_contains($url, '/how-to') || str_contains($url, '/guide')) {
+            if (str_contains($path, '/how-to') || str_contains($path, '/guide') || str_contains($html, 'step-by-step')) {
                 $suggestedModules[] = 'howto';
             }
-            if ($ogType === 'business.business' || str_contains($url, '/contact')) {
+            if ($ogType === 'business.business' || str_contains($path, '/contact') || str_contains($path, '/about-us')) {
                 $suggestedModules[] = 'localbusiness';
             }
 
             return response()->json([
                 'title' => $title,
+                'h1' => $h1,
                 'description' => $description,
+                'keywords' => $keywords,
                 'canonical' => $url,
                 'og_type' => $ogType,
-                'suggestions' => $suggestedModules
+                'og_image' => $ogImage,
+                'suggestions' => array_unique($suggestedModules)
             ]);
         } catch (\Exception $e) {
-            return response()->json(['error' => 'Failed to analyze URL: ' . $e->getMessage()], 422);
+            return response()->json(['error' => 'Failed to reach site: ' . $e->getMessage()], 422);
         }
     }
 

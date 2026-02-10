@@ -665,18 +665,26 @@ const analyzeUrl = async () => {
   isAnalyzing.value = true
   try {
     const response = await axios.post(route('api.analyze-url'), { url: form.page_link })
-    form.name = response.data.title || ''
+    
+    // Priority: H1 -> Title -> Fallback
+    form.name = response.data.h1 || response.data.title || 'Dynamic Page'
     form.meta_description = response.data.description || ''
     
     // Improved brand detection
     if (response.data.title) {
+      let brandName = ''
       if (response.data.title.includes('|')) {
-        form.brand_name = response.data.title.split('|').pop().trim()
+        brandName = response.data.title.split('|').pop().trim()
       } else if (response.data.title.includes('-')) {
-        form.brand_name = response.data.title.split('-').pop().trim()
+        brandName = response.data.title.split('-').pop().trim()
       } else {
-        form.brand_name = response.data.title
+        brandName = response.data.title
       }
+      form.brand_name = brandName
+    }
+
+    if (response.data.og_image) {
+      form.brand_logo = response.data.og_image
     }
 
     // Handle suggestions
@@ -699,7 +707,7 @@ const analyzeUrl = async () => {
 
     toastStore.success('URL Intelligence has populated the foundational fields and suggested modules!')
   } catch (e) {
-    toastStore.error('Failed to analyze URL. You can still enter details manually.')
+    toastStore.error('Failed to reach site. You can still enter details manually.')
   } finally {
     isAnalyzing.value = false
   }

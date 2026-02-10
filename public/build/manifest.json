@@ -1,10 +1,6 @@
 {
-  "_AppLayout-VINdzIbg.css": {
-    "file": "assets/AppLayout-VINdzIbg.css",
-    "src": "_AppLayout-VINdzIbg.css"
-  },
-  "_AppLayout-n6hsF4X4.js": {
-    "file": "assets/AppLayout-n6hsF4X4.js",
+  "_AppLayout-CDuAYf4I.js": {
+    "file": "assets/AppLayout-CDuAYf4I.js",
     "name": "AppLayout",
     "imports": [
       "resources/js/app.js"
@@ -12,6 +8,10 @@
     "css": [
       "assets/AppLayout-VINdzIbg.css"
     ]
+  },
+  "_AppLayout-VINdzIbg.css": {
+    "file": "assets/AppLayout-VINdzIbg.css",
+    "src": "_AppLayout-VINdzIbg.css"
   },
   "resources/css/app.css": {
     "file": "assets/app-COC1O8dK.css",
@@ -23,34 +23,34 @@
     ]
   },
   "resources/js/Pages/Dashboard.vue": {
-    "file": "assets/Dashboard-DN1k-LXZ.js",
+    "file": "assets/Dashboard-Bbsx0P_H.js",
     "name": "Dashboard",
     "src": "resources/js/Pages/Dashboard.vue",
     "isDynamicEntry": true,
     "imports": [
       "resources/js/app.js",
-      "_AppLayout-n6hsF4X4.js"
+      "_AppLayout-CDuAYf4I.js"
     ],
     "css": [
       "assets/app-COC1O8dK.css"
     ]
   },
   "resources/js/Pages/Schemas/AutomatedGenerator.vue": {
-    "file": "assets/AutomatedGenerator-B7SaNiB9.js",
+    "file": "assets/AutomatedGenerator-CkjpvmNK.js",
     "name": "AutomatedGenerator",
     "src": "resources/js/Pages/Schemas/AutomatedGenerator.vue",
     "isDynamicEntry": true,
     "imports": [
       "resources/js/app.js",
-      "_AppLayout-n6hsF4X4.js"
+      "_AppLayout-CDuAYf4I.js"
     ],
     "css": [
-      "assets/AutomatedGenerator-BVU8ciLJ.css",
+      "assets/AutomatedGenerator-SJ1WbF2a.css",
       "assets/app-COC1O8dK.css"
     ]
   },
   "resources/js/Pages/Schemas/Components/FieldItem.vue": {
-    "file": "assets/FieldItem-32z5_Fjr.js",
+    "file": "assets/FieldItem-RXDOjTmX.js",
     "name": "FieldItem",
     "src": "resources/js/Pages/Schemas/Components/FieldItem.vue",
     "isDynamicEntry": true,
@@ -62,26 +62,26 @@
     ]
   },
   "resources/js/Pages/Schemas/Create.vue": {
-    "file": "assets/Create-CV3Ywfjq.js",
+    "file": "assets/Create-4aZZX6Hg.js",
     "name": "Create",
     "src": "resources/js/Pages/Schemas/Create.vue",
     "isDynamicEntry": true,
     "imports": [
       "resources/js/app.js",
-      "_AppLayout-n6hsF4X4.js"
+      "_AppLayout-CDuAYf4I.js"
     ],
     "css": [
       "assets/app-COC1O8dK.css"
     ]
   },
   "resources/js/Pages/Schemas/Edit.vue": {
-    "file": "assets/Edit-Cf0qO_3D.js",
+    "file": "assets/Edit-CFejpxV1.js",
     "name": "Edit",
     "src": "resources/js/Pages/Schemas/Edit.vue",
     "isDynamicEntry": true,
     "imports": [
       "resources/js/app.js",
-      "_AppLayout-n6hsF4X4.js",
+      "_AppLayout-CDuAYf4I.js",
       "resources/js/Pages/Schemas/Components/FieldItem.vue"
     ],
     "css": [
@@ -90,26 +90,26 @@
     ]
   },
   "resources/js/Pages/Schemas/Index.vue": {
-    "file": "assets/Index-Choov7ER.js",
+    "file": "assets/Index-CYUgfGy5.js",
     "name": "Index",
     "src": "resources/js/Pages/Schemas/Index.vue",
     "isDynamicEntry": true,
     "imports": [
       "resources/js/app.js",
-      "_AppLayout-n6hsF4X4.js"
+      "_AppLayout-CDuAYf4I.js"
     ],
     "css": [
       "assets/app-COC1O8dK.css"
     ]
   },
   "resources/js/Pages/Sitemaps/Index.vue": {
-    "file": "assets/Index-Cemb2vHZ.js",
+    "file": "assets/Index-BGivu0Va.js",
     "name": "Index",
     "src": "resources/js/Pages/Sitemaps/Index.vue",
     "isDynamicEntry": true,
     "imports": [
       "resources/js/app.js",
-      "_AppLayout-n6hsF4X4.js"
+      "_AppLayout-CDuAYf4I.js"
     ],
     "css": [
       "assets/Index-vpdI21Eo.css",
@@ -117,13 +117,13 @@
     ]
   },
   "resources/js/Pages/Sitemaps/Manager.vue": {
-    "file": "assets/Manager-BI3vIuVP.js",
+    "file": "assets/Manager-DCjc47BT.js",
     "name": "Manager",
     "src": "resources/js/Pages/Sitemaps/Manager.vue",
     "isDynamicEntry": true,
     "imports": [
       "resources/js/app.js",
-      "_AppLayout-n6hsF4X4.js"
+      "_AppLayout-CDuAYf4I.js"
     ],
     "css": [
       "assets/Manager-CSfojbBY.css",
@@ -131,7 +131,7 @@
     ]
   },
   "resources/js/app.js": {
-    "file": "assets/app-DTNBGdar.js",
+    "file": "assets/app-CHHIClU9.js",
     "name": "app",
     "src": "resources/js/app.js",
     "isEntry": true,
