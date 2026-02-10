@@ -102,15 +102,23 @@
                   Real-time Intelligence
                 </span>
               </div>
-              <button
-                @click="copyPreview"
-                class="bg-white/5 hover:bg-white/10 text-slate-400 hover:text-white p-3 rounded-xl transition-standard border border-white/5 active:scale-90"
-                title="Copy Code"
-              >
-                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 5H6a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2v-1M8 5a2 2 0 002 2h2a2 2 0 002-2M8 5a2 2 0 012-2h2a2 2 0 012 2m0 0h2a2 2 0 012 2v3m2 4H10m0 0l3-3m-3 3l3 3" />
-                </svg>
-              </button>
+              <div class="flex items-center gap-3">
+                <button
+                  @click="showImportModal = true"
+                  class="bg-blue-500/10 hover:bg-blue-500/20 text-blue-400 px-4 py-2 rounded-xl transition-standard border border-blue-500/20 text-[10px] font-black uppercase tracking-widest active:scale-90"
+                >
+                  Import Code
+                </button>
+                <button
+                  @click="copyPreview"
+                  class="bg-white/5 hover:bg-white/10 text-slate-400 hover:text-white p-3 rounded-xl transition-standard border border-white/5 active:scale-90"
+                  title="Copy Code"
+                >
+                  <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 5H6a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2v-1M8 5a2 2 0 002 2h2a2 2 0 002-2M8 5a2 2 0 012-2h2a2 2 0 012 2m0 0h2a2 2 0 012 2v3m2 4H10m0 0l3-3m-3 3l3 3" />
+                  </svg>
+                </button>
+              </div>
             </div>
             
             <div class="flex-grow p-8 font-mono text-[13px] overflow-auto custom-scrollbar-dark selection:bg-blue-500/30">
@@ -135,6 +143,37 @@
               </div>
             </div>
           </div>
+        </div>
+      </div>
+    </div>
+    <!-- Import Modal -->
+    <div v-if="showImportModal" class="fixed inset-0 z-[100] flex items-center justify-center p-6 bg-slate-900/60 backdrop-blur-md">
+      <div class="bg-white w-full max-w-2xl rounded-[3rem] shadow-premium p-12 relative scale-in-center">
+        <button @click="showImportModal = false" class="absolute top-10 right-10 text-slate-300 hover:text-slate-900 transition-colors">
+          <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+          </svg>
+        </button>
+        
+        <h2 class="text-3xl font-black text-slate-900 mb-8 tracking-tight">Import JSON-LD</h2>
+        
+        <div class="space-y-8">
+          <div class="space-y-3">
+            <label class="block text-[10px] font-black text-slate-400 uppercase tracking-widest ml-4">Paste code snippet</label>
+            <textarea 
+              v-model="importCode" 
+              rows="8" 
+              placeholder='{ "@context": "https://schema.org", ... }' 
+              class="w-full px-8 py-6 rounded-3xl bg-slate-50 border-transparent focus:bg-white focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 transition-standard font-mono text-sm"
+            ></textarea>
+          </div>
+
+          <button 
+            @click="processImport" 
+            class="w-full bg-blue-600 text-white py-5 rounded-[2rem] font-black text-lg shadow-xl shadow-blue-100 hover:scale-105 active:scale-95 transition-standard"
+          >
+            Populate Form Architecture
+          </button>
         </div>
       </div>
     </div>
@@ -165,6 +204,8 @@ const mapFields = (fields) => {
 const localFields = ref(props.schema.root_fields ? mapFields(JSON.parse(JSON.stringify(props.schema.root_fields))) : [])
 const previewJson = ref('')
 const saving = ref(false)
+const showImportModal = ref(false)
+const importCode = ref('')
 
 const previewLines = computed(() => previewJson.value.split('\n'))
 
@@ -216,6 +257,73 @@ const generatePreview = () => {
     ...processFieldsForPreview(localFields.value)
   }
   previewJson.value = JSON.stringify(result, null, 2)
+}
+
+const getTypeOfValue = (val) => {
+  if (typeof val === 'number') return 'number'
+  if (typeof val === 'boolean') return 'boolean'
+  if (typeof val === 'string' && (val.startsWith('http://') || val.startsWith('https://'))) return 'url'
+  return 'text'
+}
+
+const jsonToFields = (obj) => {
+  return Object.entries(obj)
+    .filter(([key]) => !['@context', '@type', '@id'].includes(key))
+    .map(([key, value]) => {
+      let type = 'text'
+      let val = value
+      let children = []
+
+      if (Array.isArray(value)) {
+        type = 'array'
+        val = ''
+        children = value.map(item => {
+          if (typeof item === 'object' && item !== null) {
+            return { 
+              field_path: '', 
+              field_type: 'object', 
+              field_value: '', 
+              children: jsonToFields(item) 
+            }
+          } else {
+            return { 
+              field_path: '', 
+              field_type: getTypeOfValue(item), 
+              field_value: item, 
+              children: [] 
+            }
+          }
+        })
+      } else if (typeof value === 'object' && value !== null) {
+        type = 'object'
+        val = ''
+        children = jsonToFields(value)
+      } else {
+        type = getTypeOfValue(value)
+        val = value
+      }
+
+      return {
+        field_path: key,
+        field_type: type,
+        field_value: val,
+        children: children
+      }
+    })
+}
+
+const processImport = () => {
+  try {
+    const parsed = JSON.parse(importCode.value)
+    const newFields = jsonToFields(parsed)
+    localFields.value = [...localFields.value, ...newFields]
+    generatePreview()
+    showImportModal.value = false
+    importCode.value = ''
+    toastStore.success('Intelligence Interpreter has expanded the form architecture!')
+  } catch (e) {
+    toastStore.error('Parse Error: Please ensure you are pasting valid JSON-LD.')
+  }
 }
 
 const saveFields = () => {
