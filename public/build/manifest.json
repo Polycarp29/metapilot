@@ -1,6 +1,10 @@
 {
-  "_AppLayout-CBvnPcGH.js": {
-    "file": "assets/AppLayout-CBvnPcGH.js",
+  "_AppLayout-VINdzIbg.css": {
+    "file": "assets/AppLayout-VINdzIbg.css",
+    "src": "_AppLayout-VINdzIbg.css"
+  },
+  "_AppLayout-n6hsF4X4.js": {
+    "file": "assets/AppLayout-n6hsF4X4.js",
     "name": "AppLayout",
     "imports": [
       "resources/js/app.js"
@@ -9,12 +13,8 @@
       "assets/AppLayout-VINdzIbg.css"
     ]
   },
-  "_AppLayout-VINdzIbg.css": {
-    "file": "assets/AppLayout-VINdzIbg.css",
-    "src": "_AppLayout-VINdzIbg.css"
-  },
   "resources/css/app.css": {
-    "file": "assets/app-Dfx4Ayps.css",
+    "file": "assets/app-COC1O8dK.css",
     "src": "resources/css/app.css",
     "isEntry": true,
     "name": "app",
@@ -23,34 +23,34 @@
     ]
   },
   "resources/js/Pages/Dashboard.vue": {
-    "file": "assets/Dashboard-DbWpNmYi.js",
+    "file": "assets/Dashboard-DN1k-LXZ.js",
     "name": "Dashboard",
     "src": "resources/js/Pages/Dashboard.vue",
     "isDynamicEntry": true,
     "imports": [
       "resources/js/app.js",
-      "_AppLayout-CBvnPcGH.js"
+      "_AppLayout-n6hsF4X4.js"
     ],
     "css": [
-      "assets/app-Dfx4Ayps.css"
+      "assets/app-COC1O8dK.css"
     ]
   },
   "resources/js/Pages/Schemas/AutomatedGenerator.vue": {
-    "file": "assets/AutomatedGenerator-9OXT3RT4.js",
+    "file": "assets/AutomatedGenerator-B7SaNiB9.js",
     "name": "AutomatedGenerator",
     "src": "resources/js/Pages/Schemas/AutomatedGenerator.vue",
     "isDynamicEntry": true,
     "imports": [
       "resources/js/app.js",
-      "_AppLayout-CBvnPcGH.js"
+      "_AppLayout-n6hsF4X4.js"
     ],
     "css": [
-      "assets/AutomatedGenerator-Yrv_Ffis.css",
-      "assets/app-Dfx4Ayps.css"
+      "assets/AutomatedGenerator-BVU8ciLJ.css",
+      "assets/app-COC1O8dK.css"
     ]
   },
   "resources/js/Pages/Schemas/Components/FieldItem.vue": {
-    "file": "assets/FieldItem-jLEf6FdB.js",
+    "file": "assets/FieldItem-32z5_Fjr.js",
     "name": "FieldItem",
     "src": "resources/js/Pages/Schemas/Components/FieldItem.vue",
     "isDynamicEntry": true,
@@ -58,80 +58,80 @@
       "resources/js/app.js"
     ],
     "css": [
-      "assets/app-Dfx4Ayps.css"
+      "assets/app-COC1O8dK.css"
     ]
   },
   "resources/js/Pages/Schemas/Create.vue": {
-    "file": "assets/Create-DWjgPCsU.js",
+    "file": "assets/Create-CV3Ywfjq.js",
     "name": "Create",
     "src": "resources/js/Pages/Schemas/Create.vue",
     "isDynamicEntry": true,
     "imports": [
       "resources/js/app.js",
-      "_AppLayout-CBvnPcGH.js"
+      "_AppLayout-n6hsF4X4.js"
     ],
     "css": [
-      "assets/app-Dfx4Ayps.css"
+      "assets/app-COC1O8dK.css"
     ]
   },
   "resources/js/Pages/Schemas/Edit.vue": {
-    "file": "assets/Edit-DpsQ5lRs.js",
+    "file": "assets/Edit-Cf0qO_3D.js",
     "name": "Edit",
     "src": "resources/js/Pages/Schemas/Edit.vue",
     "isDynamicEntry": true,
     "imports": [
       "resources/js/app.js",
-      "_AppLayout-CBvnPcGH.js",
+      "_AppLayout-n6hsF4X4.js",
       "resources/js/Pages/Schemas/Components/FieldItem.vue"
     ],
     "css": [
       "assets/Edit-Cg6APa9Z.css",
-      "assets/app-Dfx4Ayps.css"
+      "assets/app-COC1O8dK.css"
     ]
   },
   "resources/js/Pages/Schemas/Index.vue": {
-    "file": "assets/Index-DZ5fjwki.js",
+    "file": "assets/Index-Choov7ER.js",
     "name": "Index",
     "src": "resources/js/Pages/Schemas/Index.vue",
     "isDynamicEntry": true,
     "imports": [
       "resources/js/app.js",
-      "_AppLayout-CBvnPcGH.js"
+      "_AppLayout-n6hsF4X4.js"
     ],
     "css": [
-      "assets/app-Dfx4Ayps.css"
+      "assets/app-COC1O8dK.css"
     ]
   },
   "resources/js/Pages/Sitemaps/Index.vue": {
-    "file": "assets/Index-jh3TbEVX.js",
+    "file": "assets/Index-Cemb2vHZ.js",
     "name": "Index",
     "src": "resources/js/Pages/Sitemaps/Index.vue",
     "isDynamicEntry": true,
     "imports": [
       "resources/js/app.js",
-      "_AppLayout-CBvnPcGH.js"
+      "_AppLayout-n6hsF4X4.js"
     ],
     "css": [
       "assets/Index-vpdI21Eo.css",
-      "assets/app-Dfx4Ayps.css"
+      "assets/app-COC1O8dK.css"
     ]
   },
   "resources/js/Pages/Sitemaps/Manager.vue": {
-    "file": "assets/Manager-snIfMvnu.js",
+    "file": "assets/Manager-BI3vIuVP.js",
     "name": "Manager",
     "src": "resources/js/Pages/Sitemaps/Manager.vue",
     "isDynamicEntry": true,
     "imports": [
       "resources/js/app.js",
-      "_AppLayout-CBvnPcGH.js"
+      "_AppLayout-n6hsF4X4.js"
     ],
     "css": [
       "assets/Manager-CSfojbBY.css",
-      "assets/app-Dfx4Ayps.css"
+      "assets/app-COC1O8dK.css"
     ]
   },
   "resources/js/app.js": {
-    "file": "assets/app-DSSj5FBY.js",
+    "file": "assets/app-DTNBGdar.js",
     "name": "app",
     "src": "resources/js/app.js",
     "isEntry": true,
@@ -146,7 +146,7 @@
       "resources/js/Pages/Sitemaps/Manager.vue"
     ],
     "css": [
-      "assets/app-Dfx4Ayps.css"
+      "assets/app-COC1O8dK.css"
     ]
   }
 }

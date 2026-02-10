@@ -277,6 +277,9 @@ class SchemaController extends Controller
             'brand_show_products' => 'boolean',
             'brand_show_services' => 'boolean',
             'brand_show_offers' => 'boolean',
+            'brand_name' => 'nullable|string|max:255',
+            'brand_logo' => 'nullable|url',
+            'brand_alternate_name' => 'nullable|string',
             'brand_products' => 'array',
             'brand_products.*.@type' => 'nullable|string',
             'brand_products.*.name' => 'nullable|string',
@@ -303,15 +306,22 @@ class SchemaController extends Controller
         $primaryTypeId = null;
         if ($validated['include_brand_identity']) {
             $primaryTypeId = SchemaType::where('type_key', 'organization')->first()?->id;
-            $fields = $this->getOrganizationBaseData($validated['meta_description'], $validated['page_link']);
+            $fields = $this->getOrganizationBaseData(
+                $validated['meta_description'], 
+                $validated['page_link'],
+                [
+                    'name' => $validated['brand_name'] ?? $validated['name'],
+                    'logo' => $validated['brand_logo'] ?? '',
+                    'alternateName' => $validated['brand_alternate_name'] ?? ''
+                ]
+            );
             
             if ($validated['brand_show_offers']) {
                 $fields['offers'] = [
                     '@type' => 'Offer',
-                    'name' => 'Daily Deposit Bonus',
-                    'description' => '99% withdrawable bonus on all deposits with no limitations',
-                    'category' => 'DepositBonus',
-                    'url' => $validated['page_link'] . '/bonuses'
+                    'name' => 'Primary Offer',
+                    'description' => 'Exclusive access/offer available through this portal.',
+                    'url' => $validated['page_link']
                 ];
             }
 
@@ -352,6 +362,42 @@ class SchemaController extends Controller
                 $fields['service'] = $this->deduplicateItems(
                     array_merge($fields['service'] ?? [], $mappedItems)
                 );
+            } elseif ($type->type_key === 'faq') {
+                $fields['mainEntity'] = array_map(function($item) {
+                    return [
+                        '@type' => 'Question',
+                        'name' => $item['name'] ?? '',
+                        'acceptedAnswer' => [
+                            '@type' => 'Answer',
+                            'text' => $item['description'] ?? ''
+                        ]
+                    ];
+                }, $items);
+            } elseif ($type->type_key === 'howto') {
+                $fields['step'] = array_map(function($item, $index) {
+                    return [
+                        '@type' => 'HowToStep',
+                        'position' => $index + 1,
+                        'name' => $item['name'] ?? '',
+                        'text' => $item['description'] ?? '',
+                        'url' => $item['url'] ?? ''
+                    ];
+                }, $items, array_keys($items));
+            } elseif ($type->type_key === 'localbusiness') {
+                // For LocalBusiness, we expect the first item to contain the main details
+                $business = $items[0] ?? [];
+                $fields = array_merge($fields, [
+                    '@type' => 'LocalBusiness',
+                    'address' => [
+                        '@type' => 'PostalAddress',
+                        'streetAddress' => $business['address'] ?? '',
+                        'addressLocality' => $business['city'] ?? '',
+                        'addressRegion' => $business['region'] ?? '',
+                        'addressCountry' => $business['country'] ?? ''
+                    ],
+                    'telephone' => $business['phone'] ?? '',
+                    'priceRange' => $business['price_range'] ?? '$$'
+                ]);
             } else {
                 $fields[$type->type_key] = array_merge($fields[$type->type_key] ?? [], $items);
             }
@@ -405,41 +451,77 @@ class SchemaController extends Controller
     private $lastGeneratedSchema;
 
     /**
-     * Centralized Brand/Organization Data
+     * Generalized Brand/Organization Data
      */
-    private function getOrganizationBaseData(string $description, string $url): array
+    private function getOrganizationBaseData(string $description, string $url, array $overrides = []): array
     {
         return [
             '@type' => ['Organization', 'WebSite'],
-            'name' => '9UBET',
-            'alternateName' => ['9UBET Kenya', '9ubet.com'],
+            'name' => $overrides['name'] ?? 'Universal Brand',
+            'alternateName' => $overrides['alternateName'] ?? '',
             'description' => $description,
             'url' => $url,
-            'logo' => 'https://www.9ubet.co.ke/logo.png',
-            'sameAs' => [
-                'https://www.instagram.com/9ubet.com_?igsh=MWx4eGwyYTlzaTFtYQ%3D%3D&utm_source=qr',
-                'https://x.com/9ubet?s=21',
-                'https://www.facebook.com/profile.php?id=61568301403707',
-                'https://www.linkedin.com/company/96422776'
-            ],
+            'logo' => $overrides['logo'] ?? '',
             'address' => [
-                'addressCountry' => 'KE',
-                'addressRegion' => 'Nairobi'
-            ],
-            'paymentAccepted' => 'M-Pesa',
-            'currenciesAccepted' => 'KES',
-            'aggregateRating' => [
-                '@type' => 'AggregateRating',
-                'ratingValue' => '4.8',
-                'reviewCount' => '2500',
-                'bestRating' => '5'
+                'addressRegion' => 'Global'
             ],
             'potentialAction' => [
-                '@type' => 'RegisterAction',
-                'name' => 'Betting Registration',
-                'target' => 'https://www.9ubet.co.ke/register'
+                '@type' => 'ViewAction',
+                'name' => 'Visit Official Site',
+                'target' => $url
             ]
         ];
+    }
+
+    public function analyzeUrl(Request $request)
+    {
+        $request->validate(['url' => 'required|url']);
+        $url = $request->url;
+
+        try {
+            $client = new \GuzzleHttp\Client();
+            $response = $client->get($url, ['timeout' => 5]);
+            $html = (string) $response->getBody();
+
+            $doc = new \DOMDocument();
+            @$doc->loadHTML($html);
+            $titles = $doc->getElementsByTagName('title');
+            $title = $titles->length > 0 ? $titles->item(0)->nodeValue : '';
+            
+            $description = '';
+            $ogType = '';
+            $metas = $doc->getElementsByTagName('meta');
+            foreach ($metas as $meta) {
+                if ($meta->getAttribute('name') === 'description') {
+                    $description = $meta->getAttribute('content');
+                }
+                if ($meta->getAttribute('property') === 'og:type') {
+                    $ogType = $meta->getAttribute('content');
+                }
+            }
+
+            // Simple type detection
+            $suggestedModules = [];
+            if (str_contains($url, '/faq') || str_contains($url, 'frequently-asked')) {
+                $suggestedModules[] = 'faq';
+            }
+            if (str_contains($url, '/how-to') || str_contains($url, '/guide')) {
+                $suggestedModules[] = 'howto';
+            }
+            if ($ogType === 'business.business' || str_contains($url, '/contact')) {
+                $suggestedModules[] = 'localbusiness';
+            }
+
+            return response()->json([
+                'title' => $title,
+                'description' => $description,
+                'canonical' => $url,
+                'og_type' => $ogType,
+                'suggestions' => $suggestedModules
+            ]);
+        } catch (\Exception $e) {
+            return response()->json(['error' => 'Failed to analyze URL: ' . $e->getMessage()], 422);
+        }
     }
 
     /**

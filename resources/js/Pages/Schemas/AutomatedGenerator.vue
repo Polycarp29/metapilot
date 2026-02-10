@@ -13,13 +13,13 @@
                 <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-blue-400 opacity-75"></span>
                 <span class="relative inline-flex rounded-full h-2 w-2 bg-blue-500"></span>
               </span>
-              Modular Intelligence
+              Universal Intelligence
             </div>
             <h1 class="text-5xl md:text-6xl font-black text-white tracking-tight mb-6">
-              9UBET <span class="text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-emerald-400">Flex-Builder</span>
+              Modular <span class="text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-emerald-400">Flex-Builder</span>
             </h1>
             <p class="text-slate-400 font-medium text-lg max-w-xl leading-relaxed">
-              Create highly adaptive structured data. Toggle brand identity, add custom categories, and tailor every page context.
+              Create highly adaptive structured data for any website. Toggle brand identity, add custom categories, and tailor every page context.
             </p>
           </div>
           <Link 
@@ -77,7 +77,21 @@
                 </div>
                 <div class="space-y-4">
                   <label class="block text-xs font-black text-slate-400 uppercase tracking-[0.2em] ml-2">Canonical Link Destination</label>
-                  <input v-model="form.page_link" type="url" class="block w-full px-8 py-5 rounded-3xl border-slate-200 bg-slate-50/50 focus:bg-white transition-standard text-slate-900 font-medium" :class="{'ring-2 ring-red-500 border-red-500': errors.page_link}" />
+                  <div class="flex gap-4">
+                    <input v-model="form.page_link" type="url" class="block w-full px-8 py-5 rounded-3xl border-slate-200 bg-slate-50/50 focus:bg-white transition-standard text-slate-900 font-medium" :class="{'ring-2 ring-red-500 border-red-500': errors.page_link}" />
+                    <button 
+                      type="button" 
+                      @click="analyzeUrl" 
+                      :disabled="isAnalyzing"
+                      class="shrink-0 bg-slate-900 text-white px-8 py-5 rounded-3xl font-black transition-standard hover:bg-slate-800 disabled:opacity-50 flex items-center gap-2"
+                    >
+                      <svg v-if="isAnalyzing" class="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
+                        <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                        <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                      </svg>
+                      {{ isAnalyzing ? 'Scanning...' : 'Scan URL' }}
+                    </button>
+                  </div>
                   <p v-if="errors.page_link" class="text-red-500 text-[10px] font-black uppercase tracking-widest ml-4 mt-2">{{ errors.page_link }}</p>
                 </div>
               </div>
@@ -130,70 +144,88 @@
                       enter-from-class="opacity-0 -translate-y-8" 
                       enter-to-class="opacity-100 translate-y-0"
                     >
-                      <div v-if="form.include_brand_identity" class="bg-indigo-50/40 p-10 rounded-[2.5rem] border border-indigo-100 space-y-10 ml-4 relative overflow-hidden">
-                        <div class="absolute top-0 right-0 p-4 opacity-5">
-                          <svg class="w-32 h-32 text-indigo-900" fill="currentColor" viewBox="0 0 24 24"><path d="M20 2H4c-1.1 0-1.99.9-1.99 2L2 22l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2z"/></svg>
-                        </div>
+                      <div v-if="form.include_brand_identity" class="space-y-6">
+                        <div class="bg-indigo-50/40 p-10 rounded-[2.5rem] border border-indigo-100 space-y-10 ml-4 relative overflow-hidden">
+                          <div class="absolute top-0 right-0 p-4 opacity-5">
+                            <svg class="w-32 h-32 text-indigo-900" fill="currentColor" viewBox="0 0 24 24"><path d="M20 2H4c-1.1 0-1.99.9-1.99 2L2 22l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2z"/></svg>
+                          </div>
 
-                        <!-- Question 1: Products -->
-                        <div class="space-y-4">
                           <div class="flex items-center gap-4">
                             <div class="w-2 h-2 rounded-full bg-blue-500 shadow-[0_0_10px_rgba(59,130,246,0.5)]"></div>
                             <span class="text-[10px] font-black uppercase tracking-[0.2em] text-blue-600/60">Guided Building</span>
                           </div>
-                          <h5 class="text-lg font-black text-slate-800 tracking-tight leading-tight">Do you want to list your brand's flagship products?</h5>
-                          <div class="flex gap-3">
-                            <button 
-                              type="button"
-                              @click="toggleBrandProducts"
-                              :class="form.brand_show_products ? 'bg-blue-600 text-white shadow-lg' : 'bg-white text-slate-600 border border-slate-200'"
-                              class="px-6 py-2.5 rounded-xl text-xs font-black uppercase tracking-widest transition-all"
-                            >
-                              {{ form.brand_show_products ? 'Yes, Include Products' : 'No Products' }}
-                            </button>
-                            <Transition enter-active-class="transition duration-300" enter-from-class="opacity-0 scale-95">
-                              <label v-if="form.brand_show_products" class="flex items-center gap-3 bg-white px-5 py-2.5 rounded-xl border border-blue-100 shadow-sm cursor-pointer hover:border-blue-300 transition-colors">
-                                <input v-model="form.brand_link_products" type="checkbox" class="w-4 h-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500" />
-                                <span class="text-[10px] font-black text-slate-500 uppercase tracking-widest leading-none">Link to pages?</span>
-                              </label>
-                            </Transition>
-                          </div>
-                        </div>
-
-                        <!-- Question 2: Services -->
-                        <div class="space-y-4 pt-6 border-t border-indigo-100/50">
-                          <h5 class="text-lg font-black text-slate-800 tracking-tight leading-tight">Should we also detail the services you provide?</h5>
-                          <div class="flex gap-3">
-                            <button 
-                              type="button"
-                              @click="toggleBrandServices"
-                              :class="form.brand_show_services ? 'bg-indigo-600 text-white shadow-lg' : 'bg-white text-slate-600 border border-slate-200'"
-                              class="px-6 py-2.5 rounded-xl text-xs font-black uppercase tracking-widest transition-all"
-                            >
-                              {{ form.brand_show_services ? 'Yes, Add Services' : 'No Services' }}
-                            </button>
-                            <Transition enter-active-class="transition duration-300" enter-from-class="opacity-0 scale-95">
-                              <label v-if="form.brand_show_services" class="flex items-center gap-3 bg-white px-5 py-2.5 rounded-xl border border-indigo-100 shadow-sm cursor-pointer hover:border-indigo-300 transition-colors">
-                                <input v-model="form.brand_link_services" type="checkbox" class="w-4 h-4 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500" />
-                                <span class="text-[10px] font-black text-slate-500 uppercase tracking-widest leading-none">Include Landing Links?</span>
-                              </label>
-                            </Transition>
-                          </div>
-                        </div>
-
-                        <!-- Question 3: Offers -->
-                        <div class="space-y-4 pt-6 border-t border-indigo-100/50">
-                          <label class="flex items-center gap-4 cursor-pointer group">
-                            <div class="relative">
-                              <input v-model="form.brand_show_offers" type="checkbox" class="sr-only peer" />
-                              <div class="w-12 h-6 bg-slate-200 rounded-full peer peer-checked:bg-emerald-600 transition-colors shadow-inner"></div>
-                              <div class="absolute left-1 top-1 w-4 h-4 bg-white rounded-full peer-checked:translate-x-6 transition-transform shadow-sm"></div>
+                          <h5 class="text-lg font-black text-slate-800 tracking-tight leading-tight">Define your brand identity details.</h5>
+                          <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                            <div class="space-y-2">
+                                <label class="text-[9px] font-black text-slate-400 uppercase tracking-widest ml-1">Brand Name</label>
+                                <input v-model="form.brand_name" type="text" placeholder="e.g., Acme Corp" class="w-full bg-white border-slate-200 rounded-xl px-5 py-3 text-xs font-bold" />
                             </div>
-                            <div>
-                              <span class="text-xs font-black text-slate-700 uppercase tracking-widest block">Standard Betting Offers</span>
-                              <span class="text-[10px] text-slate-400 font-medium">Include welcome bonuses & deposit matches.</span>
+                            <div class="space-y-2">
+                                <label class="text-[9px] font-black text-slate-400 uppercase tracking-widest ml-1">Brand Logo URL</label>
+                                <input v-model="form.brand_logo" type="url" placeholder="https://..." class="w-full bg-white border-slate-200 rounded-xl px-5 py-3 text-xs font-bold" />
                             </div>
-                          </label>
+                            <div class="space-y-2 md:col-span-2">
+                                <label class="text-[9px] font-black text-slate-400 uppercase tracking-widest ml-1">Alternate Name / Trademarks</label>
+                                <input v-model="form.brand_alternate_name" type="text" placeholder="e.g., Acme, Acme Co" class="w-full bg-white border-slate-200 rounded-xl px-5 py-3 text-xs font-bold" />
+                            </div>
+                          </div>
+
+                          <!-- Question 1: Products -->
+                          <div class="space-y-4 pt-6 border-t border-indigo-100/50">
+                            <h5 class="text-lg font-black text-slate-800 tracking-tight leading-tight">Do you want to list your brand's flagship products?</h5>
+                            <div class="flex gap-3">
+                              <button 
+                                type="button"
+                                @click="toggleBrandProducts"
+                                :class="form.brand_show_products ? 'bg-blue-600 text-white shadow-lg' : 'bg-white text-slate-600 border border-slate-200'"
+                                class="px-6 py-2.5 rounded-xl text-xs font-black uppercase tracking-widest transition-all"
+                              >
+                                {{ form.brand_show_products ? 'Yes, Include Products' : 'No Products' }}
+                              </button>
+                              <Transition enter-active-class="transition duration-300" enter-from-class="opacity-0 scale-95">
+                                <label v-if="form.brand_show_products" class="flex items-center gap-3 bg-white px-5 py-2.5 rounded-xl border border-blue-100 shadow-sm cursor-pointer hover:border-blue-300 transition-colors">
+                                  <input v-model="form.brand_link_products" type="checkbox" class="w-4 h-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500" />
+                                  <span class="text-[10px] font-black text-slate-500 uppercase tracking-widest leading-none">Link to pages?</span>
+                                </label>
+                              </Transition>
+                            </div>
+                          </div>
+
+                          <!-- Question 2: Services -->
+                          <div class="space-y-4 pt-6 border-t border-indigo-100/50">
+                            <h5 class="text-lg font-black text-slate-800 tracking-tight leading-tight">Should we also detail the services you provide?</h5>
+                            <div class="flex gap-3">
+                              <button 
+                                type="button"
+                                @click="toggleBrandServices"
+                                :class="form.brand_show_services ? 'bg-indigo-600 text-white shadow-lg' : 'bg-white text-slate-600 border border-slate-200'"
+                                class="px-6 py-2.5 rounded-xl text-xs font-black uppercase tracking-widest transition-all"
+                              >
+                                {{ form.brand_show_services ? 'Yes, Add Services' : 'No Services' }}
+                              </button>
+                              <Transition enter-active-class="transition duration-300" enter-from-class="opacity-0 scale-95">
+                                <label v-if="form.brand_show_services" class="flex items-center gap-3 bg-white px-5 py-2.5 rounded-xl border border-indigo-100 shadow-sm cursor-pointer hover:border-indigo-300 transition-colors">
+                                  <input v-model="form.brand_link_services" type="checkbox" class="w-4 h-4 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500" />
+                                  <span class="text-[10px] font-black text-slate-500 uppercase tracking-widest leading-none">Include Landing Links?</span>
+                                </label>
+                              </Transition>
+                            </div>
+                          </div>
+
+                          <!-- Question 3: Offers -->
+                          <div class="space-y-4 pt-6 border-t border-indigo-100/50">
+                            <label class="flex items-center gap-4 cursor-pointer group">
+                              <div class="relative">
+                                <input v-model="form.brand_show_offers" type="checkbox" class="sr-only peer" />
+                                <div class="w-12 h-6 bg-slate-200 rounded-full peer peer-checked:bg-emerald-600 transition-colors shadow-inner"></div>
+                                <div class="absolute left-1 top-1 w-4 h-4 bg-white rounded-full peer-checked:translate-x-6 transition-transform shadow-sm"></div>
+                              </div>
+                              <div>
+                                <span class="text-xs font-black text-slate-700 uppercase tracking-widest block">Standard Market Offers</span>
+                                <span class="text-[10px] text-slate-400 font-medium">Include general promotions & value propositions.</span>
+                              </div>
+                            </label>
+                          </div>
                         </div>
                       </div>
                     </Transition>
@@ -294,7 +326,7 @@
                           <!-- Question 2: Name -->
                           <div class="space-y-4">
                             <label class="block text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">Assistant: "What's the name of this {{ p['@type'].toLowerCase() }}?"</label>
-                            <input v-model="p.name" placeholder="e.g., 9UBET VIP Membership" class="block w-full px-8 py-5 rounded-2xl border-slate-200 bg-slate-50/50 focus:bg-white transition-standard text-slate-900 font-bold text-lg" />
+                            <input v-model="p.name" placeholder="e.g., Enterprise Plan" class="block w-full px-8 py-5 rounded-2xl border-slate-200 bg-slate-50/50 focus:bg-white transition-standard text-slate-900 font-bold text-lg" />
                           </div>
 
                           <!-- Question 3: Description (Reveals after name) -->
@@ -460,41 +492,95 @@
                       </div>
                     </div>
 
-                    <!-- Service Module Guided -->
-                    <div v-else-if="getTypeKey(module.schema_type_id) === 'service' || getTypeKey(module.schema_type_id) === 'financial_product'" class="space-y-8">
+                    <!-- FAQ Module Guided -->
+                    <div v-else-if="getTypeKey(module.schema_type_id) === 'faq'" class="space-y-8">
                        <div class="flex justify-between items-center">
-                        <label class="text-[10px] font-black text-slate-400 uppercase tracking-widest">Assistant: "What specific {{ getTypeName(module.schema_type_id) }} items should we add?"</label>
-                        <button @click.prevent="addService(mIdx)" class="text-indigo-600 font-bold text-[10px] uppercase tracking-widest">+ Add Item</button>
+                        <label class="text-[10px] font-black text-slate-400 uppercase tracking-widest">Assistant: "Add your Frequently Asked Questions below."</label>
+                        <button @click.prevent="addFAQItem(mIdx)" class="text-blue-600 font-bold text-[10px] uppercase tracking-widest">+ Add Question</button>
                       </div>
 
-                      <div v-for="(s, sIdx) in module.data.items" :key="sIdx" class="relative group">
+                      <div v-for="(q, qIdx) in module.data.items" :key="qIdx" class="relative group">
                         <div class="bg-white p-10 rounded-[2.5rem] border border-slate-100 shadow-sm transition-all hover:shadow-xl space-y-8">
                           <div class="space-y-4">
-                            <label class="block text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">Assistant: "Service name?"</label>
-                            <input v-model="s.name" placeholder="Service name..." class="block w-full px-8 py-5 rounded-2xl border-slate-200 bg-slate-50/50 focus:bg-white transition-standard text-slate-900 font-bold text-lg" />
+                            <label class="block text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">Question Text</label>
+                            <input v-model="q.name" placeholder="What is your return policy?" class="block w-full px-8 py-5 rounded-2xl border-slate-200 bg-slate-50/50 focus:bg-white transition-standard text-slate-900 font-bold text-lg" />
                           </div>
-
-                          <Transition enter-active-class="transition duration-500 delay-100" enter-from-class="opacity-0 -translate-y-4">
-                            <div v-if="s.name.length > 2" class="space-y-4 pt-6 border-t border-slate-50">
-                              <label class="block text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">Assistant: "Service details?"</label>
-                              <textarea v-model="s.description" rows="2" placeholder="Details..." class="block w-full px-8 py-5 rounded-2xl border-slate-200 bg-slate-50/50 focus:bg-white transition-standard text-slate-900 font-medium"></textarea>
-                            </div>
-                          </Transition>
-
-                          <Transition enter-active-class="transition duration-500 delay-100" enter-from-class="opacity-0 -translate-y-4">
-                            <div v-if="s.description.length > 5" class="space-y-4 pt-6 border-t border-slate-50">
-                              <label class="block text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">Assistant: "Landing page?"</label>
-                              <input v-model="s.url" type="url" placeholder="https://..." class="block w-full px-8 py-5 rounded-2xl border-slate-200 bg-slate-50/50 focus:bg-white transition-standard text-slate-900 font-medium" />
-                            </div>
-                          </Transition>
-
-                          <button @click.prevent="removeService(mIdx, sIdx)" class="absolute -top-3 -right-3 w-8 h-8 rounded-full bg-red-50 text-red-400 border border-red-100 flex items-center justify-center hover:bg-red-500 hover:text-white transition-all shadow-sm">
+                          <div class="space-y-4 pt-6 border-t border-slate-50">
+                            <label class="block text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">Accepted Answer</label>
+                            <textarea v-model="q.description" rows="3" placeholder="Provide the answer here..." class="block w-full px-8 py-5 rounded-2xl border-slate-200 bg-slate-50/50 focus:bg-white transition-standard text-slate-900 font-medium"></textarea>
+                          </div>
+                          <button @click.prevent="removeFAQItem(mIdx, qIdx)" class="absolute -top-3 -right-3 w-8 h-8 rounded-full bg-red-50 text-red-400 border border-red-100 flex items-center justify-center hover:bg-red-500 hover:text-white transition-all shadow-sm">
                             <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
                             </svg>
                           </button>
                         </div>
                       </div>
+                    </div>
+
+                    <!-- HowTo Module Guided -->
+                    <div v-else-if="getTypeKey(module.schema_type_id) === 'howto'" class="space-y-8">
+                       <div class="flex justify-between items-center">
+                        <label class="text-[10px] font-black text-slate-400 uppercase tracking-widest">Assistant: "Detail your step-by-step instructions."</label>
+                        <button @click.prevent="addHowToStep(mIdx)" class="text-emerald-600 font-bold text-[10px] uppercase tracking-widest">+ Add Step</button>
+                      </div>
+
+                      <div v-for="(s, sIdx) in module.data.items" :key="sIdx" class="relative group">
+                        <div class="bg-white p-10 rounded-[2.5rem] border border-slate-100 shadow-sm transition-all hover:shadow-xl flex gap-8">
+                          <div class="w-12 h-12 rounded-2xl bg-emerald-50 text-emerald-600 flex items-center justify-center font-black text-lg shrink-0 border border-emerald-100">{{ sIdx + 1 }}</div>
+                          <div class="flex-grow space-y-6">
+                            <div class="space-y-2">
+                              <label class="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Step Headline</label>
+                              <input v-model="s.name" placeholder="First Step..." class="w-full bg-slate-50/50 border-slate-200 rounded-xl px-5 py-3 text-sm font-bold" />
+                            </div>
+                            <div class="space-y-2">
+                                <label class="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Step Details</label>
+                                <textarea v-model="s.description" rows="2" placeholder="Details for this step..." class="w-full bg-slate-50/50 border-slate-200 rounded-xl px-5 py-3 text-sm font-medium"></textarea>
+                            </div>
+                          </div>
+                          <button @click.prevent="removeHowToStep(mIdx, sIdx)" class="w-10 h-10 rounded-full bg-red-50 text-red-400 border border-red-100 flex items-center justify-center hover:bg-red-500 hover:text-white transition-all shadow-sm">
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+                            </svg>
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+
+                    <!-- LocalBusiness Module Guided -->
+                    <div v-else-if="getTypeKey(module.schema_type_id) === 'localbusiness'" class="space-y-8">
+                        <div v-if="module.data.items.length === 0" class="flex flex-col items-center py-10 bg-white rounded-[2.5rem] border border-slate-100">
+                          <button @click.prevent="setupLocalBusiness(mIdx)" class="bg-slate-900 text-white px-8 py-4 rounded-2xl font-black text-sm uppercase tracking-widest hover:scale-105 active:scale-95 transition-all">Initialize Business Details</button>
+                        </div>
+                        <div v-else class="bg-white p-12 rounded-[2.5rem] border border-slate-100 shadow-premium space-y-10">
+                          <div class="grid grid-cols-1 md:grid-cols-2 gap-8">
+                            <div class="space-y-3 md:col-span-2">
+                              <label class="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-2">Street Address</label>
+                              <input v-model="module.data.items[0].address" placeholder="123 Innovation Drive" class="w-full bg-slate-50 border-transparent rounded-2xl px-6 py-4 text-sm font-bold focus:bg-white focus:ring-4 focus:ring-blue-500/10 transition-all font-display" />
+                            </div>
+                            <div class="space-y-3">
+                              <label class="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-2">City</label>
+                              <input v-model="module.data.items[0].city" placeholder="Nairobi" class="w-full bg-slate-50 border-transparent rounded-2xl px-6 py-4 text-sm font-bold focus:bg-white focus:ring-4 focus:ring-blue-500/10 transition-all font-display" />
+                            </div>
+                            <div class="space-y-3">
+                              <label class="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-2">Region/State</label>
+                              <input v-model="module.data.items[0].region" placeholder="Nairobi County" class="w-full bg-slate-50 border-transparent rounded-2xl px-6 py-4 text-sm font-bold focus:bg-white focus:ring-4 focus:ring-blue-500/10 transition-all font-display" />
+                            </div>
+                            <div class="space-y-3">
+                              <label class="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-2">Telephone</label>
+                              <input v-model="module.data.items[0].phone" type="tel" placeholder="+254..." class="w-full bg-slate-50 border-transparent rounded-2xl px-6 py-4 text-sm font-bold focus:bg-white focus:ring-4 focus:ring-blue-500/10 transition-all font-display" />
+                            </div>
+                            <div class="space-y-3">
+                              <label class="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-2">Price Range</label>
+                              <select v-model="module.data.items[0].price_range" class="w-full bg-slate-50 border-transparent rounded-2xl px-6 py-4 text-sm font-black focus:bg-white transition-all appearance-none uppercase tracking-widest">
+                                <option value="$">$ (Economy)</option>
+                                <option value="$$">$$ (Standard)</option>
+                                <option value="$$$">$$$ (Premium)</option>
+                                <option value="$$$$">$$$$ (Luxury)</option>
+                              </select>
+                            </div>
+                          </div>
+                        </div>
                     </div>
 
                     <div v-else class="text-center py-10 bg-white rounded-[2rem] border border-slate-100">
@@ -535,12 +621,17 @@
 import { ref } from 'vue'
 import { useForm, Link } from '@inertiajs/vue3'
 import AppLayout from '../../Layouts/AppLayout.vue'
+import axios from 'axios'
+import { useToastStore } from '../../stores/useToastStore'
+
+const toastStore = useToastStore()
 
 const props = defineProps({
   schemaTypes: Array
 })
 
 const currentStep = ref(0)
+const isAnalyzing = ref(false)
 const steps = [
   { label: 'Foundation', title: 'SEO Context' },
   { label: 'Modular', title: 'Schema Blocks' },
@@ -550,8 +641,11 @@ const steps = [
 const form = useForm({
   name: '',
   meta_description: '',
-  page_link: 'https://www.9ubet.co.ke',
+  page_link: '',
   include_brand_identity: true,
+  brand_name: '',
+  brand_logo: '',
+  brand_alternate_name: '',
   brand_show_products: false,
   brand_link_products: true,
   brand_show_services: false,
@@ -561,6 +655,55 @@ const form = useForm({
   brand_services: [],
   modules: []
 })
+
+const analyzeUrl = async () => {
+  if (!form.page_link) {
+    toastStore.error('Please enter a URL first.')
+    return
+  }
+
+  isAnalyzing.value = true
+  try {
+    const response = await axios.post(route('api.analyze-url'), { url: form.page_link })
+    form.name = response.data.title || ''
+    form.meta_description = response.data.description || ''
+    
+    // Improved brand detection
+    if (response.data.title) {
+      if (response.data.title.includes('|')) {
+        form.brand_name = response.data.title.split('|').pop().trim()
+      } else if (response.data.title.includes('-')) {
+        form.brand_name = response.data.title.split('-').pop().trim()
+      } else {
+        form.brand_name = response.data.title
+      }
+    }
+
+    // Handle suggestions
+    if (response.data.suggestions && response.data.suggestions.length > 0) {
+      response.data.suggestions.forEach(suggestionKey => {
+        const type = props.schemaTypes.find(t => t.type_key === suggestionKey)
+        if (type && !form.modules.find(m => m.schema_type_id === type.id)) {
+          form.modules.push({
+            schema_type_id: type.id,
+            data: { items: suggestionKey === 'localbusiness' ? [] : [{ name: '', description: '' }] }
+          })
+          
+          // Auto-initialize if localbusiness
+          if (suggestionKey === 'localbusiness') {
+            setupLocalBusiness(form.modules.length - 1)
+          }
+        }
+      })
+    }
+
+    toastStore.success('URL Intelligence has populated the foundational fields and suggested modules!')
+  } catch (e) {
+    toastStore.error('Failed to analyze URL. You can still enter details manually.')
+  } finally {
+    isAnalyzing.value = false
+  }
+}
 
 const addBrandProduct = () => {
   form.brand_products.push({ 
@@ -617,12 +760,35 @@ const removeProduct = (mIdx, pIdx) => {
   form.modules[mIdx].data.items.splice(pIdx, 1)
 }
 
-const addService = (mIdx) => {
+const removeService = (mIdx, sIdx) => {
+  form.modules[mIdx].data.items.splice(sIdx, 1)
+}
+
+const addFAQItem = (mIdx) => {
+  form.modules[mIdx].data.items.push({ name: '', description: '' })
+}
+
+const removeFAQItem = (mIdx, qIdx) => {
+  form.modules[mIdx].data.items.splice(qIdx, 1)
+}
+
+const addHowToStep = (mIdx) => {
   form.modules[mIdx].data.items.push({ name: '', description: '', url: '' })
 }
 
-const removeService = (mIdx, sIdx) => {
+const removeHowToStep = (mIdx, sIdx) => {
   form.modules[mIdx].data.items.splice(sIdx, 1)
+}
+
+const setupLocalBusiness = (mIdx) => {
+  form.modules[mIdx].data.items = [{
+    address: '',
+    city: '',
+    region: '',
+    country: 'Kenya',
+    phone: '',
+    price_range: '$$'
+  }]
 }
 
 const getTypeName = (id) => props.schemaTypes.find(t => t.id === id)?.name || 'Custom'
