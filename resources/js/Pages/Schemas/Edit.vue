@@ -104,6 +104,13 @@
               </div>
               <div class="flex items-center gap-3">
                 <button
+                  @click="toggleEditorMode"
+                  :class="isEditorMode ? 'bg-emerald-500 text-white' : 'bg-white/5 text-slate-400 hover:text-white'"
+                  class="px-4 py-2 rounded-xl transition-standard border border-white/5 text-[10px] font-black uppercase tracking-widest active:scale-90"
+                >
+                  {{ isEditorMode ? 'Viewing Highlighted' : 'Edit as Code' }}
+                </button>
+                <button
                   @click="showImportModal = true"
                   class="bg-blue-500/10 hover:bg-blue-500/20 text-blue-400 px-4 py-2 rounded-xl transition-standard border border-blue-500/20 text-[10px] font-black uppercase tracking-widest active:scale-90"
                 >
@@ -121,15 +128,24 @@
               </div>
             </div>
             
-            <div class="flex-grow p-8 font-mono text-[13px] overflow-auto custom-scrollbar-dark selection:bg-blue-500/30">
-              <pre class="bg-transparent"><code class="grid gap-1"><span v-for="(line, i) in previewLines" :key="i" class="flex gap-6"><span class="text-slate-700 w-8 text-right select-none pr-4 border-r border-slate-800">{{ i + 1 }}</span><span class="text-slate-300 whitespace-pre" v-html="highlight(line)"></span></span></code></pre>
+            <div class="flex-grow p-8 font-mono text-[13px] overflow-auto custom-scrollbar-dark selection:bg-blue-500/30 relative">
+              <textarea
+                v-if="isEditorMode"
+                v-model="editableCode"
+                @input="handleCodeInput"
+                class="absolute inset-0 w-full h-full p-8 bg-transparent text-slate-300 resize-none border-none focus:ring-0 font-mono text-[13px] custom-scrollbar-dark"
+                spellcheck="false"
+              ></textarea>
+              <pre v-else class="bg-transparent"><code class="grid gap-1"><span v-for="(line, i) in previewLines" :key="i" class="flex gap-6"><span class="text-slate-700 w-8 text-right select-none pr-4 border-r border-slate-800">{{ i + 1 }}</span><span class="text-slate-300 whitespace-pre" v-html="highlight(line)"></span></span></code></pre>
             </div>
             
             <div class="px-8 py-5 bg-black/40 border-t border-white/5 flex items-center justify-between">
               <div class="flex gap-4">
                 <div class="flex flex-col">
                   <span class="text-[9px] font-black text-slate-500 uppercase tracking-widest">Compiler</span>
-                  <span class="text-[11px] text-emerald-400 font-bold">READY</span>
+                  <span :class="syntaxError ? 'text-red-400' : 'text-emerald-400'" class="text-[11px] font-bold">
+                    {{ syntaxError ? 'SYNTAX ERROR' : 'READY' }}
+                  </span>
                 </div>
                 <div class="w-px h-8 bg-slate-800 mx-2"></div>
                 <div class="flex flex-col">
@@ -138,8 +154,10 @@
                 </div>
               </div>
               <div class="flex items-center gap-2 group cursor-help">
-                <span class="w-2 h-2 bg-emerald-500 rounded-full shadow-[0_0_8px_rgba(16,185,129,0.5)]"></span>
-                <span class="text-[11px] font-bold text-slate-400 group-hover:text-emerald-400 transition-colors">Valid Structured Data</span>
+                <span :class="syntaxError ? 'bg-red-500' : 'bg-emerald-500'" class="w-2 h-2 rounded-full shadow-[0_0_8px_rgba(16,185,129,0.5)]"></span>
+                <span class="text-[11px] font-bold text-slate-400 group-hover:text-emerald-400 transition-colors">
+                  {{ syntaxError ? 'Invalid JSON Format' : 'Valid Structured Data' }}
+                </span>
               </div>
             </div>
           </div>
@@ -206,6 +224,9 @@ const previewJson = ref('')
 const saving = ref(false)
 const showImportModal = ref(false)
 const importCode = ref('')
+const isEditorMode = ref(false)
+const editableCode = ref('')
+const syntaxError = ref(false)
 
 const previewLines = computed(() => previewJson.value.split('\n'))
 
@@ -257,6 +278,9 @@ const generatePreview = () => {
     ...processFieldsForPreview(localFields.value)
   }
   previewJson.value = JSON.stringify(result, null, 2)
+  if (!isEditorMode.value) {
+    editableCode.value = previewJson.value
+  }
 }
 
 const getTypeOfValue = (val) => {
@@ -323,6 +347,25 @@ const processImport = () => {
     toastStore.success('Intelligence Interpreter has expanded the form architecture!')
   } catch (e) {
     toastStore.error('Parse Error: Please ensure you are pasting valid JSON-LD.')
+  }
+}
+
+const toggleEditorMode = () => {
+  isEditorMode.value = !isEditorMode.value
+  if (!isEditorMode.value) {
+    generatePreview()
+  }
+}
+
+const handleCodeInput = () => {
+  try {
+    const parsed = JSON.parse(editableCode.value)
+    syntaxError.value = false
+    localFields.value = jsonToFields(parsed)
+    // We don't call generatePreview here to avoid cursor jump in textarea
+    // but we update the internal state
+  } catch (e) {
+    syntaxError.value = true
   }
 }
 
