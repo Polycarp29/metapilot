@@ -15,6 +15,7 @@ Route::post('api/analyze-url', [SchemaController::class, 'analyzeUrl'])->name('a
 Route::resource('schemas', SchemaController::class);
 
 // Schema Actions (AJAX endpoints)
+Route::post('api/validate-schema', [SchemaController::class, 'validateJsonLd'])->name('api.validate-schema');
 Route::prefix('schemas/{schema}')->name('schemas.')->group(function () {
     Route::get('preview', [SchemaController::class, 'preview'])->name('preview');
     Route::get('export', [SchemaController::class, 'export'])->name('export');

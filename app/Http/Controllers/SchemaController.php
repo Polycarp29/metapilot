@@ -219,6 +219,18 @@ class SchemaController extends Controller
         ]);
     }
 
+    public function validateJsonLd(Request $request)
+    {
+        $request->validate([
+            'json_ld' => 'required|array'
+        ]);
+
+        $validationService = new SchemaValidationService();
+        $validation = $validationService->validateSchema($request->json_ld);
+
+        return response()->json($validation);
+    }
+
     public function testWithGoogle(Schema $schema)
     {
         $schema->load(['schemaType', 'rootFields.recursiveChildren']);

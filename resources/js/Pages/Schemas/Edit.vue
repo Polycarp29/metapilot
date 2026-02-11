@@ -145,25 +145,47 @@
               <pre v-else class="bg-transparent"><code class="grid gap-1"><span v-for="(line, i) in previewLines" :key="i" class="flex gap-6"><span class="text-slate-700 w-8 text-right select-none pr-4 border-r border-slate-800">{{ i + 1 }}</span><span class="text-slate-300 whitespace-pre" v-html="highlight(line)"></span></span></code></pre>
             </div>
             
-            <div class="px-8 py-5 bg-black/40 border-t border-white/5 flex items-center justify-between">
-              <div class="flex gap-4">
-                <div class="flex flex-col">
-                  <span class="text-[9px] font-black text-slate-500 uppercase tracking-widest">Compiler</span>
-                  <span :class="syntaxError ? 'text-red-400' : 'text-emerald-400'" class="text-[11px] font-bold">
-                    {{ syntaxError ? 'SYNTAX ERROR' : 'READY' }}
-                  </span>
+            <div class="px-8 py-5 bg-black/40 border-t border-white/5 flex flex-col gap-4">
+              <!-- Validation Indicators -->
+              <div class="flex items-center justify-between">
+                <div class="flex gap-4">
+                  <div class="flex flex-col">
+                    <span class="text-[9px] font-black text-slate-500 uppercase tracking-widest">Compiler</span>
+                    <span :class="syntaxError ? 'text-red-400' : 'text-emerald-400'" class="text-[11px] font-bold">
+                      {{ syntaxError ? 'SYNTAX ERROR' : 'READY' }}
+                    </span>
+                  </div>
+                  <div class="w-px h-8 bg-slate-800 mx-2"></div>
+                  <div class="flex flex-col">
+                     <span class="text-[9px] font-black text-slate-500 uppercase tracking-widest">Protocol</span>
+                     <span class="text-[11px] text-blue-400 font-bold">JSON-LD 1.1</span>
+                  </div>
                 </div>
-                <div class="w-px h-8 bg-slate-800 mx-2"></div>
-                <div class="flex flex-col">
-                   <span class="text-[9px] font-black text-slate-500 uppercase tracking-widest">Protocol</span>
-                   <span class="text-[11px] text-blue-400 font-bold">JSON-LD 1.1</span>
+                <div class="flex items-center gap-4">
+                  <div v-if="isValidating" class="w-4 h-4 border-2 border-blue-500/30 border-t-blue-500 rounded-full animate-spin"></div>
+                  <div class="flex items-center gap-2 group cursor-help">
+                    <span :class="seoErrors.length > 0 || syntaxError ? 'bg-red-500 shadow-[0_0_8px_rgba(239,68,68,0.5)]' : 'bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.5)]'" class="w-2 h-2 rounded-full"></span>
+                    <span class="text-[11px] font-bold text-slate-400 group-hover:text-emerald-400 transition-colors">
+                      {{ seoErrors.length > 0 || syntaxError ? 'Action Required' : 'SEO Standard Passed' }}
+                    </span>
+                  </div>
                 </div>
               </div>
-              <div class="flex items-center gap-2 group cursor-help">
-                <span :class="syntaxError ? 'bg-red-500' : 'bg-emerald-500'" class="w-2 h-2 rounded-full shadow-[0_0_8px_rgba(16,185,129,0.5)]"></span>
-                <span class="text-[11px] font-bold text-slate-400 group-hover:text-emerald-400 transition-colors">
-                  {{ syntaxError ? 'Invalid JSON Format' : 'Valid Structured Data' }}
-                </span>
+
+              <!-- SEO Result List -->
+              <div v-if="seoErrors.length > 0 || seoWarnings.length > 0" class="pt-4 border-t border-white/5 space-y-3">
+                <div v-for="(err, i) in seoErrors" :key="'err-'+i" class="flex gap-3 items-start p-3 bg-red-500/10 rounded-xl border border-red-500/20">
+                  <svg class="w-4 h-4 text-red-500 shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  </svg>
+                  <span class="text-[11px] text-red-400 font-medium leading-relaxed">{{ err }}</span>
+                </div>
+                <div v-for="(warn, i) in seoWarnings" :key="'warn-'+i" class="flex gap-3 items-start p-3 bg-amber-500/10 rounded-xl border border-amber-500/20">
+                  <svg class="w-4 h-4 text-amber-500 shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  </svg>
+                  <span class="text-[11px] text-amber-400 font-medium leading-relaxed">{{ warn }}</span>
+                </div>
               </div>
             </div>
           </div>
@@ -207,6 +229,7 @@
 <script setup>
 import { ref, computed, onMounted } from 'vue'
 import { Link, router } from '@inertiajs/vue3'
+import axios from 'axios'
 import AppLayout from '../../Layouts/AppLayout.vue'
 import FieldItem from './Components/FieldItem.vue'
 
@@ -238,6 +261,10 @@ const importCode = ref('')
 const isEditorMode = ref(false)
 const editableCode = ref('')
 const syntaxError = ref(false)
+const seoErrors = ref([])
+const seoWarnings = ref([])
+const isValidating = ref(false)
+let validationTimeout = null
 
 const previewLines = computed(() => previewJson.value.split('\n'))
 
@@ -308,6 +335,30 @@ const generatePreview = () => {
   if (!isEditorMode.value) {
     editableCode.value = previewJson.value
   }
+  
+  // Trigger SEO Validation
+  performLiveValidation()
+}
+
+const performLiveValidation = () => {
+  if (validationTimeout) clearTimeout(validationTimeout)
+  
+  validationTimeout = setTimeout(async () => {
+    try {
+      isValidating.value = true
+      const parsed = JSON.parse(previewJson.value)
+      
+      const response = await axios.post('/api/validate-schema', {
+        json_ld: parsed
+      })
+      
+      seoErrors.value = response.data.errors || []
+      seoWarnings.value = response.data.warnings || []
+      isValidating.value = false
+    } catch (e) {
+      isValidating.value = false
+    }
+  }, 1000)
 }
 
 const getTypeOfValue = (val) => {
