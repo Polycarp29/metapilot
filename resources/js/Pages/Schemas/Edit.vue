@@ -50,11 +50,11 @@
           </div>
           
           <div class="space-y-6">
-            <div v-for="(field, index) in localFields" :key="index">
+            <div v-for="field in localFields" :key="field._uid">
               <FieldItem
                 :field="field"
-                @remove="removeRootField(index)"
-                @duplicate="duplicateRootField(index)"
+                @remove="removeRootField(localFields.indexOf(field))"
+                @duplicate="duplicateRootField(localFields.indexOf(field))"
                 @update="generatePreview"
               />
             </div>
@@ -218,10 +218,15 @@ const props = defineProps({
   schemaTypes: Array
 })
 
+const generateUid = () => {
+  return Math.random().toString(36).substr(2, 9) + Date.now().toString(36)
+}
+
 const mapFields = (fields) => {
   return fields.map(f => ({
     ...f,
-    children: mapFields(f.recursive_children || [])
+    _uid: generateUid(),
+    children: mapFields(f.recursive_children || f.children || [])
   }))
 }
 
@@ -238,6 +243,7 @@ const previewLines = computed(() => previewJson.value.split('\n'))
 
 const addRootField = () => {
   localFields.value.push({
+    _uid: generateUid(),
     field_path: '',
     field_type: 'text',
     field_value: '',
@@ -251,9 +257,18 @@ const removeRootField = (index) => {
   generatePreview()
 }
 
+const prepareForDuplication = (field) => {
+  const newField = { ...field, _uid: generateUid() }
+  if (field.children && field.children.length > 0) {
+    newField.children = field.children.map(child => prepareForDuplication(child))
+  }
+  return newField
+}
+
 const duplicateRootField = (index) => {
   const fieldToDuplicate = JSON.parse(JSON.stringify(localFields.value[index]))
-  localFields.value.splice(index + 1, 0, fieldToDuplicate)
+  const newField = prepareForDuplication(fieldToDuplicate)
+  localFields.value.splice(index + 1, 0, newField)
   generatePreview()
 }
 

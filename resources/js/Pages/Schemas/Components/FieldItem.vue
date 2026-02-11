@@ -95,11 +95,11 @@
 
     <!-- Nested Fields (Recursion) -->
     <div v-if="['object', 'array'].includes(field.field_type)" class="pl-8 border-l-2 border-slate-100 mt-6 space-y-6">
-      <div v-for="(child, index) in field.children" :key="index">
+      <div v-for="child in field.children" :key="child._uid">
         <FieldItem
           :field="child"
-          @remove="removeChild(index)"
-          @duplicate="duplicateChild(index)"
+          @remove="removeChild(field.children.indexOf(child))"
+          @duplicate="duplicateChild(field.children.indexOf(child))"
           @update="$emit('update')"
         />
       </div>
@@ -130,6 +130,10 @@ const props = defineProps({
   }
 })
 
+const generateUid = () => {
+  return Math.random().toString(36).substr(2, 9) + Date.now().toString(36)
+}
+
 const emit = defineEmits(['remove', 'duplicate', 'update'])
 
 const handleTypeChange = () => {
@@ -146,6 +150,7 @@ const addChild = () => {
     props.field.children = []
   }
   props.field.children.push({
+    _uid: generateUid(),
     field_path: props.field.field_type === 'array' ? '' : '',
     field_type: 'text',
     field_value: '',
@@ -159,9 +164,18 @@ const removeChild = (index) => {
   emit('update')
 }
 
+const prepareForDuplication = (field) => {
+  const newField = { ...field, _uid: generateUid() }
+  if (field.children && field.children.length > 0) {
+    newField.children = field.children.map(child => prepareForDuplication(child))
+  }
+  return newField
+}
+
 const duplicateChild = (index) => {
   const childToDuplicate = JSON.parse(JSON.stringify(props.field.children[index]))
-  props.field.children.splice(index + 1, 0, childToDuplicate)
+  const newChild = prepareForDuplication(childToDuplicate)
+  props.field.children.splice(index + 1, 0, newChild)
   emit('update')
 }
 </script>
