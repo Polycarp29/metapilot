@@ -48,9 +48,12 @@ class SchemaController extends Controller
         $schemaTypes = SchemaType::where('is_active', true)
             ->orderBy('name')
             ->get(['id', 'name', 'type_key', 'description', 'required_fields']);
+        
+        $containers = SchemaContainer::orderBy('name')->get(['id', 'name', 'identifier']);
 
         return Inertia::render('Schemas/Create', [
-            'schemaTypes' => $schemaTypes
+            'schemaTypes' => $schemaTypes,
+            'containers' => $containers
         ]);
     }
 
@@ -59,15 +62,34 @@ class SchemaController extends Controller
         $data = $request->validated();
 
         // 1. Manage Container
-        if (!empty($data['schema_id'])) {
+        $schemaId = $data['schema_id'] ?? null;
+
+        if (!empty($data['use_existing_container']) && !empty($data['selected_container_id'])) {
+            $container = SchemaContainer::findOrFail($data['selected_container_id']);
+            
+            // If sub_path is provided, we use it to vary the schema_id
+            $subPath = $data['sub_path'] ?? '';
+            if (!empty($subPath)) {
+                $subPath = '/' . ltrim($subPath, '/');
+                $schemaId = rtrim($container->identifier, '/') . $subPath;
+            } else {
+                $schemaId = $container->identifier;
+            }
+        } else {
             $container = SchemaContainer::firstOrCreate(
-                ['identifier' => $data['schema_id']],
+                ['identifier' => $schemaId],
                 ['name' => $data['name']]
             );
-            $data['schema_container_id'] = $container->id;
         }
 
-        $schema = Schema::create($data);
+        $schema = Schema::create([
+            'schema_type_id' => $data['schema_type_id'],
+            'schema_container_id' => $container->id,
+            'name' => $data['name'],
+            'schema_id' => $schemaId,
+            'url' => $data['url'] ?? null,
+            'is_active' => true,
+        ]);
 
         // Pre-populate fields from the schema type templates
         if ($schema->schemaType && !empty($schema->schemaType->required_fields)) {

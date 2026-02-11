@@ -24,8 +24,11 @@ class StoreSchemaRequest extends FormRequest
         return [
             'schema_type_id' => 'required|exists:schema_types,id',
             'name' => 'required|string|max:255',
-            'schema_id' => 'required|url',
+            'schema_id' => 'required_without:use_existing_container|nullable|url',
             'url' => 'nullable|url|max:500',
+            'use_existing_container' => 'boolean',
+            'selected_container_id' => 'nullable|exists:schema_containers,id',
+            'sub_path' => 'nullable|string',
         ];
     }
 
@@ -41,7 +44,8 @@ class StoreSchemaRequest extends FormRequest
             'schema_type_id.exists' => 'The selected schema type is invalid.',
             'name.required' => 'Schema name is required.',
             'name.max' => 'Schema name cannot exceed 255 characters.',
-            'schema_id.required' => 'Schema ID is required.',
+            'schema_id.required' => 'Schema ID is required when creating a new root.',
+            'schema_id.required_without' => 'Schema ID is required when creating a new root.',
             'schema_id.url' => 'Schema ID must be a valid URL.',
             'schema_id.unique' => 'This schema ID is already in use.',
             'url.url' => 'URL must be a valid URL format.',
