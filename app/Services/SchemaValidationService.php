@@ -60,12 +60,20 @@ class SchemaValidationService
         
         // Check basic structure
         if (!isset($schema['@type'])) {
-            $errors[] = 'Missing @type property';
+            $errors[] = [
+                'code' => 'missing_type',
+                'field' => '@type',
+                'message' => 'Missing @type property'
+            ];
             return ['errors' => $errors, 'warnings' => $warnings, 'isValid' => false];
         }
         
         if (!isset($schema['@context']) || $schema['@context'] !== 'https://schema.org') {
-            $warnings[] = '@context should be "https://schema.org"';
+            $warnings[] = [
+                'code' => 'invalid_context',
+                'field' => '@context',
+                'message' => '@context should be "https://schema.org"'
+            ];
         }
         
         $schemaType = $schema['@type'];
@@ -99,7 +107,11 @@ class SchemaValidationService
         $warnings = [];
         
         if (!isset(self::VALIDATION_RULES[$schemaType])) {
-            $warnings[] = "No validation rules defined for schema type: {$schemaType}";
+            $warnings[] = [
+                'code' => 'unknown_type',
+                'field' => '@type',
+                'message' => "No validation rules defined for schema type: {$schemaType}"
+            ];
             return ['errors' => $errors, 'warnings' => $warnings];
         }
         
@@ -109,7 +121,11 @@ class SchemaValidationService
         if (isset($rules['required_fields'])) {
             foreach ($rules['required_fields'] as $field) {
                 if (!isset($schema[$field]) || empty($schema[$field])) {
-                    $errors[] = "Missing required field: {$field}";
+                    $errors[] = [
+                        'code' => 'missing_field',
+                        'field' => $field,
+                        'message' => "Missing required field: {$field}"
+                    ];
                 }
             }
         }
@@ -126,7 +142,11 @@ class SchemaValidationService
             
             if (!$hasRequiredField) {
                 $fieldsList = implode('", "', $rules['required_one_of']);
-                $errors[] = "Must include at least one of: \"{$fieldsList}\"";
+                $errors[] = [
+                    'code' => 'missing_one_of',
+                    'field' => $rules['required_one_of'][0], // target first one for UI
+                    'message' => "Must include at least one of: \"{$fieldsList}\""
+                ];
             }
         }
         
@@ -134,7 +154,11 @@ class SchemaValidationService
         if (isset($rules['recommended_fields'])) {
             foreach ($rules['recommended_fields'] as $field) {
                 if (!isset($schema[$field]) || empty($schema[$field])) {
-                    $warnings[] = "Recommended field missing: {$field}";
+                    $warnings[] = [
+                        'code' => 'missing_recommended',
+                        'field' => $field,
+                        'message' => "Recommended field missing: {$field}"
+                    ];
                 }
             }
         }
@@ -172,12 +196,20 @@ class SchemaValidationService
         
         foreach ($offersList as $index => $offer) {
             if (!isset($offer['@type']) || $offer['@type'] !== 'Offer') {
-                $errors[] = "Offer {$index}: Missing or invalid @type (should be 'Offer')";
+                $errors[] = [
+                    'code' => 'invalid_type',
+                    'field' => "offers[{$index}].@type",
+                    'message' => "Offer {$index}: Missing or invalid @type (should be 'Offer')"
+                ];
             }
             
             foreach ($requirements as $field) {
                 if (!isset($offer[$field]) || empty($offer[$field])) {
-                    $errors[] = "Offer {$index}: Missing required field '{$field}'";
+                    $errors[] = [
+                        'code' => 'missing_field',
+                        'field' => "offers[{$index}].{$field}",
+                        'message' => "Offer {$index}: Missing required field '{$field}'"
+                    ];
                 }
             }
             
@@ -193,7 +225,11 @@ class SchemaValidationService
                 ];
                 
                 if (!in_array($offer['availability'], $validAvailability)) {
-                    $errors[] = "Offer {$index}: Invalid availability value. Should be a schema.org availability URL";
+                    $errors[] = [
+                        'code' => 'invalid_value',
+                        'field' => "offers[{$index}].availability",
+                        'message' => "Offer {$index}: Invalid availability value"
+                    ];
                 }
             }
         }
@@ -213,23 +249,43 @@ class SchemaValidationService
         
         foreach ($questions as $index => $question) {
             if (!isset($question['@type']) || $question['@type'] !== 'Question') {
-                $errors[] = "Question {$index}: Missing or invalid @type (should be 'Question')";
+                $errors[] = [
+                    'code' => 'invalid_type',
+                    'field' => "mainEntity[{$index}].@type",
+                    'message' => "Question {$index}: Missing or invalid @type (should be 'Question')"
+                ];
             }
             
             if (!isset($question['name']) || empty($question['name'])) {
-                $errors[] = "Question {$index}: Missing 'name' field";
+                $errors[] = [
+                    'code' => 'missing_field',
+                    'field' => "mainEntity[{$index}].name",
+                    'message' => "Question {$index}: Missing 'name' field"
+                ];
             }
             
             if (!isset($question['acceptedAnswer'])) {
-                $errors[] = "Question {$index}: Missing 'acceptedAnswer' field";
+                $errors[] = [
+                    'code' => 'missing_field',
+                    'field' => "mainEntity[{$index}].acceptedAnswer",
+                    'message' => "Question {$index}: Missing 'acceptedAnswer' field"
+                ];
             } else {
                 $answer = $question['acceptedAnswer'];
                 if (!isset($answer['@type']) || $answer['@type'] !== 'Answer') {
-                    $errors[] = "Question {$index}: acceptedAnswer must have @type 'Answer'";
+                    $errors[] = [
+                        'code' => 'invalid_type',
+                        'field' => "mainEntity[{$index}].acceptedAnswer.@type",
+                        'message' => "Question {$index}: acceptedAnswer must have @type 'Answer'"
+                    ];
                 }
                 
                 if (!isset($answer['text']) || empty($answer['text'])) {
-                    $errors[] = "Question {$index}: acceptedAnswer missing 'text' field";
+                    $errors[] = [
+                        'code' => 'missing_field',
+                        'field' => "mainEntity[{$index}].acceptedAnswer.text",
+                        'message' => "Question {$index}: acceptedAnswer missing 'text' field"
+                    ];
                 }
             }
         }
@@ -254,11 +310,19 @@ class SchemaValidationService
         
         foreach ($stepsList as $index => $step) {
             if (!isset($step['@type']) || $step['@type'] !== 'HowToStep') {
-                $errors[] = "Step {$index}: Missing or invalid @type (should be 'HowToStep')";
+                $errors[] = [
+                    'code' => 'invalid_type',
+                    'field' => "step[{$index}].@type",
+                    'message' => "Step {$index}: Missing or invalid @type (should be 'HowToStep')"
+                ];
             }
             
             if (!isset($step['text']) || empty($step['text'])) {
-                $errors[] = "Step {$index}: Missing 'text' field";
+                $errors[] = [
+                    'code' => 'missing_field',
+                    'field' => "step[{$index}].text",
+                    'message' => "Step {$index}: Missing 'text' field"
+                ];
             }
         }
         

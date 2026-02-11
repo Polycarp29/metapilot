@@ -110,6 +110,16 @@
               </div>
               <div class="flex items-center gap-3">
                 <button
+                  @click="showValidationPanel = !showValidationPanel"
+                  :class="showValidationPanel ? 'bg-indigo-500/10 text-indigo-400 border-indigo-500/20' : 'bg-white/5 text-slate-400 border-white/5'"
+                  class="px-3 py-2 rounded-xl transition-standard border text-[10px] font-black uppercase tracking-widest active:scale-90 flex items-center gap-2 hover:bg-indigo-500/20"
+                >
+                  <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  </svg>
+                  Validation
+                </button>
+                <button
                   @click="toggleEditorMode"
                   :class="isEditorMode ? 'bg-emerald-500 text-white' : 'bg-white/5 text-slate-400 hover:text-white'"
                   class="px-4 py-2 rounded-xl transition-standard border border-white/5 text-[10px] font-black uppercase tracking-widest active:scale-90"
@@ -145,7 +155,7 @@
               <pre v-else class="bg-transparent"><code class="grid gap-1"><span v-for="(line, i) in previewLines" :key="i" class="flex gap-6"><span class="text-slate-700 w-8 text-right select-none pr-4 border-r border-slate-800">{{ i + 1 }}</span><span class="text-slate-300 whitespace-pre" v-html="highlight(line)"></span></span></code></pre>
             </div>
             
-            <div class="px-8 py-5 bg-black/40 border-t border-white/5 flex flex-col gap-4">
+            <div v-show="showValidationPanel" class="px-8 py-5 bg-black/40 border-t border-white/5 flex flex-col gap-4">
               <!-- Validation Indicators -->
               <div class="flex items-center justify-between">
                 <div class="flex gap-4">
@@ -178,13 +188,22 @@
                   <svg class="w-4 h-4 text-red-500 shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                   </svg>
-                  <span class="text-[11px] text-red-400 font-medium leading-relaxed">{{ err }}</span>
+                  <div class="flex-grow flex items-center justify-between gap-4">
+                    <span class="text-[11px] text-red-400 font-medium leading-relaxed">{{ err.message }}</span>
+                    <button 
+                      v-if="err.code === 'missing_field'"
+                      @click="applyFix(err)"
+                      class="text-[9px] font-black uppercase tracking-widest bg-red-500/20 text-red-400 px-3 py-1.5 rounded-lg hover:bg-red-500 hover:text-white transition-standard"
+                    >
+                      Quick Fix
+                    </button>
+                  </div>
                 </div>
                 <div v-for="(warn, i) in seoWarnings" :key="'warn-'+i" class="flex gap-3 items-start p-3 bg-amber-500/10 rounded-xl border border-amber-500/20">
                   <svg class="w-4 h-4 text-amber-500 shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                   </svg>
-                  <span class="text-[11px] text-amber-400 font-medium leading-relaxed">{{ warn }}</span>
+                  <span class="text-[11px] text-amber-400 font-medium leading-relaxed">{{ warn.message }}</span>
                 </div>
               </div>
             </div>
@@ -264,6 +283,7 @@ const syntaxError = ref(false)
 const seoErrors = ref([])
 const seoWarnings = ref([])
 const isValidating = ref(false)
+const showValidationPanel = ref(true)
 let validationTimeout = null
 
 const previewLines = computed(() => previewJson.value.split('\n'))
@@ -432,6 +452,67 @@ const toggleEditorMode = () => {
   isEditorMode.value = !isEditorMode.value
   if (!isEditorMode.value) {
     generatePreview()
+  }
+}
+
+const applyFix = (error) => {
+  // Parse field path (e.g. "offers[0].price" or just "name")
+  const pathParts = error.field.split('.').map(part => {
+    // Handle array indices
+    if (part.includes('[')) {
+      const [name, indexStr] = part.split('[')
+      const index = parseInt(indexStr.replace(']', ''))
+      return { name, index, isArray: true }
+    }
+    return { name: part, isArray: false }
+  })
+
+  // Start with root fields
+  let currentContext = localFields.value
+  let targetFound = true
+
+  // Ensure path exists up to the last part
+  for (let i = 0; i < pathParts.length - 1; i++) {
+    const part = pathParts[i]
+    
+    // Find the field in current context
+    let field = currentContext.find(f => f.field_path === part.name)
+    
+    if (!field) {
+      toastStore.error(`Cannot apply fix: Parent field '${part.name}' not found.`)
+      targetFound = false
+      break
+    }
+
+    if (part.isArray) {
+      if (!field.children || !field.children[part.index]) {
+         toastStore.error(`Cannot apply fix: Array index ${part.index} out of bounds.`)
+         targetFound = false
+         break
+      }
+      currentContext = field.children[part.index].children
+    } else {
+      currentContext = field.children
+    }
+  }
+
+  if (targetFound) {
+    const lastPart = pathParts[pathParts.length - 1]
+    
+    // Check if it already exists (shouldn't if validation failed, but safety check)
+    const exists = currentContext.some(f => f.field_path === lastPart.name)
+    
+    if (!exists) {
+      currentContext.push({
+        _uid: generateUid(),
+        field_path: lastPart.name,
+        field_type: 'text', // Default to text, user can change
+        field_value: '',
+        children: []
+      })
+      generatePreview()
+      toastStore.success(`Fixed: Added '${lastPart.name}' property.`)
+    }
   }
 }
 
