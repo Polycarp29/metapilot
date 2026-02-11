@@ -68,16 +68,29 @@
         </div>
       </div>
 
-      <!-- Remove Button -->
-      <button
-        @click="$emit('remove')"
-        class="mt-6 p-2 rounded-xl text-slate-300 hover:text-red-500 hover:bg-red-50 transition-standard opacity-0 group-hover/item:opacity-100 active:scale-90"
-        title="Remove property"
-      >
-        <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-        </svg>
-      </button>
+      <div class="mt-6 flex flex-col gap-2 opacity-0 group-hover/item:opacity-100 transition-standard">
+        <!-- Duplicate Button -->
+        <button
+          @click="$emit('duplicate')"
+          class="p-2 rounded-xl text-slate-300 hover:text-blue-500 hover:bg-blue-50 transition-standard active:scale-90"
+          title="Duplicate property"
+        >
+          <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7v8a2 2 0 002 2h6M8 7V5a2 2 0 012-2h4.586a1 1 0 01.707.293l4.414 4.414a1 1 0 01.293.707V15a2 2 0 01-2 2h-2M8 7H6a2 2 0 00-2 2v10a2 2 0 002 2h8a2 2 0 002-2v-2" />
+          </svg>
+        </button>
+
+        <!-- Remove Button -->
+        <button
+          @click="$emit('remove')"
+          class="p-2 rounded-xl text-slate-300 hover:text-red-500 hover:bg-red-50 transition-standard active:scale-90"
+          title="Remove property"
+        >
+          <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+          </svg>
+        </button>
+      </div>
     </div>
 
     <!-- Nested Fields (Recursion) -->
@@ -86,6 +99,7 @@
         <FieldItem
           :field="child"
           @remove="removeChild(index)"
+          @duplicate="duplicateChild(index)"
           @update="$emit('update')"
         />
       </div>
@@ -116,7 +130,7 @@ const props = defineProps({
   }
 })
 
-const emit = defineEmits(['remove', 'update'])
+const emit = defineEmits(['remove', 'duplicate', 'update'])
 
 const handleTypeChange = () => {
   if (['object', 'array'].includes(props.field.field_type)) {
@@ -142,6 +156,12 @@ const addChild = () => {
 
 const removeChild = (index) => {
   props.field.children.splice(index, 1)
+  emit('update')
+}
+
+const duplicateChild = (index) => {
+  const childToDuplicate = JSON.parse(JSON.stringify(props.field.children[index]))
+  props.field.children.splice(index + 1, 0, childToDuplicate)
   emit('update')
 }
 </script>

@@ -273,9 +273,11 @@ class SchemaController extends Controller
     public function automatedCreate()
     {
         $schemaTypes = SchemaType::where('is_active', true)->get(['id', 'name', 'type_key']);
+        $containers = SchemaContainer::orderBy('name')->get(['id', 'name', 'identifier']);
         
         return Inertia::render('Schemas/AutomatedGenerator', [
-            'schemaTypes' => $schemaTypes
+            'schemaTypes' => $schemaTypes,
+            'containers' => $containers
         ]);
     }
 
@@ -285,6 +287,9 @@ class SchemaController extends Controller
             'name' => 'required|string|max:255',
             'meta_description' => 'required|string',
             'page_link' => 'required|url',
+            'use_existing_container' => 'boolean',
+            'selected_container_id' => 'nullable|exists:schema_containers,id',
+            'sub_path' => 'nullable|string',
             'include_brand_identity' => 'boolean',
             'brand_show_products' => 'boolean',
             'brand_show_services' => 'boolean',
@@ -459,21 +464,36 @@ class SchemaController extends Controller
         
         try {
             DB::transaction(function () use ($pageLink, $primaryTypeId, $validated, $fields) {
-                // 1. Find or Create Container (Unique check)
-                $container = SchemaContainer::firstOrCreate(
-                    ['identifier' => $pageLink],
-                    ['name' => $validated['brand_name'] ?? $validated['name']]
-                );
+                // 1. Find or Create Container
+                if (!empty($validated['use_existing_container']) && !empty($validated['selected_container_id'])) {
+                    $container = SchemaContainer::findOrFail($validated['selected_container_id']);
+                    
+                    // If sub_path is provided, we use it to vary the schema_id
+                    $subPath = $validated['sub_path'] ?? '';
+                    if (!empty($subPath)) {
+                        $subPath = '/' . ltrim($subPath, '/');
+                        $schemaId = rtrim($container->identifier, '/') . $subPath;
+                    } else {
+                        $schemaId = $container->identifier;
+                    }
+                } else {
+                    $container = SchemaContainer::firstOrCreate(
+                        ['identifier' => $pageLink],
+                        ['name' => $validated['brand_name'] ?? $validated['name']]
+                    );
+                    $schemaId = $pageLink;
+                }
 
                 // 2. Find or Create the primary Schema record inside this container
                 $schema = Schema::withTrashed()
                     ->where('schema_container_id', $container->id)
                     ->where('schema_type_id', $primaryTypeId)
+                    ->where('schema_id', $schemaId)
                     ->first();
 
                 if ($schema) {
                     $schema->update([
-                        'schema_id' => $pageLink,
+                        'schema_id' => $schemaId,
                         'name' => $validated['name'],
                         'url' => $validated['page_link'],
                         'is_active' => true
@@ -484,7 +504,7 @@ class SchemaController extends Controller
                 } else {
                     $schema = Schema::create([
                         'schema_container_id' => $container->id,
-                        'schema_id' => $pageLink,
+                        'schema_id' => $schemaId,
                         'schema_type_id' => $primaryTypeId,
                         'name' => $validated['name'],
                         'url' => $validated['page_link'],

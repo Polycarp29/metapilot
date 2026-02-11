@@ -47,17 +47,6 @@
         <div class="space-y-8 pb-32">
           <div class="flex justify-between items-center mb-2">
             <h3 class="text-xs font-black text-slate-400 uppercase tracking-[0.2em] ml-2">Properties Map</h3>
-            <button
-              @click="addRootField"
-              class="group flex items-center gap-2 text-blue-600 font-bold text-xs uppercase tracking-widest hover:text-blue-700 transition-standard"
-            >
-              <div class="w-6 h-6 bg-blue-50 rounded-lg flex items-center justify-center group-hover:bg-blue-600 group-hover:text-white transition-standard">
-                 <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                   <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
-                 </svg>
-              </div>
-              Add Property
-            </button>
           </div>
           
           <div class="space-y-6">
@@ -65,8 +54,25 @@
               <FieldItem
                 :field="field"
                 @remove="removeRootField(index)"
+                @duplicate="duplicateRootField(index)"
                 @update="generatePreview"
               />
+            </div>
+            
+            <div class="pt-6">
+              <button
+                @click="addRootField"
+                class="group flex items-center gap-3 bg-white border-2 border-dashed border-slate-200 w-full py-6 rounded-[2rem] text-slate-400 hover:border-blue-400 hover:bg-blue-50 hover:text-blue-600 transition-standard active:scale-[0.98]"
+              >
+                <div class="mx-auto flex items-center gap-2">
+                  <div class="w-8 h-8 bg-slate-100 rounded-lg flex items-center justify-center group-hover:bg-blue-600 group-hover:text-white transition-standard">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
+                    </svg>
+                  </div>
+                  <span class="text-sm font-black uppercase tracking-widest">New Property Layer</span>
+                </div>
+              </button>
             </div>
             
             <div v-if="localFields.length === 0" class="flex flex-col items-center justify-center py-32 bg-white/50 border-2 border-dashed border-slate-200 rounded-[2.5rem] text-center px-10">
@@ -242,6 +248,12 @@ const addRootField = () => {
 
 const removeRootField = (index) => {
   localFields.value.splice(index, 1)
+  generatePreview()
+}
+
+const duplicateRootField = (index) => {
+  const fieldToDuplicate = JSON.parse(JSON.stringify(localFields.value[index]))
+  localFields.value.splice(index + 1, 0, fieldToDuplicate)
   generatePreview()
 }
 

@@ -24,7 +24,7 @@ class StoreSchemaRequest extends FormRequest
         return [
             'schema_type_id' => 'required|exists:schema_types,id',
             'name' => 'required|string|max:255',
-            'schema_id' => 'required|url|unique:schemas,schema_id',
+            'schema_id' => 'required|url',
             'url' => 'nullable|url|max:500',
         ];
     }

@@ -96,6 +96,49 @@
                   </div>
                   <p v-if="errors.page_link" class="text-red-500 text-[10px] font-black uppercase tracking-widest ml-4 mt-2">{{ errors.page_link }}</p>
                   
+                  <div class="mt-8 space-y-6 bg-slate-50/50 p-8 rounded-[2.5rem] border border-slate-100/50">
+                    <h5 class="text-xs font-black text-slate-800 uppercase tracking-widest ml-2">Architecture Strategy</h5>
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <button 
+                        type="button"
+                        @click="form.use_existing_container = false"
+                        :class="!form.use_existing_container ? 'bg-slate-900 text-white shadow-xl' : 'bg-white text-slate-600 border border-slate-200'"
+                        class="px-6 py-4 rounded-2xl text-xs font-black uppercase tracking-widest transition-all text-center"
+                      >
+                        New Root Schema
+                      </button>
+                      <button 
+                        type="button"
+                        @click="form.use_existing_container = true"
+                        :class="form.use_existing_container ? 'bg-slate-900 text-white shadow-xl' : 'bg-white text-slate-600 border border-slate-200'"
+                        class="px-6 py-4 rounded-2xl text-xs font-black uppercase tracking-widest transition-all text-center"
+                      >
+                        Build on Existing Root
+                      </button>
+                    </div>
+
+                    <Transition 
+                      enter-active-class="transition duration-500 ease-out" 
+                      enter-from-class="opacity-0 -translate-y-4" 
+                      enter-to-class="opacity-100 translate-y-0"
+                    >
+                      <div v-if="form.use_existing_container" class="space-y-4 pt-4 border-t border-slate-200/50">
+                        <div class="space-y-2">
+                          <label class="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-2">Select Root Container</label>
+                          <select v-model="form.selected_container_id" class="w-full bg-white border-slate-200 rounded-xl px-5 py-3 text-sm font-bold appearance-none">
+                            <option value="">Select a brand root...</option>
+                            <option v-for="c in containers" :key="c.id" :value="c.id">{{ c.name }} ({{ c.identifier }})</option>
+                          </select>
+                        </div>
+                        <div class="space-y-2">
+                          <label class="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-2">Sub-path Variation</label>
+                          <input v-model="form.sub_path" type="text" placeholder="e.g., /en or /mobile" class="w-full bg-white border-slate-200 rounded-xl px-5 py-3 text-sm font-bold" />
+                          <p class="text-[9px] text-slate-400 font-medium ml-2 italic text-left">The schema @id will be: root_id + sub_path</p>
+                        </div>
+                      </div>
+                    </Transition>
+                  </div>
+
                   <!-- Quality Score Indicator -->
                   <Transition 
                     enter-active-class="transition duration-700 ease-out" 
@@ -736,7 +779,9 @@ import { useToastStore } from '../../stores/useToastStore'
 const toastStore = useToastStore()
 
 const props = defineProps({
-  schemaTypes: Array
+  schemaTypes: Array,
+  containers: Array,
+  errors: Object
 })
 
 const currentStep = ref(0)
@@ -752,6 +797,9 @@ const form = useForm({
   name: '',
   meta_description: '',
   page_link: '',
+  use_existing_container: false,
+  selected_container_id: '',
+  sub_path: '',
   include_brand_identity: true,
   brand_name: '',
   brand_logo: '',
