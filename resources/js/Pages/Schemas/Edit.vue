@@ -14,7 +14,34 @@
           </Link>
           <div>
             <div class="flex items-center gap-3 mb-1">
-              <h1 class="text-3xl font-extrabold text-slate-900 tracking-tight">{{ schema.name }}</h1>
+              <div class="flex items-center gap-3 mb-1 group">
+                <div v-if="isEditingName" class="flex items-center gap-2">
+                  <input 
+                    ref="nameInput"
+                    v-model="schemaForm.name" 
+                    @blur="saveName"
+                    @keyup.enter="saveName"
+                    class="text-3xl font-extrabold text-slate-900 tracking-tight bg-transparent border-b-2 border-blue-500 focus:outline-none px-0 py-0 w-full min-w-[200px]"
+                  />
+                </div>
+                <h1 
+                  v-else 
+                  @click="startEditingName"
+                  class="text-3xl font-extrabold text-slate-900 tracking-tight cursor-text hover:text-blue-600 transition-colors border-b-2 border-transparent hover:border-blue-200"
+                  title="Click to rename"
+                >
+                  {{ schema.name }}
+                </h1>
+                <button 
+                  v-if="!isEditingName"
+                  @click="startEditingName" 
+                  class="text-slate-300 hover:text-blue-500 transition-colors opacity-0 group-hover:opacity-100"
+                >
+                  <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
+                  </svg>
+                </button>
+              </div>
               <span class="px-3 py-1 bg-blue-50 text-blue-600 rounded-lg text-[10px] font-black uppercase tracking-widest border border-blue-100">{{ schema.schema_type.name }}</span>
             </div>
             <p class="text-sm text-slate-400 font-medium tracking-tight truncate max-w-sm">{{ schema.schema_id }}</p>
@@ -31,6 +58,16 @@
             </svg>
             Export JSON
           </a>
+          <button
+            @click="showSettingsModal = true"
+            class="flex-grow md:flex-grow-0 inline-flex items-center justify-center gap-2 bg-white border border-slate-200 text-slate-700 font-bold px-6 py-3.5 rounded-2xl hover:bg-slate-50 transition-standard active:scale-95 text-sm"
+          >
+            <svg class="w-5 h-5 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+            </svg>
+            Settings
+          </button>
           <button
             @click="saveFields"
             :disabled="saving"
@@ -242,12 +279,104 @@
         </div>
       </div>
     </div>
+
+    <!-- Settings Modal -->
+    <div v-if="showSettingsModal" class="fixed inset-0 z-[100] flex items-center justify-center p-6 bg-slate-900/60 backdrop-blur-md">
+      <div class="bg-white w-full max-w-2xl rounded-[3rem] shadow-premium p-12 relative scale-in-center">
+        <button @click="showSettingsModal = false" class="absolute top-10 right-10 text-slate-300 hover:text-slate-900 transition-colors">
+          <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+          </svg>
+        </button>
+        
+        <h2 class="text-3xl font-black text-slate-900 mb-8 tracking-tight">Schema Configuration</h2>
+        
+        <form @submit.prevent="updateSettings" class="space-y-6">
+            <!-- Schema Type -->
+            <div class="space-y-3">
+                <label class="block text-[10px] font-black text-slate-400 uppercase tracking-widest ml-4">Schema Type</label>
+                <div class="relative">
+                    <select 
+                        v-model="schemaForm.schema_type_id"
+                        class="w-full appearance-none px-8 py-4 rounded-3xl bg-slate-50 border-transparent focus:bg-white focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 transition-standard text-slate-900 font-bold"
+                    >
+                        <option v-for="type in schemaTypes" :key="type.id" :value="type.id">
+                            {{ type.name }} ({{ type.type_key }})
+                        </option>
+                    </select>
+                    <div class="absolute right-6 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none">
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
+                        </svg>
+                    </div>
+                </div>
+                <p v-if="schemaForm.schema_type_id !== schema.schema_type_id" class="px-4 text-xs text-amber-600 font-medium">
+                    Warning: Changing the schema type may require updating properties to match the new type's validation rules.
+                </p>
+            </div>
+
+            <!-- Page URL -->
+            <div class="space-y-3">
+                <label class="block text-[10px] font-black text-slate-400 uppercase tracking-widest ml-4">Page URL (Context)</label>
+                <input 
+                    v-model="schemaForm.url" 
+                    type="url"
+                    placeholder="https://example.com/page" 
+                    class="w-full px-8 py-4 rounded-3xl bg-slate-50 border-transparent focus:bg-white focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 transition-standard text-slate-900 font-medium"
+                />
+            </div>
+
+            <!-- Schema ID -->
+            <div class="space-y-3">
+                <label class="block text-[10px] font-black text-slate-400 uppercase tracking-widest ml-4">Schema ID (@id)</label>
+                <input 
+                    v-model="schemaForm.schema_id" 
+                    type="text"
+                    placeholder="https://example.com/page#schema" 
+                    class="w-full px-8 py-4 rounded-3xl bg-slate-50 border-transparent focus:bg-white focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 transition-standard text-slate-900 font-medium"
+                />
+            </div>
+
+             <!-- Status -->
+             <div class="space-y-3 pt-2">
+                <label class="flex items-center gap-4 cursor-pointer group bg-slate-50 p-4 rounded-3xl border border-transparent hover:border-slate-200 transition-standard">
+                    <div class="relative">
+                        <input type="checkbox" v-model="schemaForm.is_active" class="sr-only peer">
+                        <div class="w-14 h-8 bg-slate-200 peer-checked:bg-emerald-500 rounded-full transition-colors"></div>
+                        <div class="absolute left-1 top-1 w-6 h-6 bg-white rounded-full transition-transform peer-checked:translate-x-6 shadow-sm"></div>
+                    </div>
+                    <div>
+                        <span class="block text-sm font-bold text-slate-900">Active Status</span>
+                        <span class="text-xs text-slate-500 font-medium">{{ schemaForm.is_active ? 'Schema is published and visible' : 'Schema is inactive (draft)' }}</span>
+                    </div>
+                </label>
+            </div>
+
+            <div class="pt-4 flex gap-4">
+                 <button 
+                    type="button"
+                    @click="showSettingsModal = false" 
+                    class="flex-1 bg-white text-slate-700 py-4 rounded-[2rem] font-bold border border-slate-200 hover:bg-slate-50 transition-standard"
+                >
+                    Cancel
+                </button>
+                <button 
+                    type="submit" 
+                    :disabled="schemaForm.processing"
+                    class="flex-1 bg-blue-600 text-white py-4 rounded-[2rem] font-black shadow-xl shadow-blue-100 hover:scale-[1.02] active:scale-[0.98] transition-standard disabled:opacity-50 disabled:hover:scale-100"
+                >
+                    {{ schemaForm.processing ? 'Saving...' : 'Save Configuration' }}
+                </button>
+            </div>
+        </form>
+      </div>
+    </div>
   </AppLayout>
 </template>
 
 <script setup>
-import { ref, computed, onMounted } from 'vue'
-import { Link, router } from '@inertiajs/vue3'
+import { ref, computed, onMounted, nextTick } from 'vue'
+import { Link, router, useForm } from '@inertiajs/vue3'
 import axios from 'axios'
 import AppLayout from '../../Layouts/AppLayout.vue'
 import FieldItem from './Components/FieldItem.vue'
@@ -276,6 +405,7 @@ const localFields = ref(props.schema.root_fields ? mapFields(JSON.parse(JSON.str
 const previewJson = ref('')
 const saving = ref(false)
 const showImportModal = ref(false)
+const showSettingsModal = ref(false)
 const importCode = ref('')
 const isEditorMode = ref(false)
 const editableCode = ref('')
@@ -284,7 +414,70 @@ const seoErrors = ref([])
 const seoWarnings = ref([])
 const isValidating = ref(false)
 const showValidationPanel = ref(true)
+
 let validationTimeout = null
+
+// Editable Name State
+const isEditingName = ref(false)
+const nameInput = ref(null)
+const schemaForm = useForm({
+  name: props.schema.name,
+  schema_type_id: props.schema.schema_type_id,
+  schema_id: props.schema.schema_id,
+  url: props.schema.url,
+  is_active: !!props.schema.is_active
+})
+
+const updateSettings = () => {
+    schemaForm.put(`/schemas/${props.schema.id}`, {
+        preserveScroll: true,
+        onSuccess: () => {
+            showSettingsModal.value = false
+            toastStore.success('Schema configuration updated successfully.')
+            // Trigger refresh or just let inertia props update handle it. 
+            // If type changed, re-generating preview might be needed if defaults changed, 
+            // but relying on props.schema to update should be fine for root fields if they were reloaded,
+            // but for just type change, we might want to manually refresh the preview part if needed.
+            // For now, let's assume the user will manually fix fields if strictly validated.
+             generatePreview()
+        },
+        onError: () => {
+            toastStore.error('Failed to update schema settings.')
+        }
+    })
+}
+
+const startEditingName = () => {
+  schemaForm.name = props.schema.name
+  isEditingName.value = true
+  nextTick(() => {
+    nameInput.value?.focus()
+  })
+}
+
+const saveName = () => {
+  if (schemaForm.name === props.schema.name) {
+    isEditingName.value = false
+    return
+  }
+
+  if (!schemaForm.name.trim()) {
+    toastStore.error("Schema name cannot be empty.")
+    return
+  }
+
+  schemaForm.put(`/schemas/${props.schema.id}`, {
+    preserveScroll: true,
+    onSuccess: () => {
+      isEditingName.value = false
+      toastStore.success("Schema renamed successfully.")
+    },
+    onError: () => {
+      toastStore.error("Failed to rename schema.")
+      // Revert on error if needed, but inertia handles prop updates
+    }
+  })
+}
 
 const previewLines = computed(() => previewJson.value.split('\n'))
 

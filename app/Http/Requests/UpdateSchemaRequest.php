@@ -21,7 +21,8 @@ class UpdateSchemaRequest extends FormRequest
      */
     public function rules(): array
     {
-        $schemaId = $this->route('schema');
+        $schema = $this->route('schema');
+        $schemaId = $schema instanceof \App\Models\Schema ? $schema->id : $schema;
         
         return [
             'schema_type_id' => 'sometimes|exists:schema_types,id',
