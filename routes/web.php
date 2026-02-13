@@ -53,4 +53,13 @@ Route::middleware('auth')->group(function () {
 
     // Schema Type Actions
     Route::get('schema-types/{schemaType}/required-fields', [SchemaController::class, 'getRequiredFields'])->name('schema-types.required-fields');
+
+    // Team Management
+    Route::resource('team-members', \App\Http\Controllers\TeamMemberController::class)->only(['index', 'update', 'destroy']);
+    Route::post('team-invitations', [\App\Http\Controllers\OrganizationInvitationController::class, 'store'])->name('team-invitations.store');
+    Route::delete('team-invitations/{invitation}', [\App\Http\Controllers\OrganizationInvitationController::class, 'destroy'])->name('team-invitations.destroy');
+
+    // Profile
+    Route::get('profile', [\App\Http\Controllers\ProfileController::class, 'edit'])->name('profile.edit');
+    Route::patch('profile', [\App\Http\Controllers\ProfileController::class, 'update'])->name('profile.update');
 });

@@ -24,7 +24,14 @@ class StoreSchemaRequest extends FormRequest
         return [
             'schema_type_id' => 'required|exists:schema_types,id',
             'name' => 'required|string|max:255',
-            'schema_id' => 'required_without:use_existing_container|nullable|url',
+            'schema_id' => [
+                'required_without:use_existing_container',
+                'nullable',
+                'url',
+                \Illuminate\Validation\Rule::unique('schemas')->where(function ($query) {
+                    return $query->where('organization_id', auth()->user()->currentOrganization()->id);
+                })
+            ],
             'url' => 'nullable|url|max:500',
             'use_existing_container' => 'boolean',
             'selected_container_id' => 'nullable|exists:schema_containers,id',

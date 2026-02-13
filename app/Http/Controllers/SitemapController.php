@@ -33,7 +33,14 @@ class SitemapController extends Controller
     {
         $validated = $request->validate([
             'name' => 'required|string|max:255',
-            'filename' => 'required|string|max:255|unique:sitemaps,filename',
+            'filename' => [
+                'required',
+                'string',
+                'max:255',
+                \Illuminate\Validation\Rule::unique('sitemaps')->where(function ($query) {
+                    return $query->where('organization_id', auth()->user()->currentOrganization()->id);
+                })
+            ],
             'is_index' => 'boolean'
         ]);
 
@@ -59,7 +66,14 @@ class SitemapController extends Controller
     {
         $validated = $request->validate([
             'name' => 'required|string|max:255',
-            'filename' => 'required|string|max:255|unique:sitemaps,filename,' . $sitemap->id,
+            'filename' => [
+                'required',
+                'string',
+                'max:255',
+                \Illuminate\Validation\Rule::unique('sitemaps')->where(function ($query) {
+                    return $query->where('organization_id', auth()->user()->currentOrganization()->id);
+                })->ignore($sitemap->id)
+            ],
             'is_index' => 'boolean'
         ]);
 

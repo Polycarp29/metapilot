@@ -27,7 +27,13 @@ class UpdateSchemaRequest extends FormRequest
         return [
             'schema_type_id' => 'sometimes|exists:schema_types,id',
             'name' => 'sometimes|string|max:255',
-            'schema_id' => 'sometimes|url|unique:schemas,schema_id,' . $schemaId,
+            'schema_id' => [
+                'sometimes',
+                'url',
+                \Illuminate\Validation\Rule::unique('schemas')->where(function ($query) {
+                    return $query->where('organization_id', auth()->user()->currentOrganization()->id);
+                })->ignore($schemaId)
+            ],
             'url' => 'nullable|url|max:500',
             'is_active' => 'sometimes|boolean'
         ];

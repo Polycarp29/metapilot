@@ -1,5 +1,6 @@
 <template>
   <div id="app" class="min-h-screen bg-slate-50 font-sans selection:bg-blue-100 selection:text-blue-700">
+    <WorkspaceLoader :show="isLoading" />
     <Toaster ref="toaster" />
     
     <!-- Navigation -->
@@ -62,6 +63,10 @@
               </svg>
               <span>New Schema</span>
             </Link>
+            
+            <div class="h-8 w-px bg-slate-200 mx-2 hidden sm:block"></div>
+            
+            <UserDropdown />
           </div>
         </div>
       </div>
@@ -86,13 +91,27 @@
 </template>
 
 <script setup>
-import { ref } from 'vue'
-import { Link } from '@inertiajs/vue3'
+import { ref, onMounted } from 'vue'
+import { Link, usePage } from '@inertiajs/vue3'
 import Toaster from '../Components/Toaster.vue'
+import WorkspaceLoader from '../Components/WorkspaceLoader.vue'
+import UserDropdown from '../Components/UserDropdown.vue'
 
 const toaster = ref(null)
+const isLoading = ref(false)
+const page = usePage()
 
-// You could provide the toaster instance here if needed
+onMounted(() => {
+  // Show loader only when visiting the dashboard and it's likely a fresh load/login
+  // For simplicity, we show it on dashboard mount if not previously shown in session
+  if (page.component === 'Dashboard' && !sessionStorage.getItem('workspace_loaded')) {
+    isLoading.value = true
+    setTimeout(() => {
+      isLoading.value = false
+      sessionStorage.setItem('workspace_loaded', 'true')
+    }, 2000)
+  }
+})
 </script>
 
 <style>
