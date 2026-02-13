@@ -6,7 +6,17 @@ use Illuminate\Database\Eloquent\Model;
 
 class SchemaContainer extends Model
 {
-    protected $fillable = ['name', 'identifier', 'description'];
+    protected $fillable = ['user_id', 'organization_id', 'name', 'identifier', 'description'];
+
+    public function organization()
+    {
+        return $this->belongsTo(Organization::class);
+    }
+
+    public function user()
+    {
+        return $this->belongsTo(User::class);
+    }
 
     public function schemas()
     {

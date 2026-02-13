@@ -8,6 +8,7 @@ class AnalyticsProperty extends Model
 {
     protected $fillable = [
         'organization_id',
+        'user_id',
         'name',
         'property_id',
         'website_url',
@@ -26,5 +27,10 @@ class AnalyticsProperty extends Model
     public function organization()
     {
         return $this->belongsTo(Organization::class);
+    }
+
+    public function user()
+    {
+        return $this->belongsTo(User::class);
     }
 }

@@ -18,7 +18,14 @@ class SchemaController extends Controller
 {
     public function index(Request $request)
     {
-        $schemas = Schema::with(['schemaType', 'container'])
+        $organization = auth()->user()->currentOrganization();
+
+        if (!$organization) {
+            return redirect()->route('dashboard')->with('error', 'No organization selected.');
+        }
+
+        $schemas = Schema::where('organization_id', $organization->id)
+            ->with(['schemaType', 'container'])
             ->when($request->search, function ($query, $search) {
                 return $query->where('name', 'like', "%{$search}%")
                     ->orWhereHas('schemaType', function ($q) use ($search) {
@@ -45,11 +52,15 @@ class SchemaController extends Controller
 
     public function create()
     {
+        $organization = auth()->user()->currentOrganization();
+        
         $schemaTypes = SchemaType::where('is_active', true)
             ->orderBy('name')
             ->get(['id', 'name', 'type_key', 'description', 'required_fields']);
         
-        $containers = SchemaContainer::orderBy('name')->get(['id', 'name', 'identifier']);
+        $containers = SchemaContainer::where('organization_id', $organization->id)
+            ->orderBy('name')
+            ->get(['id', 'name', 'identifier']);
 
         return Inertia::render('Schemas/Create', [
             'schemaTypes' => $schemaTypes,
@@ -76,13 +87,31 @@ class SchemaController extends Controller
                 $schemaId = $container->identifier;
             }
         } else {
+            // Determine ownership for container (Organization Owner)
+            $user = auth()->user();
+            $organization = $user->currentOrganization();
+            $owner = $organization->owners()->first() ?? $user;
+
             $container = SchemaContainer::firstOrCreate(
-                ['identifier' => $schemaId],
-                ['name' => $data['name']]
+                [
+                    'organization_id' => $organization->id,
+                    'identifier' => $schemaId
+                ],
+                [
+                    'user_id' => $owner->id,
+                    'name' => $data['name']
+                ]
             );
         }
 
+        // Determine ownership (Organization Owner)
+        $user = auth()->user();
+        $organization = $user->currentOrganization();
+        $owner = $organization->owners()->first() ?? $user;
+
         $schema = Schema::create([
+            'organization_id' => $organization->id,
+            'user_id' => $owner->id,
             'schema_type_id' => $data['schema_type_id'],
             'schema_container_id' => $container->id,
             'name' => $data['name'],
@@ -306,8 +335,12 @@ class SchemaController extends Controller
 
     public function automatedCreate()
     {
+        $organization = auth()->user()->currentOrganization();
+
         $schemaTypes = SchemaType::where('is_active', true)->get(['id', 'name', 'type_key']);
-        $containers = SchemaContainer::orderBy('name')->get(['id', 'name', 'identifier']);
+        $containers = SchemaContainer::where('organization_id', $organization->id)
+            ->orderBy('name')
+            ->get(['id', 'name', 'identifier']);
         
         return Inertia::render('Schemas/AutomatedGenerator', [
             'schemaTypes' => $schemaTypes,
@@ -511,9 +544,20 @@ class SchemaController extends Controller
                         $schemaId = $container->identifier;
                     }
                 } else {
+                    // Determine ownership
+                    $user = auth()->user();
+                    $organization = $user->currentOrganization();
+                    $owner = $organization->owners()->first() ?? $user;
+
                     $container = SchemaContainer::firstOrCreate(
-                        ['identifier' => $pageLink],
-                        ['name' => $validated['brand_name'] ?? $validated['name']]
+                        [
+                            'organization_id' => $organization->id,
+                            'identifier' => $pageLink
+                        ],
+                        [
+                            'user_id' => $owner->id,
+                            'name' => $validated['brand_name'] ?? $validated['name']
+                        ]
                     );
                     $schemaId = $pageLink;
                 }
@@ -524,6 +568,11 @@ class SchemaController extends Controller
                     ->where('schema_type_id', $primaryTypeId)
                     ->where('schema_id', $schemaId)
                     ->first();
+
+                // Determine ownership
+                $user = auth()->user();
+                $organization = $user->currentOrganization();
+                $owner = $organization->owners()->first() ?? $user;
 
                 if ($schema) {
                     $schema->update([
@@ -537,6 +586,8 @@ class SchemaController extends Controller
                     }
                 } else {
                     $schema = Schema::create([
+                        'organization_id' => $organization->id,
+                        'user_id' => $owner->id,
                         'schema_container_id' => $container->id,
                         'schema_id' => $schemaId,
                         'schema_type_id' => $primaryTypeId,

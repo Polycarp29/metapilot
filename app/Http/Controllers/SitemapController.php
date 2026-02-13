@@ -13,7 +13,17 @@ class SitemapController extends Controller
 {
     public function index()
     {
-        $sitemaps = Sitemap::withCount('links')->orderBy('created_at', 'desc')->get();
+        $organization = auth()->user()->currentOrganization();
+        
+        if (!$organization) {
+            return redirect()->route('dashboard')->with('error', 'No organization selected.');
+        }
+
+        $sitemaps = Sitemap::where('organization_id', $organization->id)
+            ->withCount('links')
+            ->orderBy('created_at', 'desc')
+            ->get();
+
         return Inertia::render('Sitemaps/Index', [
             'sitemaps' => $sitemaps
         ]);
@@ -31,7 +41,15 @@ class SitemapController extends Controller
             $validated['filename'] .= '.xml';
         }
 
-        $sitemap = Sitemap::create($validated);
+        // Determine ownership
+        $user = auth()->user();
+        $organization = $user->currentOrganization();
+        $owner = $organization->owners()->first() ?? $user;
+
+        $sitemap = Sitemap::create(array_merge($validated, [
+            'organization_id' => $organization->id,
+            'user_id' => $owner->id
+        ]));
 
         return redirect()->route('sitemaps.show', $sitemap)
             ->with('message', 'Sitemap container created!');
@@ -67,6 +85,9 @@ class SitemapController extends Controller
         // Basic duplicate detection for the view
         $duplicates = SitemapLink::whereIn('url', $sitemap->links()->pluck('url'))
             ->where('sitemap_id', '!=', $sitemap->id)
+            ->whereHas('sitemap', function ($query) use ($sitemap) {
+                $query->where('organization_id', $sitemap->organization_id);
+            })
             ->get()
             ->groupBy('url');
 
@@ -201,7 +222,9 @@ class SitemapController extends Controller
 
         if ($sitemap->is_index) {
             $xml .= '<sitemapindex xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">' . PHP_EOL;
-            $otherSitemaps = Sitemap::where('is_index', false)->get();
+            $otherSitemaps = Sitemap::where('organization_id', $sitemap->organization_id)
+                ->where('is_index', false)
+                ->get();
             foreach ($otherSitemaps as $other) {
                 $xml .= '  <sitemap>' . PHP_EOL;
                 $xml .= '    <loc>' . url($other->filename) . '</loc>' . PHP_EOL;
