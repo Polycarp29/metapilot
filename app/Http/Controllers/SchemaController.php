@@ -726,7 +726,7 @@ class SchemaController extends Controller
                 }
             }
 
-            // Simple type detection logic
+            // Simple type detection logic based on content
             $suggestedModules = [];
             $path = parse_url($url, PHP_URL_PATH);
             $htmlLower = strtolower($html);
@@ -740,7 +740,6 @@ class SchemaController extends Controller
             if ($ogType === 'business.business' || str_contains($path, '/contact') || str_contains($path, '/about') || str_contains($htmlLower, 'address') || str_contains($htmlLower, 'phone')) {
                 $suggestedModules[] = 'localbusiness';
             }
-            
             if (str_contains($path, '/blog/') || str_contains($path, '/news/') || str_contains($path, '/article/')) {
                 $suggestedModules[] = 'article';
             }
@@ -754,6 +753,25 @@ class SchemaController extends Controller
                 $suggestedModules[] = 'event';
             }
 
+            // AI Enhancement using Organization Settings
+            $aiSuggestions = null;
+            $org = auth()->user()->currentOrganization();
+            // Only use AI if configured and key is available (system level)
+            if ($org && !empty($org->settings['ai_model']) && config('services.openai.api_key')) {
+                try {
+                    $aiService = new \App\Services\OpenAIService();
+                    $aiService->setModel($org->settings['ai_model']);
+                    $textContent = strip_tags($html);
+                    // We don't block the response on AI, just attempt it
+                    // In a real queue system this would be a job, but here we wait briefly
+                    // For now, we return the basic analysis and let the frontend handle "AI suggestions" if we want to add that field later
+                    // Or we could append it here:
+                   // $aiSuggestions = $aiService->generateSchemaSuggestions($url, $textContent);
+                } catch (\Exception $e) {
+                    \Log::warning('AI Analysis skipped: ' . $e->getMessage());
+                }
+            }
+
             return response()->json([
                 'title' => $title,
                 'h1' => $h1,
@@ -763,6 +781,7 @@ class SchemaController extends Controller
                 'og_type' => $ogType,
                 'og_image' => $ogImage,
                 'suggestions' => array_unique($suggestedModules),
+                'ai_analysis' => $aiSuggestions, // Future field
                 'quality_score' => $this->calculateQualityScore($title, $description, $ogImage)
             ]);
         } catch (\Exception $e) {

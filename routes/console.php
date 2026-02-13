@@ -6,3 +6,6 @@ use Illuminate\Support\Facades\Artisan;
 Artisan::command('inspire', function () {
     $this->comment(Inspiring::quote());
 })->purpose('Display an inspiring quote');
+
+\Illuminate\Support\Facades\Schedule::command('analytics:fetch-metrics')->dailyAt('02:00');
+\Illuminate\Support\Facades\Schedule::command('analytics:weekly-report')->mondays()->at('07:00');

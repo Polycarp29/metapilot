@@ -33,4 +33,19 @@ class AnalyticsProperty extends Model
     {
         return $this->belongsTo(User::class);
     }
+
+    public function snapshots()
+    {
+        return $this->hasMany(MetricSnapshot::class);
+    }
+
+    public function leadEvents()
+    {
+        return $this->hasMany(LeadEvent::class);
+    }
+
+    public function insights()
+    {
+        return $this->hasMany(Insight::class);
+    }
 }

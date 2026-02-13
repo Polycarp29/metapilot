@@ -38,12 +38,35 @@ class User extends Authenticatable
      *
      * @return array<string, string>
      */
+    protected $appends = [
+        'profile_photo_url',
+    ];
+
+    /**
+     * Get the attributes that should be cast.
+     *
+     * @return array<string, string>
+     */
     protected function casts(): array
     {
         return [
             'email_verified_at' => 'datetime',
             'password' => 'hashed',
         ];
+    }
+
+    /**
+     * Get the default profile photo URL if no photo has been uploaded.
+     *
+     * @return string
+     */
+    public function getProfilePhotoUrlAttribute()
+    {
+        $name = trim(collect(explode(' ', $this->name))->map(function ($segment) {
+            return mb_substr($segment, 0, 1);
+        })->join(' '));
+
+        return 'https://ui-avatars.com/api/?name='.urlencode($name).'&color=7F9CF5&background=EBF4FF';
     }
 
     /**

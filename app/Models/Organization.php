@@ -43,6 +43,11 @@ class Organization extends Model
         return $this->hasMany(AnalyticsProperty::class);
     }
 
+    public function seoCampaigns()
+    {
+        return $this->hasMany(SeoCampaign::class);
+    }
+
     /**
      * Get the schemas for the organization.
      */

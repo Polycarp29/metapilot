@@ -32,6 +32,16 @@
             </Link>
             
             <Link
+              href="/analytics"
+              class="px-5 py-2.5 rounded-xl text-sm font-semibold transition-standard"
+              :class="$page.component.startsWith('Analytics/') 
+                ? 'bg-white text-blue-600 shadow-sm border border-slate-100' 
+                : 'text-slate-500 hover:text-slate-900 hover:bg-white/50'"
+            >
+              Analytics
+            </Link>
+
+            <Link
               href="/sitemaps"
               class="px-5 py-2.5 rounded-xl text-sm font-semibold transition-standard"
               :class="$page.component.startsWith('Sitemaps/') 
@@ -49,6 +59,16 @@
                 : 'text-slate-500 hover:text-slate-900 hover:bg-white/50'"
             >
               Schemas
+            </Link>
+
+            <Link
+              href="/campaigns"
+              class="px-5 py-2.5 rounded-xl text-sm font-semibold transition-standard"
+              :class="$page.component.startsWith('Campaigns/') 
+                ? 'bg-white text-blue-600 shadow-sm border border-slate-100' 
+                : 'text-slate-500 hover:text-slate-900 hover:bg-white/50'"
+            >
+              Campaigns
             </Link>
           </div>
 

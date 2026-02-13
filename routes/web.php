@@ -62,4 +62,24 @@ Route::middleware('auth')->group(function () {
     // Profile
     Route::get('profile', [\App\Http\Controllers\ProfileController::class, 'edit'])->name('profile.edit');
     Route::patch('profile', [\App\Http\Controllers\ProfileController::class, 'update'])->name('profile.update');
+
+    // Organization Settings
+    Route::get('settings', [\App\Http\Controllers\OrganizationSettingsController::class, 'index'])->name('organization.settings');
+    Route::put('settings', [\App\Http\Controllers\OrganizationSettingsController::class, 'update'])->name('organization.update');
+
+    // Password Update
+    Route::put('password', [\App\Http\Controllers\PasswordController::class, 'update'])->name('password.update');
+
+    // Analytics
+    Route::get('analytics', [\App\Http\Controllers\AnalyticsDashboardController::class, 'index'])->name('analytics.index');
+    Route::get('api/analytics/{property}/overview', [\App\Http\Controllers\AnalyticsDashboardController::class, 'getOverview'])->name('api.analytics.overview');
+    Route::get('api/analytics/{property}/trends', [\App\Http\Controllers\AnalyticsDashboardController::class, 'getTrends'])->name('api.analytics.trends');
+
+    // Campaigns
+    Route::get('campaigns', [\App\Http\Controllers\SeoCampaignController::class, 'index'])->name('campaigns.index');
+    Route::get('campaigns/create', [\App\Http\Controllers\SeoCampaignController::class, 'create'])->name('campaigns.create');
+    Route::post('campaigns', [\App\Http\Controllers\SeoCampaignController::class, 'store'])->name('campaigns.store');
+    Route::get('campaigns/{campaign}', [\App\Http\Controllers\SeoCampaignController::class, 'show'])->name('campaigns.show');
+    Route::get('api/campaigns/propose/{property}', [\App\Http\Controllers\SeoCampaignController::class, 'propose'])->name('api.campaigns.propose');
+    Route::get('api/campaigns/{campaign}/performance', [\App\Http\Controllers\SeoCampaignController::class, 'performance'])->name('api.campaigns.performance');
 });
