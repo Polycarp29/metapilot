@@ -45,4 +45,61 @@ class User extends Authenticatable
             'password' => 'hashed',
         ];
     }
+
+    /**
+     * The organizations that the user belongs to.
+     */
+    public function organizations()
+    {
+        return $this->belongsToMany(Organization::class)
+            ->withPivot('role')
+            ->withTimestamps();
+    }
+
+    /**
+     * Check if the user is an owner of the given organization.
+     */
+    public function isOwnerOf(Organization $organization): bool
+    {
+        return $this->getRoleIn($organization) === 'owner';
+    }
+
+    /**
+     * Check if the user can manage the given organization (owner or admin).
+     */
+    public function canManage(Organization $organization): bool
+    {
+        return in_array($this->getRoleIn($organization), ['owner', 'admin']);
+    }
+
+    /**
+     * Get the user's role in the given organization.
+     */
+    public function getRoleIn(Organization $organization): ?string
+    {
+        $pivot = $this->organizations()->where('organization_id', $organization->id)->first();
+        return $pivot?->pivot->role;
+    }
+
+    /**
+     * Get the user's current organization from session.
+     */
+    public function currentOrganization(): ?Organization
+    {
+        $organizationId = session('current_organization_id');
+        
+        if (!$organizationId) {
+            return $this->organizations()->first();
+        }
+        
+        return $this->organizations()->find($organizationId);
+    }
+
+    /**
+     * Check if user belongs to any organization.
+     */
+    public function hasOrganizations(): bool
+    {
+        return $this->organizations()->exists();
+    }
 }
