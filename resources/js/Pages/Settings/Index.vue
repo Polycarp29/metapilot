@@ -175,41 +175,97 @@
             </div>
           </div>
 
-          <form @submit.prevent="updateOrganization" class="space-y-6">
-             <div class="space-y-2">
-               <label class="text-sm font-bold text-slate-700">Default Reporting Period</label>
-                <select v-model="orgForm.settings.analytics_period" class="w-full px-4 py-3 rounded-xl border border-slate-200 focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10 bg-white transition-standard outline-none font-medium">
-                 <option value="7d">Last 7 Days</option>
-                 <option value="30d">Last 30 Days</option>
-                 <option value="90d">Last 90 Days</option>
-               </select>
-             </div>
-             
-             <div class="space-y-4 pt-4 border-t border-slate-100">
-                <div class="flex items-center justify-between">
-                    <div>
-                        <p class="font-bold text-slate-900">Weekly Email Reports</p>
-                        <p class="text-sm text-slate-500">Receive a summary of your schema performance every Monday.</p>
-                    </div>
-                     <!-- Simple Toggle -->
-                    <button 
-                        type="button"
-                        @click="orgForm.settings.notifications_enabled = !orgForm.settings.notifications_enabled"
-                        class="relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none"
-                        :class="orgForm.settings.notifications_enabled ? 'bg-blue-600' : 'bg-slate-200'"
-                    >
-                        <span 
-                            class="pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out"
-                            :class="orgForm.settings.notifications_enabled ? 'translate-x-5' : 'translate-x-0'"
-                        />
-                    </button>
+          <div class="space-y-10">
+            <!-- Property Connection Form -->
+            <div class="p-8 bg-blue-50/30 rounded-[2rem] border border-blue-100/50">
+              <h3 class="text-lg font-bold text-slate-900 mb-4">Connect New GA4 Property</h3>
+              <form @submit.prevent="addProperty" class="grid grid-cols-1 md:grid-cols-3 gap-6">
+                <div class="space-y-2">
+                  <label class="text-sm font-bold text-slate-700">Display Name</label>
+                  <input v-model="propertyForm.name" type="text" placeholder="e.g. My Main Site" class="w-full px-4 py-3 rounded-xl border border-slate-200 focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10 bg-white">
                 </div>
-             </div>
-
-             <div class="flex justify-end">
-              <button type="submit" :disabled="orgForm.processing" class="bg-slate-900 hover:bg-slate-800 text-white px-6 py-2.5 rounded-xl font-bold transition-standard shadow-lg shadow-slate-200 active:scale-95 disabled:opacity-70">Save Preferences</button>
+                <div class="space-y-2">
+                  <label class="text-sm font-bold text-slate-700">GA4 Property ID</label>
+                  <input v-model="propertyForm.property_id" type="text" placeholder="e.g. 123456789" class="w-full px-4 py-3 rounded-xl border border-slate-200 focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10 bg-white">
+                </div>
+                <div class="space-y-2">
+                  <label class="text-sm font-bold text-slate-700">Website URL</label>
+                  <input v-model="propertyForm.website_url" type="url" placeholder="https://example.com" class="w-full px-4 py-3 rounded-xl border border-slate-200 focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10 bg-white">
+                </div>
+                <div class="md:col-span-3 flex justify-end">
+                  <button type="submit" :disabled="propertyForm.processing" class="bg-blue-600 text-white px-8 py-3 rounded-2xl font-bold hover:bg-blue-700 transition-all shadow-lg shadow-blue-200">
+                    {{ propertyForm.processing ? 'Connecting...' : 'Connect Property' }}
+                  </button>
+                </div>
+              </form>
             </div>
-          </form>
+
+            <!-- Connected Properties List -->
+            <div class="space-y-6">
+              <div class="flex items-center justify-between px-2">
+                <h3 class="text-lg font-bold text-slate-900">Connected GA4 Properties</h3>
+                <span class="text-xs font-bold text-slate-400 uppercase tracking-widest">{{ analyticsProperties.length }} Properties</span>
+              </div>
+              
+              <div v-if="analyticsProperties.length" class="grid grid-cols-1 gap-4">
+                <div v-for="prop in analyticsProperties" :key="prop.id" class="p-6 bg-white rounded-3xl border border-slate-100 flex items-center justify-between group hover:border-blue-500/30 transition-all">
+                  <div class="flex items-center gap-5">
+                    <div class="w-12 h-12 bg-slate-50 rounded-2xl flex items-center justify-center text-slate-400">
+                      <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" /></svg>
+                    </div>
+                    <div>
+                      <p class="font-bold text-slate-900">{{ prop.name }}</p>
+                      <p class="text-sm text-slate-400 font-medium">ID: {{ prop.property_id }} • {{ prop.website_url }}</p>
+                    </div>
+                  </div>
+                  <div class="flex items-center gap-4">
+                    <button @click="disconnectProperty(prop.id)" class="text-slate-400 hover:text-red-600 font-bold text-sm transition-colors">Disconnect</button>
+                  </div>
+                </div>
+              </div>
+              <div v-else class="text-center py-12 p-8 bg-slate-50 rounded-[2rem] border-2 border-dashed border-slate-200">
+                <p class="text-slate-500 font-medium">No properties connected yet.</p>
+              </div>
+            </div>
+
+            <div class="pt-10 border-t border-slate-100">
+              <h3 class="text-lg font-bold text-slate-900 mb-6">General Preferences</h3>
+              <form @submit.prevent="updateOrganization" class="space-y-6">
+                <div class="space-y-2">
+                  <label class="text-sm font-bold text-slate-700">Default Reporting Period</label>
+                  <select v-model="orgForm.settings.analytics_period" class="w-full px-4 py-3 rounded-xl border border-slate-200 focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10 bg-white transition-standard outline-none font-medium">
+                    <option value="7d">Last 7 Days</option>
+                    <option value="30d">Last 30 Days</option>
+                    <option value="90d">Last 90 Days</option>
+                  </select>
+                </div>
+                
+                <div class="space-y-4 pt-4 border-t border-slate-100">
+                  <div class="flex items-center justify-between">
+                      <div>
+                          <p class="font-bold text-slate-900">Weekly Email Reports</p>
+                          <p class="text-sm text-slate-500">Receive a summary of your schema performance every Monday.</p>
+                      </div>
+                      <button 
+                          type="button"
+                          @click="orgForm.settings.notifications_enabled = !orgForm.settings.notifications_enabled"
+                          class="relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none"
+                          :class="orgForm.settings.notifications_enabled ? 'bg-blue-600' : 'bg-slate-200'"
+                      >
+                          <span 
+                              class="pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out"
+                              :class="orgForm.settings.notifications_enabled ? 'translate-x-5' : 'translate-x-0'"
+                          />
+                      </button>
+                  </div>
+                </div>
+
+                <div class="flex justify-end">
+                  <button type="submit" :disabled="orgForm.processing" class="bg-slate-900 hover:bg-slate-800 text-white px-6 py-2.5 rounded-xl font-bold transition-standard shadow-lg shadow-slate-200 active:scale-95 disabled:opacity-70">Save Preferences</button>
+                </div>
+              </form>
+            </div>
+          </div>
         </div>
       </div>
 
@@ -339,7 +395,8 @@ const props = defineProps({
   members: Array,
   invitations: Array,
   currentUserRole: String,
-  aiModels: Array
+  aiModels: Array,
+  analyticsProperties: Array
 })
 
 const page = usePage()
@@ -354,6 +411,14 @@ const tabs = [
 ]
 
 const activeTab = ref('general')
+
+onMounted(() => {
+    const params = new URLSearchParams(window.location.search)
+    const tab = params.get('tab')
+    if (tab && tabs.find(t => t.id === tab)) {
+        activeTab.value = tab
+    }
+})
 const showInviteModal = ref(false)
 
 // Confirmation Modal State
@@ -371,6 +436,13 @@ const orgForm = useForm({
      analytics_period: props.organization.settings?.analytics_period || '30d',
      notifications_enabled: props.organization.settings?.notifications_enabled || false
   }
+})
+
+// Property Form
+const propertyForm = useForm({
+  name: '',
+  property_id: '',
+  website_url: ''
 })
 
 // Invite Form
@@ -418,6 +490,22 @@ const updatePassword = () => {
       }
     }
   })
+}
+
+const addProperty = () => {
+    propertyForm.post(route('analytics.properties.store'), {
+        onSuccess: () => propertyForm.reset(),
+        preserveScroll: true
+    })
+}
+
+const disconnectProperty = (id) => {
+    openConfirmModal(
+        'Disconnect GA4 Property',
+        'Are you sure you want to disconnect this GA4 property? Historical data will remain but no new data will be fetched.',
+        () => router.delete(route('analytics.properties.destroy', id)),
+        'Disconnect Property'
+    )
 }
 
 const submitInvite = () => {

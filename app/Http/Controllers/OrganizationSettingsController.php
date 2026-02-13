@@ -25,6 +25,7 @@ class OrganizationSettingsController extends Controller
             'invitations' => $organization->invitations()->orderBy('created_at', 'desc')->get(),
             'currentUserRole' => auth()->user()->getRoleIn($organization),
             'aiModels' => \App\Services\OpenAIService::getAvailableModels(),
+            'analyticsProperties' => $organization->analyticsProperties()->latest()->get(),
         ]);
     }
 

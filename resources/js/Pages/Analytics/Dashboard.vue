@@ -194,7 +194,7 @@ watch([selectedPropertyId, timeframe], fetchData)
          <div class="text-6xl mb-6">📊</div>
          <h2 class="text-2xl font-bold text-slate-900">No Analytics Properties Connected</h2>
          <p class="text-slate-500 mt-2">Connect your GA4 property in the settings to start tracking performance.</p>
-         <Link :href="route('organization.settings')" class="inline-block mt-8 bg-slate-900 text-white px-8 py-3 rounded-2xl font-bold hover:bg-slate-800 transition-all shadow-lg">
+         <Link :href="route('organization.settings', { tab: 'analytics' })" class="inline-block mt-8 bg-slate-900 text-white px-8 py-3 rounded-2xl font-bold hover:bg-slate-800 transition-all shadow-lg">
             Connect Property
          </Link>
       </div>
