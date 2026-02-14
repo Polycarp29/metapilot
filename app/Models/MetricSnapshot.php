@@ -24,6 +24,9 @@ class MetricSnapshot extends Model
         'by_campaign',
         'by_page',
         'by_device',
+        'by_country',
+        'by_city',
+        'bounce_rate',
         'raw_response',
     ];
 
@@ -37,6 +40,9 @@ class MetricSnapshot extends Model
         'by_campaign' => 'array',
         'by_page' => 'array',
         'by_device' => 'array',
+        'by_country' => 'array',
+        'by_city' => 'array',
+        'bounce_rate' => 'decimal:2',
         'raw_response' => 'array',
     ];
 

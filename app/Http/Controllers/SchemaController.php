@@ -759,7 +759,7 @@ class SchemaController extends Controller
             // Only use AI if configured and key is available (system level)
             if ($org && !empty($org->settings['ai_model']) && config('services.openai.api_key')) {
                 try {
-                    $aiService = new \App\Services\OpenAIService();
+                    $aiService = app(\App\Services\OpenAIService::class);
                     $aiService->setModel($org->settings['ai_model']);
                     $textContent = strip_tags($html);
                     // We don't block the response on AI, just attempt it

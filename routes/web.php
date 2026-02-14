@@ -72,11 +72,16 @@ Route::middleware('auth')->group(function () {
 
     // Analytics
     Route::get('analytics', [\App\Http\Controllers\AnalyticsDashboardController::class, 'index'])->name('analytics.index');
-    Route::get('api/analytics/{property}/overview', [\App\Http\Controllers\AnalyticsDashboardController::class, 'getOverview'])->name('api.analytics.overview');
-    Route::get('api/analytics/{property}/trends', [\App\Http\Controllers\AnalyticsDashboardController::class, 'getTrends'])->name('api.analytics.trends');
+    Route::get('/analytics/overview/{property}', [\App\Http\Controllers\AnalyticsDashboardController::class, 'getOverview'])->name('api.analytics.overview');
+    Route::get('/analytics/trends/{property}', [\App\Http\Controllers\AnalyticsDashboardController::class, 'getTrends'])->name('api.analytics.trends');
+    Route::get('/analytics/insights/{property}', [\App\Http\Controllers\AnalyticsDashboardController::class, 'getInsights'])->name('api.analytics.insights');
     Route::post('api/analytics/properties', [\App\Http\Controllers\AnalyticsPropertyController::class, 'store'])->name('analytics.properties.store');
     Route::delete('api/analytics/properties/{property}', [\App\Http\Controllers\AnalyticsPropertyController::class, 'destroy'])->name('analytics.properties.destroy');
     Route::put('api/analytics/properties/{property}', [\App\Http\Controllers\AnalyticsPropertyController::class, 'update'])->name('analytics.properties.update');
+
+    // Google OAuth for Analytics
+    Route::get('auth/google/redirect', [\App\Http\Controllers\GoogleAuthController::class, 'redirectToGoogle'])->name('auth.google.redirect');
+    Route::get('auth/google/callback', [\App\Http\Controllers\GoogleAuthController::class, 'handleGoogleCallback'])->name('auth.google.callback');
 
     // Campaigns
     Route::get('campaigns', [\App\Http\Controllers\SeoCampaignController::class, 'index'])->name('campaigns.index');

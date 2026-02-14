@@ -41,6 +41,7 @@ class OrganizationSettingsController extends Controller
             'name' => 'required|string|max:255',
             'settings' => 'array',
             'settings.ai_model' => 'nullable|string',
+            'settings.ai_insights_enabled' => 'nullable|boolean',
             'settings.analytics_period' => 'nullable|string',
             'settings.notifications_enabled' => 'boolean',
         ]);

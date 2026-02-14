@@ -138,12 +138,32 @@
               <p class="text-sm text-slate-500">Select the underlying intelligence engine for your automated schema analysis. 'User Based' configuration applies to this entire organization.</p>
             </div>
 
+            <div class="space-y-4 pt-6 border-t border-slate-100">
+                <div class="flex items-center justify-between">
+                    <div>
+                        <p class="font-bold text-slate-900 text-lg">Enable AI Insights</p>
+                        <p class="text-sm text-slate-500">Automatically generate SEO performance summaries and keyword strategies.</p>
+                    </div>
+                    <button 
+                        type="button"
+                        @click="orgForm.settings.ai_insights_enabled = !orgForm.settings.ai_insights_enabled"
+                        class="relative inline-flex h-7 w-12 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none"
+                        :class="orgForm.settings.ai_insights_enabled ? 'bg-purple-600' : 'bg-slate-200'"
+                    >
+                        <span 
+                            class="pointer-events-none inline-block h-6 w-6 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out"
+                            :class="orgForm.settings.ai_insights_enabled ? 'translate-x-5' : 'translate-x-0'"
+                        />
+                    </button>
+                </div>
+            </div>
+
             <div class="p-6 bg-blue-50 rounded-2xl border border-blue-100 flex gap-4">
                <div class="text-blue-500 shrink-0">
                  <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
                </div>
                <p class="text-sm text-blue-800 leading-relaxed">
-                 <strong>Note:</strong> This setting controls the analysis phase logic. API Keys are managed securely via your environment variables by the system administrator.
+                 <strong>Note:</strong> This setting controls the analysis phase logic. AI Insights require an active OpenAI API key to be configured in the system environment.
                </p>
             </div>
 
@@ -178,7 +198,21 @@
           <div class="space-y-10">
             <!-- Property Connection Form -->
             <div class="p-8 bg-blue-50/30 rounded-[2rem] border border-blue-100/50">
-              <h3 class="text-lg font-bold text-slate-900 mb-4">Connect New GA4 Property</h3>
+              <div class="flex items-center justify-between mb-6">
+                <h3 class="text-lg font-bold text-slate-900">Connect GA4 Property</h3>
+                <a 
+                  :href="route('auth.google.redirect')" 
+                  class="flex items-center gap-2 bg-white border border-slate-200 px-4 py-2 rounded-xl font-bold hover:shadow-md transition-all text-sm"
+                >
+                  <img src="https://www.gstatic.com/images/branding/product/1x/gsa_512dp.png" class="w-5 h-5" alt="Google">
+                  Connect Google Account
+                </a>
+              </div>
+
+              <div v-if="$page.props.flash.message" class="mb-6 p-4 bg-green-50 text-green-700 rounded-xl border border-green-100 font-medium text-sm">
+                {{ $page.props.flash.message }}
+              </div>
+
               <form @submit.prevent="addProperty" class="grid grid-cols-1 md:grid-cols-3 gap-6">
                 <div class="space-y-2">
                   <label class="text-sm font-bold text-slate-700">Display Name</label>
@@ -385,7 +419,7 @@
 
 
 <script setup>
-import { ref } from 'vue'
+import { ref, onMounted } from 'vue'
 import { useForm, router, usePage } from '@inertiajs/vue3'
 import AppLayout from '../../Layouts/AppLayout.vue'
 import ConfirmationModal from '../../Components/ConfirmationModal.vue'
@@ -433,6 +467,7 @@ const orgForm = useForm({
   name: props.organization.name,
   settings: {
      ai_model: props.organization.settings?.ai_model || 'gpt-4',
+     ai_insights_enabled: props.organization.settings?.ai_insights_enabled !== false,
      analytics_period: props.organization.settings?.analytics_period || '30d',
      notifications_enabled: props.organization.settings?.notifications_enabled || false
   }

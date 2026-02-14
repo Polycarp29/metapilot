@@ -12,13 +12,18 @@ class AnalyticsProperty extends Model
         'name',
         'property_id',
         'website_url',
+        'gsc_site_url',
         'config',
         'is_active',
+        'access_token',
+        'refresh_token',
+        'token_expires_at',
     ];
 
     protected $casts = [
         'config' => 'array',
         'is_active' => 'boolean',
+        'token_expires_at' => 'datetime',
     ];
 
     /**
@@ -47,5 +52,10 @@ class AnalyticsProperty extends Model
     public function insights()
     {
         return $this->hasMany(Insight::class);
+    }
+
+    public function searchConsoleMetrics()
+    {
+        return $this->hasMany(SearchConsoleMetric::class);
     }
 }
