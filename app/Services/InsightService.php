@@ -11,10 +11,12 @@ use Illuminate\Support\Facades\Log;
 class InsightService
 {
     protected $openai;
+    protected $aggregator;
 
-    public function __construct(OpenAIService $openai)
+    public function __construct(OpenAIService $openai, AnalyticsAggregatorService $aggregator)
     {
         $this->openai = $openai;
+        $this->aggregator = $aggregator;
     }
 
     /**
@@ -37,10 +39,8 @@ class InsightService
         $prevEnd = $currentStart->copy()->subDay();
         $prevStart = $prevEnd->copy()->subDays($days - 1);
 
-        $aggregator = new AnalyticsAggregatorService();
-        
-        $currentRaw = $aggregator->getOverview($property->id, $currentStart->format('Y-m-d'), $currentEnd->format('Y-m-d'));
-        $prevRaw = $aggregator->getOverview($property->id, $prevStart->format('Y-m-d'), $prevEnd->format('Y-m-d'));
+        $currentRaw = $this->aggregator->getOverview($property->id, $currentStart->format('Y-m-d'), $currentEnd->format('Y-m-d'));
+        $prevRaw = $this->aggregator->getOverview($property->id, $prevStart->format('Y-m-d'), $prevEnd->format('Y-m-d'));
 
         if (!$currentRaw || !$prevRaw) {
             return null;
@@ -71,6 +71,8 @@ class InsightService
                     'type' => 'analytics_summary',
                     'severity' => $insightData['severity'] ?? 'low',
                     'insight_at' => now(),
+                    'start_date' => $currentStart->format('Y-m-d'),
+                    'end_date' => $currentEnd->format('Y-m-d'),
                 ]);
             }
             return null;

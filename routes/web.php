@@ -75,6 +75,7 @@ Route::middleware('auth')->group(function () {
     Route::get('/analytics/overview/{property}', [\App\Http\Controllers\AnalyticsDashboardController::class, 'getOverview'])->name('api.analytics.overview');
     Route::get('/analytics/trends/{property}', [\App\Http\Controllers\AnalyticsDashboardController::class, 'getTrends'])->name('api.analytics.trends');
     Route::get('/analytics/insights/{property}', [\App\Http\Controllers\AnalyticsDashboardController::class, 'getInsights'])->name('api.analytics.insights');
+    Route::get('/analytics/acquisition/{property}', [\App\Http\Controllers\AnalyticsDashboardController::class, 'getAcquisition'])->name('api.analytics.acquisition');
     Route::post('api/analytics/properties', [\App\Http\Controllers\AnalyticsPropertyController::class, 'store'])->name('analytics.properties.store');
     Route::delete('api/analytics/properties/{property}', [\App\Http\Controllers\AnalyticsPropertyController::class, 'destroy'])->name('analytics.properties.destroy');
     Route::put('api/analytics/properties/{property}', [\App\Http\Controllers\AnalyticsPropertyController::class, 'update'])->name('analytics.properties.update');

@@ -21,9 +21,11 @@ class SeoCampaignController extends Controller
     {
         $organization = $request->user()->currentOrganization();
         $campaigns = $organization->seoCampaigns()->with('property')->latest()->get();
+        $properties = $organization->analyticsProperties()->where('is_active', true)->get();
 
         return Inertia::render('Campaigns/Index', [
             'campaigns' => $campaigns,
+            'properties' => $properties,
         ]);
     }
 

@@ -18,6 +18,7 @@ class AnalyticsPropertyController extends Controller
             'name' => 'required|string|max:255',
             'property_id' => 'required|string|max:255',
             'website_url' => 'nullable|url|max:255',
+            'gsc_site_url' => 'nullable|string|max:255',
         ]);
 
         $property = AnalyticsProperty::updateOrCreate(
@@ -27,6 +28,7 @@ class AnalyticsPropertyController extends Controller
                 'user_id' => $request->user()->id,
                 'name' => $validated['name'],
                 'website_url' => $validated['website_url'],
+                'gsc_site_url' => $validated['gsc_site_url'],
                 'is_active' => true,
                 'access_token' => session('google_access_token'),
                 'refresh_token' => session('google_refresh_token'),
@@ -45,10 +47,14 @@ class AnalyticsPropertyController extends Controller
      */
     public function update(Request $request, AnalyticsProperty $property)
     {
-        $this->authorize('update', $property);
+        // Ensure user belongs to the same organization as the property
+        if (!$request->user()->organizations->contains($property->organization_id)) {
+            abort(403, 'Unauthorized');
+        }
 
         $validated = $request->validate([
             'name' => 'required|string|max:255',
+            'gsc_site_url' => 'nullable|string|max:255',
             'is_active' => 'boolean',
         ]);
 
@@ -62,7 +68,10 @@ class AnalyticsPropertyController extends Controller
      */
     public function destroy(AnalyticsProperty $property)
     {
-        $this->authorize('delete', $property);
+        // Ensure user belongs to the same organization as the property
+        if (!request()->user()->organizations->contains($property->organization_id)) {
+            abort(403, 'Unauthorized');
+        }
 
         $property->delete();
 

@@ -35,6 +35,9 @@ class FetchGscMetrics extends Command
                 try {
                     $performance = $gscService->fetchPerformance($property, $date, $date);
                     $breakdowns = $gscService->fetchBreakdowns($property, $date, $date);
+                    
+                    // Fetch sitemaps only for the most recent date to avoid redundant API calls
+                    $sitemaps = ($i === 1) ? $gscService->fetchSitemaps($property) : null;
 
                     if ($performance && !empty($performance)) {
                         $daily = $performance[0];
@@ -51,6 +54,7 @@ class FetchGscMetrics extends Command
                                 'position' => $daily['position'],
                                 'top_queries' => $breakdowns['top_queries'] ?? [],
                                 'top_pages' => $breakdowns['top_pages'] ?? [],
+                                'sitemaps' => $sitemaps,
                             ]
                         );
                     }

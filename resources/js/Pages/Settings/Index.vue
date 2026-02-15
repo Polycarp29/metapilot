@@ -226,6 +226,10 @@
                   <label class="text-sm font-bold text-slate-700">Website URL</label>
                   <input v-model="propertyForm.website_url" type="url" placeholder="https://example.com" class="w-full px-4 py-3 rounded-xl border border-slate-200 focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10 bg-white">
                 </div>
+                <div class="space-y-2">
+                  <label class="text-sm font-bold text-slate-700">Search Console Site URL</label>
+                  <input v-model="propertyForm.gsc_site_url" type="text" placeholder="sc-domain:example.com" class="w-full px-4 py-3 rounded-xl border border-slate-200 focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10 bg-white">
+                </div>
                 <div class="md:col-span-3 flex justify-end">
                   <button type="submit" :disabled="propertyForm.processing" class="bg-blue-600 text-white px-8 py-3 rounded-2xl font-bold hover:bg-blue-700 transition-all shadow-lg shadow-blue-200">
                     {{ propertyForm.processing ? 'Connecting...' : 'Connect Property' }}
@@ -249,10 +253,12 @@
                     </div>
                     <div>
                       <p class="font-bold text-slate-900">{{ prop.name }}</p>
-                      <p class="text-sm text-slate-400 font-medium">ID: {{ prop.property_id }} • {{ prop.website_url }}</p>
+                      <p class="text-sm text-slate-400 font-medium">GA4: {{ prop.property_id }} • GSC: {{ prop.gsc_site_url || 'Not set' }}</p>
+                      <p class="text-xs text-slate-400">{{ prop.website_url }}</p>
                     </div>
                   </div>
                   <div class="flex items-center gap-4">
+                    <button @click="editProperty(prop)" class="text-slate-400 hover:text-blue-600 font-bold text-sm transition-colors">Edit</button>
                     <button @click="disconnectProperty(prop.id)" class="text-slate-400 hover:text-red-600 font-bold text-sm transition-colors">Disconnect</button>
                   </div>
                 </div>
@@ -403,6 +409,39 @@
         </div>
       </Transition>
 
+      <!-- Edit Property Modal -->
+      <Transition
+        enter-active-class="transition duration-200 ease-out"
+        enter-from-class="transform opacity-0 scale-95"
+        enter-to-class="transform opacity-100 scale-100"
+        leave-active-class="transition duration-75 ease-in"
+        leave-from-class="transform opacity-100 scale-100"
+        leave-to-class="transform opacity-0 scale-95"
+      >
+        <div v-if="showEditPropertyModal" class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm" @click.self="showEditPropertyModal = false">
+          <div class="bg-white rounded-3xl p-8 w-full max-w-md shadow-2xl">
+            <h3 class="text-2xl font-bold text-slate-900 mb-6">Edit Property</h3>
+            <form @submit.prevent="submitEditProperty" class="space-y-6">
+              <div class="space-y-2">
+                <label class="text-sm font-bold text-slate-700">Property Name</label>
+                <input v-model="editPropertyForm.name" type="text" class="w-full px-4 py-3 rounded-xl border border-slate-200 focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10 transition-standard outline-none font-medium">
+                <div v-if="editPropertyForm.errors.name" class="text-red-500 text-sm font-medium">{{ editPropertyForm.errors.name }}</div>
+              </div>
+              <div class="space-y-2">
+                <label class="text-sm font-bold text-slate-700">Search Console Site URL</label>
+                <input v-model="editPropertyForm.gsc_site_url" type="text" placeholder="https://www.example.com/ or sc-domain:example.com" class="w-full px-4 py-3 rounded-xl border border-slate-200 focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10 transition-standard outline-none font-medium">
+                <div v-if="editPropertyForm.errors.gsc_site_url" class="text-red-500 text-sm font-medium">{{ editPropertyForm.errors.gsc_site_url }}</div>
+                <p class="text-xs text-slate-500">Copy the property URL exactly as shown in Google Search Console.</p>
+              </div>
+              <div class="flex gap-4 pt-2">
+                <button type="button" @click="showEditPropertyModal = false" class="flex-1 px-4 py-3 rounded-xl font-bold text-slate-600 hover:bg-slate-100">Cancel</button>
+                <button type="submit" :disabled="editPropertyForm.processing" class="flex-1 bg-blue-600 hover:bg-blue-500 text-white px-4 py-3 rounded-xl font-bold shadow-lg shadow-blue-500/20">Save Changes</button>
+              </div>
+            </form>
+          </div>
+        </div>
+      </Transition>
+
       <ConfirmationModal 
         :show="showConfirmModal"
         :title="confirmTitle"
@@ -454,6 +493,8 @@ onMounted(() => {
     }
 })
 const showInviteModal = ref(false)
+const showEditPropertyModal = ref(false)
+const editingProperty = ref(null)
 
 // Confirmation Modal State
 const showConfirmModal = ref(false)
@@ -477,7 +518,13 @@ const orgForm = useForm({
 const propertyForm = useForm({
   name: '',
   property_id: '',
-  website_url: ''
+  website_url: '',
+  gsc_site_url: ''
+})
+
+const editPropertyForm = useForm({
+  name: '',
+  gsc_site_url: ''
 })
 
 // Invite Form
@@ -542,6 +589,25 @@ const disconnectProperty = (id) => {
         'Disconnect Property'
     )
 }
+
+const editProperty = (property) => {
+  editingProperty.value = property
+  editPropertyForm.name = property.name
+  editPropertyForm.gsc_site_url = property.gsc_site_url || ''
+  showEditPropertyModal.value = true
+}
+
+const submitEditProperty = () => {
+  editPropertyForm.put(route('analytics.properties.update', editingProperty.value.id), {
+    preserveScroll: true,
+    onSuccess: () => {
+      showEditPropertyModal.value = false
+      editPropertyForm.reset()
+      editingProperty.value = null
+    }
+  })
+}
+
 
 const submitInvite = () => {
   inviteForm.post(route('team-invitations.store'), {

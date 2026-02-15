@@ -11,6 +11,16 @@ class AnalyticsAggregatorService
     /**
      * Get overview stats for a property and date range.
      */
+    protected $ga4Service;
+
+    public function __construct(\App\Services\Ga4Service $ga4Service)
+    {
+        $this->ga4Service = $ga4Service;
+    }
+
+    /**
+     * Get overview stats for a property and date range.
+     */
     public function getOverview($propertyId, $startDate, $endDate)
     {
         // 1. Get the latest record in the range to pull the JSON breakdowns
@@ -33,6 +43,31 @@ class AnalyticsAggregatorService
                 DB::raw('COALESCE(AVG(bounce_rate), 0) as avg_bounce_rate'),
             ])
             ->first();
+
+        // 3. Try to fetch live aggregates for better accuracy (especially for user counts)
+        $property = \App\Models\AnalyticsProperty::find($propertyId);
+        $liveAggregates = null;
+        
+        try {
+            // Only fetch live if within reasonable range (e.g. last 90 days) to avoid timeouts
+            // offering a 10s timeout to backend processing
+            $liveAggregates = $this->ga4Service->fetchAggregateMetrics($property, $startDate, $endDate);
+        } catch (\Exception $e) {
+            // Fallback to DB aggregates
+            \Illuminate\Support\Facades\Log::warning("Live aggregate fetch failed for property {$propertyId}: " . $e->getMessage());
+        }
+
+        // Merge live data with DB data (prefer live for counts, DB for averages if improved)
+        $finalStats = [
+            'total_users' => $liveAggregates['active_users'] ?? (int) $aggregates->total_users, // Active Users is the standard "Users" metric
+            'total_users_all' => $liveAggregates['total_users'] ?? (int) $aggregates->total_users_all,
+            'total_new_users' => $liveAggregates['new_users'] ?? (int) $aggregates->total_new_users,
+            'total_sessions' => $liveAggregates['sessions'] ?? (int) $aggregates->total_sessions,
+            'total_conversions' => $liveAggregates['conversions'] ?? (int) $aggregates->total_conversions,
+            'avg_engagement_rate' => $liveAggregates ? $liveAggregates['engagement_rate'] : (float) $aggregates->avg_engagement_rate,
+            'avg_duration' => $liveAggregates ? $liveAggregates['avg_session_duration'] : (float) $aggregates->avg_duration,
+            'avg_bounce_rate' => $liveAggregates ? $liveAggregates['bounce_rate'] : (float) $aggregates->avg_bounce_rate,
+        ];
 
         if (!$latestRecord || $aggregates->total_users == 0) {
             return [
@@ -75,20 +110,24 @@ class AnalyticsAggregatorService
             ->orderBy('snapshot_date', 'desc')
             ->first();
 
+        // Check if there's a permission issue (has GSC URL but no data)
+        $hasGscUrl = \App\Models\AnalyticsProperty::where('id', $propertyId)->value('gsc_site_url');
+        $hasGscPermissionError = $hasGscUrl && !$latestGscRecord && $aggregates->total_users > 0;
+
         // Combine the aggregates with the latest breakdowns
         return [
-            'total_users' => (int) $aggregates->total_users,
-            'total_users_all' => (int) $aggregates->total_users_all,
-            'total_new_users' => (int) $aggregates->total_new_users,
-            'total_sessions' => (int) $aggregates->total_sessions,
-            'total_conversions' => (int) $aggregates->total_conversions,
+            'total_users' => $finalStats['total_users'],
+            'total_users_all' => $finalStats['total_users_all'],
+            'total_new_users' => $finalStats['total_new_users'],
+            'total_sessions' => $finalStats['total_sessions'],
+            'total_conversions' => $finalStats['total_conversions'],
             'total_clicks' => (int) ($gscAggregates?->total_clicks ?? 0),
             'total_impressions' => (int) ($gscAggregates?->total_impressions ?? 0),
             'avg_ctr' => (float) ($gscAggregates?->avg_ctr ?? 0),
             'avg_position' => (float) ($gscAggregates?->avg_position ?? 0),
-            'avg_engagement_rate' => (float) $aggregates->avg_engagement_rate,
-            'avg_duration' => (float) $aggregates->avg_duration,
-            'avg_bounce_rate' => (float) $aggregates->avg_bounce_rate,
+            'avg_engagement_rate' => $finalStats['avg_engagement_rate'],
+            'avg_duration' => $finalStats['avg_duration'],
+            'avg_bounce_rate' => $finalStats['avg_bounce_rate'],
             'by_page' => $latestRecord->by_page,
             'by_source' => $latestRecord->by_source,
             'by_medium' => $latestRecord->by_medium,
@@ -98,6 +137,7 @@ class AnalyticsAggregatorService
             'by_city' => $latestRecord->by_city,
             'top_queries' => $latestGscRecord?->top_queries ?? [],
             'sitemaps' => $latestGscRecord?->sitemaps ?? [],
+            'gsc_permission_error' => $hasGscPermissionError,
             'last_updated' => max(
                 $latestRecord->updated_at?->toIso8601String(),
                 $latestGscRecord?->updated_at?->toIso8601String()

@@ -15,6 +15,8 @@ class Insight extends Model
         'severity',
         'insight_at',
         'is_read',
+        'start_date',
+        'end_date',
     ];
 
     protected $casts = [

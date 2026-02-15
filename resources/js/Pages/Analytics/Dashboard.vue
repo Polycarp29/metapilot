@@ -37,7 +37,7 @@ const timeframe = ref(30)
 const customStartDate = ref(new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0])
 const customEndDate = ref(new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString().split('T')[0])
 const isCustomRange = ref(false)
-const isLoading = ref(false)
+const isLoading = ref(true)
 const fetchingInsights = ref(false)
 const insightError = ref(false)
 const overview = ref(null)
@@ -96,6 +96,7 @@ const chartOptions = ref({
 })
 
 const insights = ref(null)
+const campaigns = ref([])
 
 const fetchData = async (forceRefresh = false) => {
   if (!selectedPropertyId.value) return
@@ -114,17 +115,19 @@ const fetchData = async (forceRefresh = false) => {
       params.refresh = 1
     }
 
-    const [overviewRes, trendsRes] = await Promise.all([
-      axios.get(route('api.analytics.overview', { property: selectedPropertyId.value, ...params })),
-      axios.get(route('api.analytics.trends', { property: selectedPropertyId.value, ...params }))
+    const [overviewRes, trendsRes, acquisitionRes] = await Promise.all([
+      axios.get(route('api.analytics.overview', { property: selectedPropertyId.value }), { params }),
+      axios.get(route('api.analytics.trends', { property: selectedPropertyId.value }), { params }),
+      axios.get(route('api.analytics.acquisition', { property: selectedPropertyId.value }), { params })
     ])
     
     overview.value = overviewRes.data
     trendData.value = trendsRes.data
+    campaigns.value = acquisitionRes.data
     lastRefetchTime.value = new Date()
     updateChart()
 
-    // Fetch insights independently so they don't block the UI
+    // Fetch insights in background
     fetchInsights(params)
   } catch (error) {
     console.error('Failed to fetch analytics:', error)
@@ -311,9 +314,15 @@ onUnmounted(() => {
           <div class="w-px h-6 bg-slate-100"></div>
           
           <select v-model="timeframe" class="bg-transparent border-none focus:ring-0 font-bold text-blue-600 cursor-pointer pr-10 hover:text-blue-700 transition-colors">
+            <option :value="0">Today</option>
+            <option :value="1">Yesterday</option>
             <option :value="7">Last 7 Days</option>
+            <option :value="14">Last 14 Days</option>
+            <option :value="28">Last 28 Days</option>
             <option :value="30">Last 30 Days</option>
-            <option :value="90">Last 90 Days</option>
+            <option :value="90">Last 3 Months</option>
+            <option :value="180">Last 6 Months</option>
+            <option :value="365">Last Year</option>
             <option value="custom">Custom Range</option>
           </select>
 
@@ -363,7 +372,23 @@ onUnmounted(() => {
         </div>
       </div>
 
-      <div v-else-if="overview && overview.total_users > 0" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+      <!-- Permission Warning -->
+      <div v-if="overview?.gsc_permission_error" class="bg-amber-50 border border-amber-200 rounded-3xl p-6 flex flex-col md:flex-row items-center justify-between gap-4 animate-in fade-in slide-in-from-top-4 duration-500">
+        <div class="flex items-center gap-4">
+          <div class="w-12 h-12 rounded-2xl bg-amber-100 text-amber-600 flex items-center justify-center shrink-0">
+            <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path></svg>
+          </div>
+          <div>
+            <h3 class="text-lg font-bold text-amber-800">Search Console Permissions Missing</h3>
+            <p class="text-amber-700 font-medium">We can't access your Search Console data. Please reconnect your account with the required permissions.</p>
+          </div>
+        </div>
+        <Link :href="route('organization.settings', { tab: 'analytics' })" class="whitespace-nowrap px-6 py-3 bg-amber-600 hover:bg-amber-700 text-white rounded-xl font-bold transition-all shadow-lg shadow-amber-600/20">
+          Reconnect Account
+        </Link>
+      </div>
+
+      <div v-if="overview && overview.total_users > 0" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
         <!-- GA4: Total Users -->
         <div class="bg-white p-7 rounded-[2.5rem] border border-slate-100 shadow-premium group hover:border-blue-500/30 transition-all">
           <div class="flex flex-col">
@@ -386,7 +411,10 @@ onUnmounted(() => {
         </div>
 
         <!-- GSC: Impressions -->
-        <div class="bg-white p-7 rounded-[2.5rem] border border-slate-100 shadow-premium hover:border-emerald-500/30 transition-all">
+        <div class="bg-white p-7 rounded-[2.5rem] border border-slate-100 shadow-premium hover:border-emerald-500/30 transition-all relative overflow-hidden group">
+          <div v-if="overview.gsc_permission_error" class="absolute inset-0 bg-white/80 backdrop-blur-[2px] z-10 flex items-center justify-center text-center p-4">
+            <span class="text-xs font-bold text-amber-600 bg-amber-50 px-3 py-1.5 rounded-lg border border-amber-100">Permission Required</span>
+          </div>
           <div class="flex flex-col">
             <p class="text-emerald-700 font-bold text-xs uppercase tracking-wider">Impressions</p>
             <p class="text-[9px] text-slate-400 font-medium mt-0.5">Times seen in Search (GSC)</p>
@@ -395,7 +423,10 @@ onUnmounted(() => {
         </div>
 
         <!-- GSC: Clicks -->
-        <div class="bg-white p-7 rounded-[2.5rem] border border-slate-100 shadow-premium hover:border-emerald-500/30 transition-all">
+        <div class="bg-white p-7 rounded-[2.5rem] border border-slate-100 shadow-premium hover:border-emerald-500/30 transition-all relative overflow-hidden group">
+          <div v-if="overview.gsc_permission_error" class="absolute inset-0 bg-white/80 backdrop-blur-[2px] z-10 flex items-center justify-center text-center p-4">
+            <span class="text-xs font-bold text-amber-600 bg-amber-50 px-3 py-1.5 rounded-lg border border-amber-100">Permission Required</span>
+          </div>
           <div class="flex flex-col">
             <p class="text-emerald-700 font-bold text-xs uppercase tracking-wider">Clicks</p>
             <p class="text-[9px] text-slate-400 font-medium mt-0.5">Visits from Search (GSC)</p>
@@ -404,7 +435,10 @@ onUnmounted(() => {
         </div>
 
         <!-- GSC: Avg. Position -->
-        <div class="bg-white p-7 rounded-[2.5rem] border border-slate-100 shadow-premium hover:border-emerald-500/30 transition-all">
+        <div class="bg-white p-7 rounded-[2.5rem] border border-slate-100 shadow-premium hover:border-emerald-500/30 transition-all relative overflow-hidden group">
+          <div v-if="overview.gsc_permission_error" class="absolute inset-0 bg-white/80 backdrop-blur-[2px] z-10 flex items-center justify-center text-center p-4">
+            <span class="text-xs font-bold text-amber-600 bg-amber-50 px-3 py-1.5 rounded-lg border border-amber-100">Permission Required</span>
+          </div>
           <div class="flex flex-col">
             <p class="text-emerald-700 font-bold text-xs uppercase tracking-wider">Avg. Position</p>
             <p class="text-[9px] text-slate-400 font-medium mt-0.5">Mean rank in Search (GSC)</p>
@@ -413,7 +447,10 @@ onUnmounted(() => {
         </div>
 
         <!-- GSC: CTR -->
-        <div class="bg-white p-7 rounded-[2.5rem] border border-slate-100 shadow-premium hover:border-emerald-500/30 transition-all">
+        <div class="bg-white p-7 rounded-[2.5rem] border border-slate-100 shadow-premium hover:border-emerald-500/30 transition-all relative overflow-hidden group">
+          <div v-if="overview.gsc_permission_error" class="absolute inset-0 bg-white/80 backdrop-blur-[2px] z-10 flex items-center justify-center text-center p-4">
+            <span class="text-xs font-bold text-amber-600 bg-amber-50 px-3 py-1.5 rounded-lg border border-amber-100">Permission Required</span>
+          </div>
           <div class="flex flex-col">
             <p class="text-emerald-700 font-bold text-xs uppercase tracking-wider">CTR</p>
             <p class="text-[9px] text-slate-400 font-medium mt-0.5">Click-through rate (GSC)</p>
@@ -667,6 +704,8 @@ onUnmounted(() => {
         </div>
       </div>
 
+
+
       <!-- Actionable Insights Grid -->
       <div v-if="overview && overview.total_users > 0" class="grid grid-cols-1 lg:grid-cols-2 gap-8 pb-20">
         <!-- Top Pages -->
@@ -707,7 +746,17 @@ onUnmounted(() => {
         </div>
 
         <!-- Top Search Queries -->
-        <div class="bg-white p-8 rounded-[2.5rem] border border-slate-100 shadow-premium group">
+        <div class="bg-white p-8 rounded-[2.5rem] border border-slate-100 shadow-premium group relative overflow-hidden">
+          <div v-if="overview.gsc_permission_error" class="absolute inset-0 bg-white/80 backdrop-blur-[2px] z-10 flex items-center justify-center text-center p-4">
+            <div class="flex flex-col items-center gap-3">
+              <div class="w-12 h-12 rounded-2xl bg-amber-100 text-amber-600 flex items-center justify-center">
+                <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"></path></svg>
+              </div>
+              <h3 class="text-lg font-bold text-slate-900">Search Data Unavailable</h3>
+              <p class="text-slate-500 font-medium max-w-xs">Grant Search Console permissions to view top queries.</p>
+              <Link :href="route('organization.settings', { tab: 'analytics' })" class="text-blue-600 hover:text-blue-700 font-bold text-sm">Update Permissions &rarr;</Link>
+            </div>
+          </div>
           <div class="flex items-center justify-between mb-8">
             <h3 class="text-xl font-black text-slate-900 flex items-center gap-2">
               <svg class="w-5 h-5 text-emerald-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path></svg>
@@ -743,10 +792,15 @@ onUnmounted(() => {
 
         <!-- Acquisition Channels -->
         <div class="bg-white p-8 rounded-[2.5rem] border border-slate-100 shadow-premium">
-          <h3 class="text-xl font-black text-slate-900 mb-6 flex items-center gap-2">
-            <svg class="w-5 h-5 text-indigo-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M11 3.055A9.001 9.001 0 1020.945 13H11V3.055z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M20.488 9H15V3.512A9.025 9.025 0 0120.488 9z"></path></svg>
-            Acquisition
-          </h3>
+          <div class="flex items-center justify-between mb-6">
+            <h3 class="text-xl font-black text-slate-900 flex items-center gap-2">
+                <svg class="w-5 h-5 text-indigo-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M11 3.055A9.001 9.001 0 1020.945 13H11V3.055z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M20.488 9H15V3.512A9.025 9.025 0 0120.488 9z"></path></svg>
+                Acquisition
+            </h3>
+            <Link :href="route('campaigns.index')" class="text-[10px] font-black uppercase tracking-widest text-indigo-500 bg-indigo-50 px-3 py-1.5 rounded-lg hover:bg-indigo-100 transition-colors">
+                View Campaigns &rarr;
+            </Link>
+          </div>
           <div class="space-y-4">
             <div v-for="source in (overview.by_source || [])" :key="source.name" class="group">
               <div class="flex justify-between items-center mb-1">

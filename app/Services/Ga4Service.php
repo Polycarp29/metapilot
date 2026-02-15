@@ -122,6 +122,65 @@ class Ga4Service
     }
 
     /**
+     * Fetch aggregate totals for a property and date range (100% accurate totals).
+     */
+    public function fetchAggregateMetrics(\App\Models\AnalyticsProperty $property, string $startDate, string $endDate)
+    {
+        $this->initializeClient($property);
+
+        if (!$this->client) {
+            return null;
+        }
+
+        try {
+            $request = new RunReportRequest([
+                'property' => 'properties/' . $property->property_id,
+                'date_ranges' => [
+                    new DateRange([
+                        'start_date' => $startDate,
+                        'end_date' => $endDate,
+                    ]),
+                ],
+                // No dimensions = aggregate total
+                'metrics' => [
+                    new Metric(['name' => 'activeUsers']),
+                    new Metric(['name' => 'totalUsers']),
+                    new Metric(['name' => 'newUsers']),
+                    new Metric(['name' => 'sessions']),
+                    new Metric(['name' => 'engagedSessions']),
+                    new Metric(['name' => 'engagementRate']),
+                    new Metric(['name' => 'averageSessionDuration']),
+                    new Metric(['name' => 'conversions']),
+                    new Metric(['name' => 'bounceRate']),
+                ],
+            ]);
+
+            $response = $this->client->runReport($request);
+
+            if ($response->getRowCount() > 0) {
+                $metricValues = $response->getRows()[0]->getMetricValues();
+                
+                return [
+                    'active_users' => (int) $metricValues[0]->getValue(),
+                    'total_users' => (int) $metricValues[1]->getValue(),
+                    'new_users' => (int) $metricValues[2]->getValue(),
+                    'sessions' => (int) $metricValues[3]->getValue(),
+                    'engaged_sessions' => (int) $metricValues[4]->getValue(),
+                    'engagement_rate' => (float) $metricValues[5]->getValue(),
+                    'avg_session_duration' => (float) $metricValues[6]->getValue(),
+                    'conversions' => (int) $metricValues[7]->getValue(),
+                    'bounce_rate' => (float) ($metricValues[8]?->getValue() ?? 0),
+                ];
+            }
+            
+            return null;
+        } catch (\Exception $e) {
+            Log::error("GA4 Aggregate Fetch Failed for Property {$property->id}: " . $e->getMessage());
+            return null;
+        }
+    }
+
+    /**
      * Fetch all relevant dimension breakdowns for a property and date range.
      */
     public function fetchBreakdowns(\App\Models\AnalyticsProperty $property, string $startDate, string $endDate)
@@ -142,6 +201,70 @@ class Ga4Service
         }
 
         return $breakdowns;
+    }
+
+    /**
+     * Fetch campaign and acquisition data (Session Scope).
+     */
+    public function fetchCampaigns(\App\Models\AnalyticsProperty $property, string $startDate, string $endDate, int $limit = 20)
+    {
+        $this->initializeClient($property);
+
+        if (!$this->client) {
+            return [];
+        }
+
+        try {
+            $request = new RunReportRequest([
+                'property' => 'properties/' . $property->property_id,
+                'date_ranges' => [
+                    new DateRange(['start_date' => $startDate, 'end_date' => $endDate]),
+                ],
+                'dimensions' => [
+                    new Dimension(['name' => 'sessionSourceMedium']),
+                    new Dimension(['name' => 'sessionCampaignName']),
+                    new Dimension(['name' => 'sessionGoogleAdsCampaignName']),
+                ],
+                'metrics' => [
+                    new Metric(['name' => 'sessions']),
+                    new Metric(['name' => 'totalUsers']),
+                    new Metric(['name' => 'conversions']),
+                    new Metric(['name' => 'engagementRate']),
+                ],
+                'limit' => $limit,
+                'order_bys' => [
+                    new \Google\Analytics\Data\V1beta\OrderBy([
+                        'desc' => true,
+                        'metric' => new \Google\Analytics\Data\V1beta\OrderBy\MetricOrderBy([
+                            'metric_name' => 'sessions',
+                        ]),
+                    ]),
+                ],
+            ]);
+
+            $response = $this->client->runReport($request);
+
+            $results = [];
+            foreach ($response->getRows() as $row) {
+                $dimValues = $row->getDimensionValues();
+                $metricValues = $row->getMetricValues();
+                
+                $results[] = [
+                    'source_medium' => $dimValues[0]->getValue(),
+                    'campaign' => $dimValues[1]->getValue(),
+                    'google_ads_campaign' => $dimValues[2]->getValue(),
+                    'sessions' => (int) $metricValues[0]->getValue(),
+                    'users' => (int) $metricValues[1]->getValue(),
+                    'conversions' => (int) $metricValues[2]->getValue(),
+                    'engagement_rate' => (float) $metricValues[3]->getValue(),
+                ];
+            }
+
+            return $results;
+        } catch (\Exception $e) {
+            \Illuminate\Support\Facades\Log::error("GA4 Campaign Fetch Failed for Property {$property->id}: " . $e->getMessage());
+            return [];
+        }
     }
 
     /**

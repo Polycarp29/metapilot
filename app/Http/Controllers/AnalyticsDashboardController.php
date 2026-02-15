@@ -53,9 +53,25 @@ class AnalyticsDashboardController extends Controller
         $endDate = $request->get('end_date');
 
         if (!$startDate || !$endDate) {
-            $days = $request->get('days', 30);
-            $endDate = now()->yesterday()->format('Y-m-d');
-            $startDate = now()->subDays($days)->format('Y-m-d');
+            $days = (int) $request->get('days', 30);
+            
+            if ($days === 0) {
+                // Today
+                $startDate = now()->format('Y-m-d');
+                $endDate = now()->format('Y-m-d');
+            } elseif ($days === 1) {
+                // Yesterday
+                $startDate = now()->subDay()->format('Y-m-d');
+                $endDate = now()->subDay()->format('Y-m-d');
+            } else {
+                // Last X Days (e.g. 7, 30, 90)
+                $endDate = now()->yesterday()->format('Y-m-d');
+                $startDate = now()->subDays($days)->format('Y-m-d');
+            }
+        } else {
+             // Ensure dates are formatted correctly just in case
+            $startDate = \Carbon\Carbon::parse($startDate)->format('Y-m-d');
+            $endDate = \Carbon\Carbon::parse($endDate)->format('Y-m-d');
         }
 
         Log::info("Fetching analytics overview for property {$property->id} from {$startDate} to {$endDate}." . ($request->has('refresh') ? " (FORCE REFRESH)" : ""));
@@ -82,9 +98,25 @@ class AnalyticsDashboardController extends Controller
         $endDate = $request->get('end_date');
 
         if (!$startDate || !$endDate) {
-            $days = $request->get('days', 30);
-            $endDate = now()->yesterday()->format('Y-m-d');
-            $startDate = now()->subDays($days)->format('Y-m-d');
+            $days = (int) $request->get('days', 30);
+            
+            if ($days === 0) {
+                // Today
+                $startDate = now()->format('Y-m-d');
+                $endDate = now()->format('Y-m-d');
+            } elseif ($days === 1) {
+                // Yesterday
+                $startDate = now()->subDay()->format('Y-m-d');
+                $endDate = now()->subDay()->format('Y-m-d');
+            } else {
+                // Last X Days (e.g. 7, 30, 90)
+                $endDate = now()->yesterday()->format('Y-m-d');
+                $startDate = now()->subDays($days)->format('Y-m-d');
+            }
+        } else {
+             // Ensure dates are formatted correctly just in case
+            $startDate = \Carbon\Carbon::parse($startDate)->format('Y-m-d');
+            $endDate = \Carbon\Carbon::parse($endDate)->format('Y-m-d');
         }
 
         Log::info("Fetching analytics trends for property {$property->id}, metric: {$metric}, from {$startDate} to {$endDate}." . ($request->has('refresh') ? " (FORCE REFRESH)" : ""));
@@ -109,9 +141,25 @@ class AnalyticsDashboardController extends Controller
         $endDate = $request->get('end_date');
 
         if (!$startDate || !$endDate) {
-            $days = $request->get('days', 30);
-            $endDate = now()->yesterday()->format('Y-m-d');
-            $startDate = now()->subDays($days)->format('Y-m-d');
+            $days = (int) $request->get('days', 30);
+            
+            if ($days === 0) {
+                // Today
+                $startDate = now()->format('Y-m-d');
+                $endDate = now()->format('Y-m-d');
+            } elseif ($days === 1) {
+                // Yesterday
+                $startDate = now()->subDay()->format('Y-m-d');
+                $endDate = now()->subDay()->format('Y-m-d');
+            } else {
+                // Last X Days (e.g. 7, 30, 90)
+                $endDate = now()->yesterday()->format('Y-m-d');
+                $startDate = now()->subDays($days)->format('Y-m-d');
+            }
+        } else {
+             // Ensure dates are formatted correctly just in case
+            $startDate = \Carbon\Carbon::parse($startDate)->format('Y-m-d');
+            $endDate = \Carbon\Carbon::parse($endDate)->format('Y-m-d');
         }
 
         Log::info("AI Insight request for property {$property->id} [Range: {$startDate} to {$endDate}]" . ($request->has('refresh') ? " (FORCE REFRESH)" : ""));
@@ -119,12 +167,14 @@ class AnalyticsDashboardController extends Controller
         // Try to get existing recent insight for this range
         $insight = $property->insights()
             ->where('type', 'analytics_summary')
+            ->where('start_date', $startDate)
+            ->where('end_date', $endDate)
             ->orderBy('insight_at', 'desc')
             ->first();
 
         // If no insight or user forces refresh (could add a flag), generate new
         if (!$insight || $request->has('refresh')) {
-            Log::info("No cached insight found or refresh triggered for property {$property->id}. Starting generation...");
+            Log::info("No cached insight found for range [{$startDate} - {$endDate}] or refresh triggered. Starting generation...");
             $insight = $this->insightService->generateDynamicInsight($property, $startDate, $endDate);
             if ($insight) {
                 Log::info("AI Insight generation successful for property {$property->id}.");
@@ -136,5 +186,36 @@ class AnalyticsDashboardController extends Controller
         }
 
         return response()->json($insight);
+    }
+
+    public function getAcquisition(AnalyticsProperty $property, Request $request)
+    {
+        $startDate = $request->get('start_date');
+        $endDate = $request->get('end_date');
+
+        if (!$startDate || !$endDate) {
+            $days = (int) $request->get('days', 30);
+            
+            if ($days === 0) {
+                // Today
+                $startDate = now()->format('Y-m-d');
+                $endDate = now()->format('Y-m-d');
+            } elseif ($days === 1) {
+                // Yesterday
+                $startDate = now()->subDay()->format('Y-m-d');
+                $endDate = now()->subDay()->format('Y-m-d');
+            } else {
+                // Last X Days
+                $endDate = now()->yesterday()->format('Y-m-d');
+                $startDate = now()->subDays($days)->format('Y-m-d');
+            }
+        } else {
+            $startDate = \Carbon\Carbon::parse($startDate)->format('Y-m-d');
+            $endDate = \Carbon\Carbon::parse($endDate)->format('Y-m-d');
+        }
+
+        $campaigns = $this->ga4Service->fetchCampaigns($property, $startDate, $endDate);
+        
+        return response()->json($campaigns);
     }
 }

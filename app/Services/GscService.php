@@ -58,6 +58,13 @@ class GscService
             $response = $this->client->searchanalytics->query($property->gsc_site_url, $request);
             
             return $this->parsePerformanceResponse($response);
+        } catch (\Google\Service\Exception $e) {
+            if ($this->isPermissionError($e)) {
+                Log::warning("GSC Permission Denied for Property {$property->id}. User needs to reconnect with Search Console permissions.");
+            } else {
+                Log::error("GSC Performance Fetch Failed for Property {$property->id}: " . $e->getMessage());
+            }
+            return null;
         } catch (\Exception $e) {
             Log::error("GSC Performance Fetch Failed for Property {$property->id}: " . $e->getMessage());
             return null;
@@ -103,6 +110,13 @@ class GscService
             }
 
             return $results;
+        } catch (\Google\Service\Exception $e) {
+            if ($this->isPermissionError($e)) {
+                Log::warning("GSC Permission Denied for Property {$property->id} breakdown ({$dimension}).");
+            } else {
+                Log::error("GSC Breakdown Fetch Failed for Property {$property->id} ({$dimension}): " . $e->getMessage());
+            }
+            return [];
         } catch (\Exception $e) {
             Log::error("GSC Breakdown Fetch Failed for Property {$property->id} ({$dimension}): " . $e->getMessage());
             return [];
@@ -136,6 +150,13 @@ class GscService
             }
 
             return $results;
+        } catch (\Google\Service\Exception $e) {
+            if ($this->isPermissionError($e)) {
+                Log::warning("GSC Permission Denied for Property {$property->id} sitemaps.");
+            } else {
+                Log::error("GSC Sitemaps Fetch Failed for Property {$property->id}: " . $e->getMessage());
+            }
+            return [];
         } catch (\Exception $e) {
             Log::error("GSC Sitemaps Fetch Failed for Property {$property->id}: " . $e->getMessage());
             return [];
@@ -224,5 +245,27 @@ class GscService
         }
 
         return true;
+    }
+
+    /**
+     * Check if the exception is a permission error.
+     */
+    protected function isPermissionError(\Google\Service\Exception $e): bool
+    {
+        $errors = $e->getErrors();
+        
+        // Check for 403 status
+        if ($e->getCode() === 403) {
+            return true;
+        }
+        
+        // Check for insufficient permissions in error details
+        foreach ($errors as $error) {
+            if (isset($error['reason']) && $error['reason'] === 'insufficientPermissions') {
+                return true;
+            }
+        }
+        
+        return false;
     }
 }
