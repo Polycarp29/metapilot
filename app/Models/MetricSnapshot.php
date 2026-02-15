@@ -10,6 +10,7 @@ class MetricSnapshot extends Model
         'analytics_property_id',
         'snapshot_date',
         'users',
+        'total_users',
         'new_users',
         'sessions',
         'engaged_sessions',

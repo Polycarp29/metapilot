@@ -13,11 +13,19 @@ class AnalyticsDashboardController extends Controller
 {
     protected $aggregator;
     protected $insightService;
+    protected $ga4Service;
+    protected $gscService;
 
-    public function __construct(AnalyticsAggregatorService $aggregator, InsightService $insightService)
-    {
+    public function __construct(
+        AnalyticsAggregatorService $aggregator, 
+        InsightService $insightService,
+        \App\Services\Ga4Service $ga4Service,
+        \App\Services\GscService $gscService
+    ) {
         $this->aggregator = $aggregator;
         $this->insightService = $insightService;
+        $this->ga4Service = $ga4Service;
+        $this->gscService = $gscService;
     }
 
     public function index(Request $request)
@@ -50,8 +58,13 @@ class AnalyticsDashboardController extends Controller
             $startDate = now()->subDays($days)->format('Y-m-d');
         }
 
-        Log::info("Fetching analytics overview for property {$property->id} from {$startDate} to {$endDate}.");
+        Log::info("Fetching analytics overview for property {$property->id} from {$startDate} to {$endDate}." . ($request->has('refresh') ? " (FORCE REFRESH)" : ""));
         
+        if ($request->has('refresh')) {
+            $this->ga4Service->syncData($property, $startDate, $endDate);
+            $this->gscService->syncData($property, $startDate, $endDate);
+        }
+
         $overview = $this->aggregator->getOverview($property->id, $startDate, $endDate);
         
         Log::debug("Analytics overview data for property {$property->id}: " . json_encode($overview));
@@ -74,7 +87,12 @@ class AnalyticsDashboardController extends Controller
             $startDate = now()->subDays($days)->format('Y-m-d');
         }
 
-        Log::info("Fetching analytics trends for property {$property->id}, metric: {$metric}, from {$startDate} to {$endDate}.");
+        Log::info("Fetching analytics trends for property {$property->id}, metric: {$metric}, from {$startDate} to {$endDate}." . ($request->has('refresh') ? " (FORCE REFRESH)" : ""));
+
+        if ($request->has('refresh')) {
+            $this->ga4Service->syncData($property, $startDate, $endDate);
+            $this->gscService->syncData($property, $startDate, $endDate);
+        }
 
         $trends = $this->aggregator->getTrendData($property->id, $startDate, $endDate);
         

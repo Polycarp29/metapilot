@@ -101,6 +101,7 @@ class Ga4Service
                 ],
                 'metrics' => [
                     new Metric(['name' => 'activeUsers']),
+                    new Metric(['name' => 'totalUsers']),
                     new Metric(['name' => 'newUsers']),
                     new Metric(['name' => 'sessions']),
                     new Metric(['name' => 'engagedSessions']),
@@ -127,7 +128,7 @@ class Ga4Service
     {
         $dimensions = [
             'by_page' => ['dim' => 'pagePath', 'metrics' => ['activeUsers', 'bounceRate']],
-            'by_source' => ['dim' => 'sessionSource', 'metrics' => ['activeUsers']],
+            'by_source' => ['dim' => 'sessionSourceMedium', 'metrics' => ['activeUsers']],
             'by_medium' => ['dim' => 'sessionMedium', 'metrics' => ['activeUsers']],
             'by_campaign' => ['dim' => 'sessionCampaignName', 'metrics' => ['activeUsers']],
             'by_device' => ['dim' => 'deviceCategory', 'metrics' => ['activeUsers']],
@@ -209,16 +210,47 @@ class Ga4Service
             $data[] = [
                 'date' => \Carbon\Carbon::createFromFormat('Ymd', $dimensionValues[0]->getValue())->format('Y-m-d'),
                 'users' => (int) $metricValues[0]->getValue(),
-                'new_users' => (int) $metricValues[1]->getValue(),
-                'sessions' => (int) $metricValues[2]->getValue(),
-                'engaged_sessions' => (int) $metricValues[3]->getValue(),
-                'engagement_rate' => (float) $metricValues[4]->getValue(),
-                'avg_session_duration' => (float) $metricValues[5]->getValue(),
-                'conversions' => (int) $metricValues[6]->getValue(),
-                'bounce_rate' => (float) ($metricValues[7]?->getValue() ?? 0),
+                'total_users' => (int) $metricValues[1]->getValue(),
+                'new_users' => (int) $metricValues[2]->getValue(),
+                'sessions' => (int) $metricValues[3]->getValue(),
+                'engaged_sessions' => (int) $metricValues[4]->getValue(),
+                'engagement_rate' => (float) $metricValues[5]->getValue(),
+                'avg_session_duration' => (float) $metricValues[6]->getValue(),
+                'conversions' => (int) $metricValues[7]->getValue(),
+                'bounce_rate' => (float) ($metricValues[8]?->getValue() ?? 0),
             ];
         }
 
         return $data;
+    }
+
+    /**
+     * Fetch and save data for a property and date range.
+     */
+    public function syncData(\App\Models\AnalyticsProperty $property, string $startDate, string $endDate)
+    {
+        Log::info("Syncing GA4 data for property {$property->id} from {$startDate} to {$endDate}");
+        
+        $metrics = $this->fetchDailyMetrics($property, $startDate, $endDate);
+        $breakdowns = $this->fetchBreakdowns($property, $startDate, $endDate);
+
+        if ($metrics) {
+            foreach ($metrics as $dayData) {
+                $dataToSave = $dayData;
+
+                // Attach breakdowns to the latest date in the range for simplicity in reporting
+                if ($dayData['date'] === $endDate) {
+                    $dataToSave = array_merge($dayData, $breakdowns);
+                }
+
+                \App\Models\MetricSnapshot::updateOrCreate([
+                    'analytics_property_id' => $property->id,
+                    'snapshot_date' => $dayData['date'],
+                ], $dataToSave);
+            }
+            return true;
+        }
+
+        return false;
     }
 }

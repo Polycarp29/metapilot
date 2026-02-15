@@ -24,6 +24,7 @@ class AnalyticsAggregatorService
             ->whereBetween('snapshot_date', [$startDate, $endDate])
             ->select([
                 DB::raw('COALESCE(SUM(users), 0) as total_users'),
+                DB::raw('COALESCE(SUM(total_users), 0) as total_users_all'),
                 DB::raw('COALESCE(SUM(new_users), 0) as total_new_users'),
                 DB::raw('COALESCE(SUM(sessions), 0) as total_sessions'),
                 DB::raw('COALESCE(SUM(conversions), 0) as total_conversions'),
@@ -77,6 +78,7 @@ class AnalyticsAggregatorService
         // Combine the aggregates with the latest breakdowns
         return [
             'total_users' => (int) $aggregates->total_users,
+            'total_users_all' => (int) $aggregates->total_users_all,
             'total_new_users' => (int) $aggregates->total_new_users,
             'total_sessions' => (int) $aggregates->total_sessions,
             'total_conversions' => (int) $aggregates->total_conversions,
@@ -95,6 +97,11 @@ class AnalyticsAggregatorService
             'by_country' => $latestRecord->by_country,
             'by_city' => $latestRecord->by_city,
             'top_queries' => $latestGscRecord?->top_queries ?? [],
+            'sitemaps' => $latestGscRecord?->sitemaps ?? [],
+            'last_updated' => max(
+                $latestRecord->updated_at?->toIso8601String(),
+                $latestGscRecord?->updated_at?->toIso8601String()
+            ),
         ];
     }
 

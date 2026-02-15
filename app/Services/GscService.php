@@ -109,6 +109,60 @@ class GscService
         }
     }
 
+    public function fetchSitemaps(\App\Models\AnalyticsProperty $property)
+    {
+        if (!$property->gsc_site_url) {
+            return [];
+        }
+
+        $this->initializeClient($property);
+
+        try {
+            $response = $this->client->sitemaps->listSitemaps($property->gsc_site_url);
+            $sitemaps = $response->getSitemap();
+            
+            if (!$sitemaps) return [];
+
+            $results = [];
+            foreach ($sitemaps as $sitemap) {
+                $results[] = [
+                    'path' => $sitemap->getPath(),
+                    'last_processed' => $sitemap->getLastProcessed(),
+                    'last_check' => $sitemap->getLastDownloaded(),
+                    'errors' => $sitemap->getErrors(),
+                    'warnings' => $sitemap->getWarnings(),
+                    'contents' => $sitemap->getContents(), // contains counts
+                ];
+            }
+
+            return $results;
+        } catch (\Exception $e) {
+            Log::error("GSC Sitemaps Fetch Failed for Property {$property->id}: " . $e->getMessage());
+            return [];
+        }
+    }
+
+    public function inspectUrl(\App\Models\AnalyticsProperty $property, string $url)
+    {
+        if (!$property->gsc_site_url) {
+            return null;
+        }
+
+        $this->initializeClient($property);
+
+        try {
+            $request = new \Google\Service\SearchConsole\InspectUrlIndexRequest();
+            $request->setInspectionUrl($url);
+            $request->setSiteUrl($property->gsc_site_url);
+
+            $response = $this->client->urlInspection_index->inspect($request);
+            return $response->getInspectionResult();
+        } catch (\Exception $e) {
+            Log::error("GSC URL Inspection Failed for URL {$url}: " . $e->getMessage());
+            return null;
+        }
+    }
+
     protected function parsePerformanceResponse($response)
     {
         $data = [];
@@ -123,5 +177,52 @@ class GscService
         }
 
         return $data;
+    }
+
+    /**
+     * Fetch and save data for a property and date range.
+     */
+    public function syncData(\App\Models\AnalyticsProperty $property, string $startDate, string $endDate)
+    {
+        Log::info("Syncing GSC data for property {$property->id} from {$startDate} to {$endDate}");
+        
+        // Fetch performance daily if range is multiple days, to match our daily snapshots
+        $start = \Carbon\Carbon::parse($startDate);
+        $end = \Carbon\Carbon::parse($endDate);
+        
+        $current = $start->copy();
+        while ($current->lte($end)) {
+            $date = $current->format('Y-m-d');
+            try {
+                $performance = $this->fetchPerformance($property, $date, $date);
+                $breakdowns = $this->fetchBreakdowns($property, $date, $date);
+
+                if ($performance && !empty($performance)) {
+                    $daily = $performance[0];
+                    $sitemaps = ($date === $endDate) ? $this->fetchSitemaps($property) : null;
+                    
+                    \App\Models\SearchConsoleMetric::updateOrCreate(
+                        [
+                            'analytics_property_id' => $property->id,
+                            'snapshot_date' => $date,
+                        ],
+                        [
+                            'clicks' => $daily['clicks'],
+                            'impressions' => $daily['impressions'],
+                            'ctr' => $daily['ctr'],
+                            'position' => $daily['position'],
+                            'top_queries' => $breakdowns['top_queries'] ?? [],
+                            'top_pages' => $breakdowns['top_pages'] ?? [],
+                            'sitemaps' => $sitemaps,
+                        ]
+                    );
+                }
+            } catch (\Exception $e) {
+                Log::error("GSC Sync failed for date {$date}: " . $e->getMessage());
+            }
+            $current->addDay();
+        }
+
+        return true;
     }
 }

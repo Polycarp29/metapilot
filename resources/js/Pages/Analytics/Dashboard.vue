@@ -44,6 +44,9 @@ const overview = ref(null)
 const trendData = ref(null)
 const geoTab = ref('country')
 const chartMetric = ref('users')
+const isAutoRefreshEnabled = ref(false)
+const autoRefreshInterval = ref(null)
+const lastRefetchTime = ref(null)
 
 const chartData = ref({
   labels: [],
@@ -94,7 +97,7 @@ const chartOptions = ref({
 
 const insights = ref(null)
 
-const fetchData = async () => {
+const fetchData = async (forceRefresh = false) => {
   if (!selectedPropertyId.value) return
   
   isLoading.value = true
@@ -107,6 +110,10 @@ const fetchData = async () => {
       ? { start_date: customStartDate.value, end_date: customEndDate.value }
       : { days: timeframe.value }
 
+    if (forceRefresh) {
+      params.refresh = 1
+    }
+
     const [overviewRes, trendsRes] = await Promise.all([
       axios.get(route('api.analytics.overview', { property: selectedPropertyId.value, ...params })),
       axios.get(route('api.analytics.trends', { property: selectedPropertyId.value, ...params }))
@@ -114,6 +121,7 @@ const fetchData = async () => {
     
     overview.value = overviewRes.data
     trendData.value = trendsRes.data
+    lastRefetchTime.value = new Date()
     updateChart()
 
     // Fetch insights independently so they don't block the UI
@@ -213,6 +221,28 @@ const formatDuration = (seconds) => {
   return mins > 0 ? `${mins}m ${secs}s` : `${secs}s`
 }
 
+const formatLastUpdated = (dateString) => {
+  if (!dateString) return ''
+  const date = new Date(dateString)
+  return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+}
+
+const toggleAutoRefresh = () => {
+  isAutoRefreshEnabled.value = !isAutoRefreshEnabled.value
+  
+  if (isAutoRefreshEnabled.value) {
+    // Refresh every 15 minutes
+    autoRefreshInterval.value = setInterval(() => {
+      fetchData(true)
+    }, 15 * 60 * 1000)
+  } else {
+    if (autoRefreshInterval.value) {
+      clearInterval(autoRefreshInterval.value)
+      autoRefreshInterval.value = null
+    }
+  }
+}
+
 const getBounceRateStatus = (rate) => {
   const percentage = rate * 100
   if (percentage < 40) return { label: 'Optimum', class: 'bg-emerald-500/10 text-emerald-500 border-emerald-500/20' }
@@ -244,6 +274,13 @@ watch([selectedPropertyId, timeframe, customStartDate, customEndDate], () => {
   fetchData()
 })
 
+import { onUnmounted } from 'vue'
+onUnmounted(() => {
+  if (autoRefreshInterval.value) {
+    clearInterval(autoRefreshInterval.value)
+  }
+})
+
 </script>
 
 <template>
@@ -255,7 +292,13 @@ watch([selectedPropertyId, timeframe, customStartDate, customEndDate], () => {
       <div class="flex flex-col md:flex-row md:items-center justify-between gap-6">
         <div>
           <h1 class="text-4xl font-black text-slate-900 tracking-tight">Analytics Dashboard</h1>
-          <p class="text-slate-500 mt-2 font-medium">Insights and performance tracking for {{ organization.name }}</p>
+          <div class="flex items-center gap-3 mt-2">
+            <p class="text-slate-500 font-medium">Insights and performance tracking for {{ organization.name }}</p>
+            <div v-if="overview?.last_updated" class="flex items-center gap-2 px-2 py-0.5 bg-slate-100 rounded-md border border-slate-200 shadow-sm animate-in fade-in duration-500">
+               <div class="w-1.5 h-1.5 rounded-full bg-slate-400"></div>
+               <span class="text-[10px] font-black text-slate-500 uppercase tracking-tight">Updated: {{ formatLastUpdated(overview.last_updated) }}</span>
+            </div>
+          </div>
         </div>
 
         <div class="flex items-center gap-4 bg-white p-2 rounded-2xl shadow-premium border border-slate-100">
@@ -273,6 +316,29 @@ watch([selectedPropertyId, timeframe, customStartDate, customEndDate], () => {
             <option :value="90">Last 90 Days</option>
             <option value="custom">Custom Range</option>
           </select>
+
+          <div class="w-px h-6 bg-slate-100"></div>
+
+          <button @click="fetchData(true)" 
+            class="flex items-center gap-3 px-3 py-1.5 hover:bg-slate-50 rounded-xl transition-all group"
+            :disabled="isLoading"
+            title="Refresh Data from API">
+            <svg class="w-4 h-4 text-slate-400 group-hover:text-blue-500" 
+              :class="{ 'animate-spin text-blue-500': isLoading }"
+              fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path>
+            </svg>
+            <span class="text-xs font-bold text-slate-500 group-hover:text-slate-700">Refetch</span>
+          </button>
+
+          <div class="w-px h-6 bg-slate-100"></div>
+
+          <button @click="toggleAutoRefresh" 
+            class="flex items-center gap-2 px-3 py-1.5 hover:bg-slate-50 rounded-xl transition-all group"
+            :title="isAutoRefreshEnabled ? 'Disable Auto-refresh' : 'Enable Auto-refresh every 15m'">
+            <div class="w-2 h-2 rounded-full" :class="isAutoRefreshEnabled ? 'bg-emerald-500 animate-pulse' : 'bg-slate-300'"></div>
+            <span class="text-xs font-bold transition-colors" :class="isAutoRefreshEnabled ? 'text-emerald-600' : 'text-slate-500'">Auto</span>
+          </button>
         </div>
 
         <div v-if="isCustomRange" class="flex items-center gap-3 bg-white p-2 px-4 rounded-2xl shadow-premium border border-slate-100 animate-in fade-in slide-in-from-top-2 duration-300">
@@ -302,9 +368,12 @@ watch([selectedPropertyId, timeframe, customStartDate, customEndDate], () => {
         <div class="bg-white p-7 rounded-[2.5rem] border border-slate-100 shadow-premium group hover:border-blue-500/30 transition-all">
           <div class="flex flex-col">
             <p class="text-slate-500 font-bold text-xs uppercase tracking-wider">Total Users</p>
-            <p class="text-[9px] text-slate-400 font-medium mt-0.5">Distinct visitors (GA4)</p>
+            <p class="text-[9px] text-slate-400 font-medium mt-0.5">Active vs Total (GA4)</p>
           </div>
-          <h3 class="text-3xl font-black text-slate-900 mt-3">{{ overview.total_users || 0 }}</h3>
+          <div class="flex items-baseline gap-2 mt-3">
+            <h3 class="text-3xl font-black text-slate-900">{{ overview.total_users || 0 }}</h3>
+            <span class="text-xs font-bold text-slate-400">/ {{ overview.total_users_all || 0 }}</span>
+          </div>
         </div>
 
         <!-- GA4: Conversions -->
@@ -368,6 +437,33 @@ watch([selectedPropertyId, timeframe, customStartDate, customEndDate], () => {
             <p class="text-[9px] text-slate-400 font-medium mt-0.5">Time per visit (GA4)</p>
           </div>
           <h3 class="text-3xl font-black text-slate-900 mt-3">{{ formatDuration(overview.avg_duration) }}</h3>
+        </div>
+      </div>
+
+      <!-- SEO & Sitemap Health -->
+      <div v-if="overview && overview.sitemaps && overview.sitemaps.length > 0" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 animate-in fade-in slide-in-from-bottom-4 duration-700">
+        <div v-for="sitemap in overview.sitemaps" :key="sitemap.path" class="bg-white/60 backdrop-blur-md p-6 rounded-[2rem] border border-slate-100 shadow-premium flex items-center justify-between group overflow-hidden relative">
+          <div class="absolute inset-0 bg-blue-500/5 translate-y-full group-hover:translate-y-0 transition-transform duration-500"></div>
+          <div class="relative z-10 flex items-center gap-4">
+            <div class="w-12 h-12 rounded-2xl bg-slate-900 flex items-center justify-center text-white shadow-lg">
+              <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
+              </svg>
+            </div>
+            <div>
+              <p class="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Sitemap Index</p>
+              <p class="text-sm font-bold text-slate-900 truncate max-w-[150px]" :title="sitemap.path">{{ sitemap.path.split('/').pop() }}</p>
+            </div>
+          </div>
+          <div class="relative z-10 text-right">
+            <div class="flex items-center gap-2 justify-end mb-1">
+              <span class="w-2 h-2 rounded-full" :class="sitemap.errors > 0 ? 'bg-rose-500' : 'bg-emerald-500'"></span>
+              <p class="text-xs font-black" :class="sitemap.errors > 0 ? 'text-rose-600' : 'text-emerald-600'">{{ sitemap.errors > 0 ? 'Errors' : 'Healthy' }}</p>
+            </div>
+            <p class="text-[10px] font-bold text-slate-500">
+              Discovered: <span class="text-slate-900">{{ sitemap.contents?.[0]?.count || 0 }} URLs</span>
+            </p>
+          </div>
         </div>
       </div>
 
@@ -502,6 +598,16 @@ watch([selectedPropertyId, timeframe, customStartDate, customEndDate], () => {
               </div>
             </div>
 
+            <!-- Error State -->
+            <div v-else-if="insightError" class="py-20 text-center animate-fade-in shadow-inner rounded-[3rem] bg-white/5 border border-white/5">
+               <div class="w-24 h-24 bg-rose-500/10 rounded-[2.5rem] flex items-center justify-center mx-auto mb-6 text-rose-400 shadow-xl border border-rose-500/10">
+                  <span class="text-4xl">⚠️</span>
+               </div>
+               <h3 class="text-xl font-black text-white mb-2">Analysis Failed</h3>
+               <p class="text-slate-400 font-medium mb-6">We couldn't generate insights at this time.</p>
+               <button @click="refreshInsights" class="text-blue-400 font-bold hover:underline">Try again</button>
+            </div>
+
             <!-- Empty State (No Data) -->
             <div v-else class="py-20 text-center animate-fade-in shadow-inner rounded-[3rem] bg-white/5 border border-white/5">
               <div class="w-24 h-24 bg-blue-500/10 rounded-[2.5rem] flex items-center justify-center mx-auto mb-6 text-blue-400 shadow-xl border border-blue-500/10">
@@ -511,7 +617,7 @@ watch([selectedPropertyId, timeframe, customStartDate, customEndDate], () => {
               <p class="text-slate-400 max-w-sm mx-auto font-medium leading-relaxed">We need historical data for this property to generate contextual insights. Check back tomorrow!</p>
             </div>
           </template>
-
+ 
           <!-- Disabled State -->
           <div v-else class="py-20 text-center animate-fade-in shadow-inner rounded-[3rem] bg-white/5 border border-white/5">
             <div class="w-24 h-24 bg-purple-500/10 rounded-[2.5rem] flex items-center justify-center mx-auto mb-6 text-purple-400 shadow-xl border border-purple-500/10">
@@ -523,25 +629,6 @@ watch([selectedPropertyId, timeframe, customStartDate, customEndDate], () => {
               <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4"></path></svg>
               Enable AI Insights
             </Link>
-          </div>
- class="mt-10 flex flex-col items-center">
-              <div class="w-8 h-8 border-2 border-blue-500/30 border-t-blue-500 rounded-full animate-spin mb-4"></div>
-              <p class="text-slate-400 font-bold text-sm tracking-wide">AI is analyzing your performance data...</p>
-            </div>
-          </div>
-
-          <div v-else-if="insightError" class="py-20 text-center">
-             <div class="text-4xl mb-4">⚠️</div>
-             <p class="text-slate-400 font-bold">Failed to generate AI insights.</p>
-             <button @click="refreshInsights" class="mt-4 text-blue-400 font-bold hover:underline">Try again</button>
-          </div>
-
-          <div v-else class="py-20 text-center">
-             <div class="text-4xl mb-4">🤖</div>
-             <p class="text-slate-400 font-bold">No AI insights generated yet for this period.</p>
-             <button @click="refreshInsights" class="mt-4 bg-blue-600/20 hover:bg-blue-600/30 text-blue-300 px-6 py-2 rounded-xl border border-blue-500/30 font-bold transition-all">
-                Generate Insights
-             </button>
           </div>
         </div>
       </div>

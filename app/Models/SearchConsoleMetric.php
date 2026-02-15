@@ -15,6 +15,7 @@ class SearchConsoleMetric extends Model
         'position',
         'top_queries',
         'top_pages',
+        'sitemaps',
     ];
 
     protected $casts = [
@@ -25,6 +26,7 @@ class SearchConsoleMetric extends Model
         'position' => 'float',
         'top_queries' => 'array',
         'top_pages' => 'array',
+        'sitemaps' => 'array',
     ];
 
     public function property()
