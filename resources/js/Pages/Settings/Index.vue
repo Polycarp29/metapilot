@@ -50,6 +50,79 @@
         </div>
       </div>
 
+      <!-- Brand & AI Context Tab -->
+      <div v-if="activeTab === 'brand_ai'" class="space-y-6 animate-fade-in">
+        <div class="bg-white rounded-[2.5rem] border border-slate-100 shadow-premium p-8">
+          <div class="flex items-start justify-between mb-8">
+             <div>
+                <h2 class="text-xl font-bold text-slate-900">Brand & AI Context</h2>
+                <p class="text-slate-500 mt-1">Provide details about your business to help AI generate more accurate recommendations.</p>
+             </div>
+             <div class="bg-blue-50 text-blue-700 px-4 py-2 rounded-xl text-xs font-bold uppercase tracking-wider">
+                AI Knowledge Base
+             </div>
+          </div>
+          
+          <form @submit.prevent="updateOrganization" class="space-y-6">
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <!-- Industry -->
+                <div class="space-y-2">
+                  <label class="text-sm font-bold text-slate-700">Industry / Niche</label>
+                  <input 
+                    v-model="orgForm.settings.industry"
+                    type="text" 
+                    placeholder="e.g. E-commerce, Real Estate, SaaS"
+                    class="w-full px-4 py-3 rounded-xl border border-slate-200 focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10 transition-standard outline-none font-medium"
+                  >
+                </div>
+
+                <!-- Target Audience -->
+                <div class="space-y-2">
+                  <label class="text-sm font-bold text-slate-700">Target Audience</label>
+                  <input 
+                    v-model="orgForm.settings.business_profile.target_audience"
+                    type="text" 
+                    placeholder="e.g. Small business owners in Florida"
+                    class="w-full px-4 py-3 rounded-xl border border-slate-200 focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10 transition-standard outline-none font-medium"
+                  >
+                </div>
+            </div>
+
+            <!-- Value Proposition -->
+            <div class="space-y-2">
+              <label class="text-sm font-bold text-slate-700">Unique Value Proposition</label>
+              <textarea 
+                v-model="orgForm.settings.business_profile.value_proposition"
+                rows="3"
+                placeholder="What makes your business different? e.g. Fastest delivery, eco-friendly materials, 24/7 support."
+                class="w-full px-4 py-3 rounded-xl border border-slate-200 focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10 transition-standard outline-none font-medium resize-none"
+              ></textarea>
+            </div>
+
+            <!-- Competitors -->
+            <div class="space-y-2">
+              <label class="text-sm font-bold text-slate-700">Key Competitors (Optional)</label>
+              <textarea 
+                v-model="orgForm.settings.business_profile.competitors"
+                rows="2"
+                placeholder="List main competitors to help AI understand your market positioning."
+                class="w-full px-4 py-3 rounded-xl border border-slate-200 focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10 transition-standard outline-none font-medium resize-none"
+              ></textarea>
+            </div>
+            
+            <div class="flex justify-end pt-4 border-t border-slate-100">
+              <button 
+                type="submit" 
+                :disabled="orgForm.processing"
+                class="bg-blue-600 hover:bg-blue-700 text-white px-6 py-2.5 rounded-xl font-bold transition-standard shadow-lg shadow-blue-200 active:scale-95 disabled:opacity-70"
+              >
+                Save Context
+              </button>
+            </div>
+          </form>
+        </div>
+      </div>
+
       <!-- Account Tab (Moved from Profile) -->
       <div v-if="activeTab === 'account'" class="space-y-6 animate-fade-in">
         <!-- Update Profile Information -->
@@ -477,6 +550,7 @@ const authUser = page.props.auth.user
 
 const tabs = [
   { id: 'general', name: 'General' },
+  { id: 'brand_ai', name: 'Brand & AI Context' },
   { id: 'account', name: 'Account' },
   { id: 'ai', name: 'AI Configuration' },
   { id: 'analytics', name: 'Analytics' },
@@ -503,12 +577,18 @@ const confirmMessage = ref('')
 const confirmAction = ref(null)
 const confirmButtonText = ref('Confirm')
 
-// Organization Form
+    // Organization Form
 const orgForm = useForm({
   name: props.organization.name,
   settings: {
      ai_model: props.organization.settings?.ai_model || 'gpt-4',
      ai_insights_enabled: props.organization.settings?.ai_insights_enabled !== false,
+     industry: props.organization.settings?.industry || '',
+     business_profile: {
+        target_audience: props.organization.settings?.business_profile?.target_audience || '',
+        value_proposition: props.organization.settings?.business_profile?.value_proposition || '',
+        competitors: props.organization.settings?.business_profile?.competitors || '',
+     },
      analytics_period: props.organization.settings?.analytics_period || '30d',
      notifications_enabled: props.organization.settings?.notifications_enabled || false
   }

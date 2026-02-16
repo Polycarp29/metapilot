@@ -19,13 +19,72 @@ ChartJS.register(CategoryScale, LinearScale, BarElement, Title, Tooltip, Legend,
 
 const props = defineProps({
   campaigns: Array,
-  properties: Array // Pass available properties for selection
+  properties: Array,
+  organization: Object
 })
 
 const selectedPropertyId = ref(null)
 const acquisitionData = ref([])
 const isLoadingAcquisition = ref(false)
-const period = ref(30) // Default to last 30 days
+const period = ref(30)
+const adInsight = ref(null)
+const loadingInsight = ref(false)
+const showIndustryModal = ref(false)
+const industryInput = ref('')
+
+// Chart Options (kept same)...
+
+const generateAdInsight = () => {
+    if (!selectedPropertyId.value || loadingInsight.value) return
+
+    // Check if industry is set
+    if (!props.organization?.settings?.industry) {
+        showIndustryModal.value = true
+        return
+    }
+    
+    fetchAdInsight()
+}
+
+const saveIndustryAndGenerate = () => {
+    if (!industryInput.value) return
+    
+    // Optimistically update local prop so we don't ask again this session
+    if (props.organization) {
+        if (!props.organization.settings) props.organization.settings = {}
+        props.organization.settings.industry = industryInput.value
+    }
+    
+    showIndustryModal.value = false
+    fetchAdInsight(industryInput.value)
+}
+
+const fetchAdInsight = async (newIndustry = null) => {
+    loadingInsight.value = true
+    adInsight.value = null
+    
+    try {
+        const payload = {
+            ad_data: acquisitionData.value
+        }
+        
+        if (newIndustry) {
+            payload.industry = newIndustry
+        }
+        
+        const response = await axios.post(route('api.analytics.ad-insights', { property: selectedPropertyId.value }), payload)
+        adInsight.value = response.data
+    } catch (e) {
+        console.error("Failed to generate ad insight", e)
+    } finally {
+        loadingInsight.value = false
+    }
+}
+
+watch([selectedPropertyId, period], () => {
+    fetchAcquisitionData()
+    adInsight.value = null
+}, { deep: true })
 
 // Chart Options
 const chartOptions = {
@@ -111,9 +170,7 @@ const fetchAcquisitionData = async () => {
   }
 }
 
-watch([selectedPropertyId, period], () => {
-    fetchAcquisitionData()
-})
+
 
 onMounted(() => {
     if (props.properties && props.properties.length > 0) {
@@ -236,15 +293,79 @@ const getStatusColor = (status) => {
              </div>
 
              <div class="bg-white rounded-[2rem] border border-slate-100 shadow-sm overflow-hidden">
+                 <div class="p-8 border-b border-slate-100 flex flex-col md:flex-row md:items-center justify-between gap-4">
+                        <div>
+                            <h3 class="text-lg font-bold text-slate-900">Campaign Performance</h3>
+                            <p class="text-slate-500 text-sm mt-1">Tracking {{ acquisitionData.length }} active campaigns</p>
+                        </div>
+                        <div class="flex items-center gap-3">
+                            <button 
+                                @click="generateAdInsight" 
+                                :disabled="loadingInsight || acquisitionData.length === 0"
+                                class="flex items-center gap-2 px-4 py-2 bg-indigo-50 text-indigo-600 rounded-xl text-sm font-bold hover:bg-indigo-100 transition-colors disabled:opacity-50"
+                            >
+                                <svg v-if="loadingInsight" class="animate-spin h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
+                                <svg v-else class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z" /></svg>
+                                AI Ad Insights
+                            </button>
+                        </div>
+                    </div>
+
+                <!-- AI Ad Insights Display -->
+                <div v-if="adInsight" class="mx-8 mt-8 bg-gradient-to-br from-indigo-50 to-blue-50 rounded-[2rem] border border-blue-100 p-8 relative overflow-hidden animate-fade-in">
+                     <!-- Decorative Background -->
+                    <div class="absolute top-0 right-0 w-64 h-64 bg-blue-400/10 rounded-full blur-3xl -mr-32 -mt-32 pointer-events-none"></div>
+                    
+                    <div class="flex items-start gap-4 relative z-10">
+                        <div class="w-12 h-12 bg-white rounded-2xl flex items-center justify-center text-indigo-600 shadow-sm shrink-0">
+                            <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z" /></svg>
+                        </div>
+                        <div class="space-y-4 flex-1">
+                            <div>
+                                <div class="flex items-center justify-between">
+                                    <h3 class="text-lg font-bold text-slate-900">{{ adInsight.title }}</h3>
+                                    <Link :href="route('organization.settings')" class="text-xs font-bold text-indigo-500 hover:text-indigo-700 bg-white/50 px-3 py-1 rounded-lg border border-indigo-100 transition-colors">
+                                        Customize Context
+                                    </Link>
+                                </div>
+                                <p class="text-sm text-slate-500 mt-1">AI Analysis based on your industry and current trends.</p>
+                            </div>
+                            
+                            <div class="prose prose-sm prose-slate max-w-none bg-white/60 p-6 rounded-2xl border border-white/50 backdrop-blur-sm">
+                                <p class="text-slate-700 leading-relaxed">{{ adInsight.body }}</p>
+                            </div>
+
+                            <div v-if="adInsight.context" class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                <div v-if="adInsight.context.strategic_opportunities" class="bg-white/80 p-4 rounded-xl border border-white/50">
+                                    <h4 class="text-xs font-black text-indigo-400 uppercase tracking-widest mb-3">Opportunities</h4>
+                                    <ul class="space-y-2">
+                                        <li v-for="(opp, i) in adInsight.context.strategic_opportunities" :key="i" class="flex items-start gap-2 text-sm text-slate-700">
+                                            <span class="text-indigo-500 mt-1">•</span>
+                                            {{ opp }}
+                                        </li>
+                                    </ul>
+                                </div>
+                                <div v-if="adInsight.context.budget_recommendations" class="bg-white/80 p-4 rounded-xl border border-white/50">
+                                    <h4 class="text-xs font-black text-emerald-500 uppercase tracking-widest mb-3">Budget Strategy</h4>
+                                    <p class="text-sm text-slate-700">{{ adInsight.context.budget_recommendations }}</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
                  <div class="overflow-x-auto">
                     <table class="w-full text-left border-collapse">
                         <thead class="bg-slate-50/50">
                             <tr>
                                 <th class="py-5 pl-8 text-xs font-black text-slate-400 uppercase tracking-widest">Campaign / Source</th>
-                                <th class="py-5 text-center text-xs font-black text-slate-400 uppercase tracking-widest">Google Ads Campaign</th>
+                                <th class="py-5 text-center text-xs font-black text-slate-400 uppercase tracking-widest">Google Ads</th>
+                                <th class="py-5 text-left text-xs font-black text-slate-400 uppercase tracking-widest w-48">Top Keywords</th>
                                 <th class="py-5 text-right text-xs font-black text-slate-400 uppercase tracking-widest">Sessions</th>
                                 <th class="py-5 text-right text-xs font-black text-slate-400 uppercase tracking-widest">Users</th>
                                 <th class="py-5 text-right text-xs font-black text-slate-400 uppercase tracking-widest">Conversions</th>
+                                <th class="py-5 text-right text-xs font-black text-slate-400 uppercase tracking-widest">Ad Clicks</th>
+                                <th class="py-5 text-right text-xs font-black text-slate-400 uppercase tracking-widest">Cost</th>
+                                <th class="py-5 text-right text-xs font-black text-slate-400 uppercase tracking-widest">ROAS</th>
                                 <th class="py-5 pr-8 text-right text-xs font-black text-slate-400 uppercase tracking-widest">Engagement</th>
                             </tr>
                         </thead>
@@ -261,9 +382,25 @@ const getStatusColor = (status) => {
                                     </span>
                                     <span v-else class="text-slate-300">-</span>
                                 </td>
+                                <td class="py-4 text-left">
+                                    <div v-if="row.keywords && row.keywords.length > 0" class="flex flex-col gap-1">
+                                         <div v-for="(kw, kIdx) in row.keywords.slice(0, 3)" :key="kIdx" class="text-xs text-slate-600 flex justify-between items-center w-full pr-4">
+                                            <span class="truncate max-w-[120px]" :title="kw.keyword">{{ kw.keyword }}</span>
+                                            <span class="text-slate-400 text-[10px]">${{ kw.cost.toFixed(2) }}</span>
+                                         </div>
+                                         <div v-if="row.keywords.length > 3" class="text-[10px] text-blue-500 font-bold cursor-pointer hover:underline mt-0.5">
+                                            +{{ row.keywords.length - 3 }} more
+                                         </div>
+                                    </div>
+                                    <span v-else-if="row.google_ads_campaign && row.google_ads_campaign !== '(not set)'" class="text-xs text-slate-300 italic">No keywords</span>
+                                    <span v-else class="text-slate-300">-</span>
+                                </td>
                                 <td class="py-4 text-right font-bold">{{ row.sessions.toLocaleString() }}</td>
                                 <td class="py-4 text-right">{{ row.users.toLocaleString() }}</td>
                                 <td class="py-4 text-right text-blue-600 font-bold">{{ row.conversions.toLocaleString() }}</td>
+                                <td class="py-4 text-right">{{ row.ad_clicks ? row.ad_clicks.toLocaleString() : '-' }}</td>
+                                <td class="py-4 text-right">{{ row.ad_cost ? '$' + row.ad_cost.toFixed(2) : '-' }}</td>
+                                <td class="py-4 text-right">{{ row.roas ? row.roas.toFixed(2) + 'x' : '-' }}</td>
                                 <td class="py-4 pr-8 text-right">
                                     <span :class="{'text-emerald-500': row.engagement_rate > 0.5, 'text-amber-500': row.engagement_rate <= 0.5}">
                                         {{ (row.engagement_rate * 100).toFixed(1) }}%
@@ -290,6 +427,45 @@ const getStatusColor = (status) => {
             Create Your First Campaign
          </Link>
       </div>
+    </div>
+
+
+    <!-- Industry Modal -->
+    <div v-if="showIndustryModal" class="fixed inset-0 z-50 flex items-center justify-center px-4">
+        <div class="absolute inset-0 bg-slate-900/50 backdrop-blur-sm transition-opacity" @click="showIndustryModal = false"></div>
+        <div class="bg-white rounded-2xl shadow-xl w-full max-w-md relative z-10 p-6 animate-scale-in">
+            <h3 class="text-xl font-bold text-slate-900 mb-2">Tell us about your Industry</h3>
+            <p class="text-slate-500 text-sm mb-6">To provide accurate ad recommendations, AI needs to know your market niche.</p>
+            
+            <div class="space-y-4">
+                <div>
+                    <label class="block text-sm font-bold text-slate-700 mb-2">Industry / Niche</label>
+                    <input 
+                        v-model="industryInput" 
+                        type="text" 
+                        placeholder="e.g. SaaS, E-commerce Fashion, Local Plumbing"
+                        class="w-full px-4 py-3 rounded-xl border border-slate-200 focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10 transition-standard outline-none font-medium"
+                        @keyup.enter="saveIndustryAndGenerate"
+                    >
+                </div>
+                
+                <div class="flex justify-end gap-3">
+                    <button 
+                        @click="showIndustryModal = false"
+                        class="px-4 py-2 text-slate-500 font-bold hover:text-slate-700 transition-colors"
+                    >
+                        Cancel
+                    </button>
+                    <button 
+                        @click="saveIndustryAndGenerate"
+                        :disabled="!industryInput"
+                        class="bg-blue-600 text-white px-6 py-2 rounded-xl font-bold hover:bg-blue-700 transition-all shadow-lg shadow-blue-200 disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                        Save & Generate
+                    </button>
+                </div>
+            </div>
+        </div>
     </div>
   </AppLayout>
 </template>

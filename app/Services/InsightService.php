@@ -31,6 +31,10 @@ class InsightService
             return null;
         }
 
+        // Set AI Model based on settings
+        $aiModel = $org->settings['ai_model'] ?? 'gpt-4-turbo';
+        $this->openai->setModel($aiModel);
+
         $currentStart = Carbon::parse($startDate);
         $currentEnd = Carbon::parse($endDate);
         
@@ -108,6 +112,74 @@ class InsightService
             'avg_engagement_rate' => round(($metrics['avg_engagement_rate'] ?? 0) * 100, 2) . '%',
             'avg_session_duration' => $this->formatDuration((float) ($metrics['avg_duration'] ?? 0)),
         ];
+    }
+
+    /**
+     * Generate Ad Performance Insight based on Industry.
+     */
+    public function generateAdPerformanceInsight(AnalyticsProperty $property, array $adData)
+    {
+        // Check if AI insights are enabled
+        $org = $property->organization;
+        if ($org && ($org->settings['ai_insights_enabled'] ?? true) === false) {
+            return null;
+        }
+
+        // Get Industry & Business Profile
+        $industry = $org->settings['industry'] ?? 'General Business';
+        $businessProfile = $org->settings['business_profile'] ?? [];
+        
+        // Set AI Model based on settings
+        $aiModel = $org->settings['ai_model'] ?? 'gpt-4-turbo'; // Default to turbo if not set
+        $this->openai->setModel($aiModel);
+
+        // Prepare Data for AI
+        // We only send campaigns that have ad spend to save tokens and focus on ads
+        $activeCampaigns = array_filter($adData, fn($c) => ($c['ad_cost'] ?? 0) > 0);
+        
+        // If no active ad campaigns, return no insight
+        if (empty($activeCampaigns)) {
+            return null;
+        }
+
+        // Simplify data for prompt
+        $campaignSummary = array_map(function($c) {
+            return [
+                'name' => $c['campaign'],
+                'cost' => $c['ad_cost'],
+                'clicks' => $c['ad_clicks'],
+                'roas' => $c['roas'],
+                'top_keywords' => array_column(($c['keywords'] ?? []), 'keyword'),
+            ];
+        }, array_values($activeCampaigns));
+
+        $promptContext = [
+            'industry' => $industry,
+            'business_profile' => $businessProfile,
+            'campaigns' => $campaignSummary,
+            'trends_year' => date('Y'),
+        ];
+
+        try {
+            // We use a specialized prompt for Ad Analysis
+            $response = $this->openai->analyzeAdPerformance($property->name, $promptContext);
+
+            if ($response) {
+                return Insight::create([
+                    'analytics_property_id' => $property->id,
+                    'title' => "Ad Performance Strategies ({$industry})",
+                    'body' => $response['summary'],
+                    'context' => $response,
+                    'type' => 'ad_performance',
+                    'severity' => 'info',
+                    'insight_at' => now(),
+                ]);
+            }
+        } catch (\Exception $e) {
+            Log::error('Ad Performance Insight Generation Failed: ' . $e->getMessage());
+        }
+
+        return null;
     }
 
     /**

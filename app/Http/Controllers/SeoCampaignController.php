@@ -26,6 +26,7 @@ class SeoCampaignController extends Controller
         return Inertia::render('Campaigns/Index', [
             'campaigns' => $campaigns,
             'properties' => $properties,
+            'organization' => $organization,
         ]);
     }
 

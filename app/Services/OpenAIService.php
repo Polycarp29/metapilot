@@ -153,4 +153,71 @@ class OpenAIService
             return null;
         }
     }
+    /**
+     * Analyze Google Ads specific performance data.
+     */
+    public function analyzeAdPerformance(string $propertyName, array $dataContext)
+    {
+        if (empty($this->apiKey)) {
+            return null;
+        }
+
+        Log::info("Starting AI Ad Performance analysis for property: {$propertyName}");
+
+        try {
+            $response = Http::withToken($this->apiKey)->post('https://api.openai.com/v1/chat/completions', [
+                'model' => $this->model,
+                'messages' => [
+                    [
+                        'role' => 'system',
+                        'content' => 'You are a Digital Marketing Expert specializing in Google Ads Optimization. 
+                        Your goal is to analyze ad campaign performance data against industry trends and provide actionable strategic advice.
+                        
+                        Context:
+                        - Industry: ' . ($dataContext['industry'] ?? 'General') . '
+                        - Target Audience: ' . ($dataContext['business_profile']['target_audience'] ?? 'General Audience') . '
+                        - Value Proposition: ' . ($dataContext['business_profile']['value_proposition'] ?? 'N/A') . '
+                        - Competitors: ' . ($dataContext['business_profile']['competitors'] ?? 'N/A') . '
+                        - Current Year: ' . ($dataContext['trends_year'] ?? date('Y')) . '
+                        
+                        Focus on:
+                        1. Cost Efficiency (ROAS, CPA)
+                        2. Keyword Relevance and Negative Keyword opportunities
+                        3. Budget Allocation recommendations
+                        4. Ad Copy / Creative direction based on performance
+                        
+                        Return a JSON object with this structure:
+                        {
+                            "summary": "Executive summary of ad performance",
+                            "strategic_opportunities": ["Opportunity 1", "Opportunity 2"],
+                            "budget_recommendations": "Where to increase/decrease spend",
+                            "keyword_insights": "Analysis of top keywords and gaps",
+                            "industry_benchmark_comparison": "How this likely compares to industry averages (estimated)",
+                            "severity": "info|warning|critical"
+                        }
+                        
+                        Strictly return JSON only.'
+                    ],
+                    [
+                        'role' => 'user',
+                        'content' => "Analyze Google Ads campaigns for '{$propertyName}':\n\n" . json_encode($dataContext['campaigns'])
+                    ]
+                ],
+                'temperature' => 0.4,
+                'response_format' => ['type' => 'json_object']
+            ]);
+
+            if ($response->successful()) {
+                Log::info("OpenAI Ad Analysis successful for property: {$propertyName}");
+                $content = $response->json()['choices'][0]['message']['content'];
+                return json_decode($content, true);
+            }
+
+            Log::error("OpenAI Ad Analysis API Error [Property: {$propertyName}]: " . $response->body());
+            return null;
+        } catch (\Exception $e) {
+            Log::error("OpenAI Ad Analysis Exception [Property: {$propertyName}]: " . $e->getMessage());
+            return null;
+        }
+    }
 }

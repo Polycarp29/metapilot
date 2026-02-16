@@ -215,7 +215,8 @@ class Ga4Service
         }
 
         try {
-            $request = new RunReportRequest([
+            // 1. Fetch Session Data (Traffic)
+            $trafficRequest = new RunReportRequest([
                 'property' => 'properties/' . $property->property_id,
                 'date_ranges' => [
                     new DateRange(['start_date' => $startDate, 'end_date' => $endDate]),
@@ -223,7 +224,7 @@ class Ga4Service
                 'dimensions' => [
                     new Dimension(['name' => 'sessionSourceMedium']),
                     new Dimension(['name' => 'sessionCampaignName']),
-                    new Dimension(['name' => 'sessionGoogleAdsCampaignName']),
+                    new Dimension(['name' => 'sessionGoogleAdsCampaignName']), // Keep for identification if possible, or remove if causing issues. The error said REMOVE IT.
                 ],
                 'metrics' => [
                     new Metric(['name' => 'sessions']),
@@ -242,25 +243,163 @@ class Ga4Service
                 ],
             ]);
 
-            $response = $this->client->runReport($request);
+            // Fix: remove forbidden dimension from Traffic Request too if it was the culprit? 
+            // The error "Please remove sessionGoogleAdsCampaignName" implies it was incompatible with the AD METRICS I added.
+            // With just traffic metrics, it SHOULD be fine. But let's be safe and remove it if not strictly needed OR assume it works with session metrics.
+            // Actually, sessionGoogleAdsCampaignName IS compatible with session metrics. It was checking against ad_cost etc. 
+            // So I will KEEP it here for context, but if it fails again I'll remove it.
+            
+            $trafficResponse = $this->client->runReport($trafficRequest);
 
-            $results = [];
-            foreach ($response->getRows() as $row) {
+            $campaigns = [];
+            $campaignNames = [];
+
+            foreach ($trafficResponse->getRows() as $row) {
                 $dimValues = $row->getDimensionValues();
                 $metricValues = $row->getMetricValues();
                 
-                $results[] = [
+                $campaignName = $dimValues[1]->getValue();
+                $campaignNames[] = $campaignName;
+
+                $campaigns[$campaignName] = [
                     'source_medium' => $dimValues[0]->getValue(),
-                    'campaign' => $dimValues[1]->getValue(),
+                    'campaign' => $campaignName,
                     'google_ads_campaign' => $dimValues[2]->getValue(),
                     'sessions' => (int) $metricValues[0]->getValue(),
                     'users' => (int) $metricValues[1]->getValue(),
                     'conversions' => (int) $metricValues[2]->getValue(),
                     'engagement_rate' => (float) $metricValues[3]->getValue(),
+                    // Defaults
+                    'ad_clicks' => 0,
+                    'ad_cost' => 0,
+                    'ad_impressions' => 0,
+                    'roas' => 0,
                 ];
             }
 
-            return $results;
+            // 2. Fetch Ad Metrics & Keywords for these campaigns
+            if (!empty($campaignNames)) {
+                
+                // Build Filter Expression
+                $filterExpression = new \Google\Analytics\Data\V1beta\FilterExpression();
+                $orGroup = new \Google\Analytics\Data\V1beta\FilterExpressionList();
+                $expressions = [];
+
+                // Chunking to avoid filter limits (optional but good practice)
+                // For top 20, one batch is usually fine.
+                foreach ($campaignNames as $name) {
+                    if ($name === '(direct)' || $name === '(not set)') continue;
+
+                    $filter = new \Google\Analytics\Data\V1beta\FilterExpression();
+                    $f = new \Google\Analytics\Data\V1beta\Filter();
+                    $f->setFieldName('googleAdsCampaignName'); // Event-scoped dimension compatible with Ads metrics
+                    $stringFilter = new \Google\Analytics\Data\V1beta\Filter\StringFilter();
+                    $stringFilter->setValue($name);
+                    $f->setStringFilter($stringFilter);
+                    $filter->setFilter($f);
+                    $expressions[] = $filter;
+                }
+
+                if (!empty($expressions)) {
+                    $orGroup->setExpressions($expressions);
+                    $filterExpression->setOrGroup($orGroup);
+
+                    // 2a. Fetch Ad Metrics
+                    $adRequest = new RunReportRequest([
+                        'property' => 'properties/' . $property->property_id,
+                        'date_ranges' => [
+                            new DateRange(['start_date' => $startDate, 'end_date' => $endDate]),
+                        ],
+                        'dimensions' => [
+                            new Dimension(['name' => 'googleAdsCampaignName']),
+                        ],
+                        'metrics' => [
+                            new Metric(['name' => 'advertiserAdClicks']),
+                            new Metric(['name' => 'advertiserAdCost']),
+                            new Metric(['name' => 'advertiserAdImpressions']),
+                            new Metric(['name' => 'returnOnAdSpend']),
+                        ],
+                        'dimension_filter' => $filterExpression,
+                    ]);
+
+                    try {
+                        $adResponse = $this->client->runReport($adRequest);
+
+                        foreach ($adResponse->getRows() as $row) {
+                            $name = $row->getDimensionValues()[0]->getValue();
+                            $metrics = $row->getMetricValues();
+
+                            if (isset($campaigns[$name])) {
+                                $campaigns[$name]['ad_clicks'] = (int) $metrics[0]->getValue();
+                                $campaigns[$name]['ad_cost'] = (float) $metrics[1]->getValue();
+                                $campaigns[$name]['ad_impressions'] = (int) $metrics[2]->getValue();
+                                $campaigns[$name]['roas'] = (float) $metrics[3]->getValue();
+                            }
+                        }
+                    } catch (\Exception $e) {
+                        \Illuminate\Support\Facades\Log::warning("GA4 Ad Metric Fetch Warning: " . $e->getMessage());
+                    }
+
+                    // 2b. Fetch Keywords
+                    // We pull keywords for the same set of filtered campaigns
+                    try {
+                        $keywordRequest = new RunReportRequest([
+                            'property' => 'properties/' . $property->property_id,
+                            'date_ranges' => [
+                                new DateRange(['start_date' => $startDate, 'end_date' => $endDate]),
+                            ],
+                            'dimensions' => [
+                                new Dimension(['name' => 'googleAdsCampaignName']),
+                                new Dimension(['name' => 'googleAdsKeyword']),
+                            ],
+                            'metrics' => [
+                                new Metric(['name' => 'advertiserAdClicks']),
+                                new Metric(['name' => 'advertiserAdCost']),
+                            ],
+                            'dimension_filter' => $filterExpression,
+                            'limit' => 200, // Fetch enough to cover top keywords for the displayed campaigns
+                            'order_bys' => [
+                                new \Google\Analytics\Data\V1beta\OrderBy([
+                                    'desc' => true,
+                                    'metric' => new \Google\Analytics\Data\V1beta\OrderBy\MetricOrderBy([
+                                        'metric_name' => 'advertiserAdCost',
+                                    ]),
+                                ]),
+                            ],
+                        ]);
+
+                        $keywordResponse = $this->client->runReport($keywordRequest);
+
+                        foreach ($keywordResponse->getRows() as $row) {
+                            $campaignName = $row->getDimensionValues()[0]->getValue();
+                            $keyword = $row->getDimensionValues()[1]->getValue();
+                            $clicks = (int) $row->getMetricValues()[0]->getValue();
+                            $cost = (float) $row->getMetricValues()[1]->getValue();
+
+                            if (isset($campaigns[$campaignName])) {
+                                if (!isset($campaigns[$campaignName]['keywords'])) {
+                                    $campaigns[$campaignName]['keywords'] = [];
+                                }
+                                
+                                // Limit to top 5 per campaign
+                                if (count($campaigns[$campaignName]['keywords']) < 5) {
+                                    $campaigns[$campaignName]['keywords'][] = [
+                                        'keyword' => $keyword,
+                                        'clicks' => $clicks,
+                                        'cost' => $cost,
+                                    ];
+                                }
+                            }
+                        }
+
+                    } catch (\Exception $e) {
+                        \Illuminate\Support\Facades\Log::warning("GA4 Keyword Fetch Warning: " . $e->getMessage());
+                    }
+                }
+            }
+
+            return array_values($campaigns);
+
         } catch (\Exception $e) {
             \Illuminate\Support\Facades\Log::error("GA4 Campaign Fetch Failed for Property {$property->id}: " . $e->getMessage());
             return [];

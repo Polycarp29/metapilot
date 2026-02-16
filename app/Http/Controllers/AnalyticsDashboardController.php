@@ -218,4 +218,37 @@ class AnalyticsDashboardController extends Controller
         
         return response()->json($campaigns);
     }
+
+    /**
+     * Generate Ad Performance Insights.
+     */
+    public function getAdInsights(AnalyticsProperty $property, Request $request)
+    {
+        $adData = $request->input('ad_data', []);
+        $industry = $request->input('industry');
+        
+        if (empty($adData)) {
+            return response()->json(['error' => 'No ad data provided'], 400);
+        }
+
+        // Save Industry if provided
+        if ($industry) {
+            $org = $property->organization;
+            if ($org) {
+                // Update settings using array merging to preserve other settings
+                $settings = $org->settings ?? [];
+                $settings['industry'] = $industry;
+                $org->settings = $settings;
+                $org->save();
+            }
+        }
+
+        try {
+            $insight = $this->insightService->generateAdPerformanceInsight($property, $adData);
+            return response()->json($insight);
+        } catch (\Exception $e) {
+            Log::error("Ad Insight Generation Error: " . $e->getMessage());
+            return response()->json(['error' => 'Failed to generate ad insights'], 500);
+        }
+    }
 }
