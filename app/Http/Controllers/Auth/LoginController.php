@@ -25,9 +25,14 @@ class LoginController extends Controller
         if (Auth::attempt($request->only('email', 'password'), $request->boolean('remember'))) {
             $request->session()->regenerate();
 
-            // Set organization context if user has organizations
-            if (auth()->user()->hasOrganizations()) {
-                $org = auth()->user()->organizations()->first();
+            $user = auth()->user();
+
+            if ($user->organizations()->count() > 1) {
+                return redirect()->route('organizations.select');
+            }
+
+            if ($user->hasOrganizations()) {
+                $org = $user->organizations()->first();
                 session(['current_organization_id' => $org->id]);
             }
 

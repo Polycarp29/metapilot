@@ -13,6 +13,16 @@ Route::middleware('guest')->group(function () {
     Route::post('login', [LoginController::class, 'store']);
     Route::get('register', [RegisterController::class, 'create'])->name('register');
     Route::post('register', [RegisterController::class, 'store']);
+
+    // Password Reset
+    Route::get('forgot-password', [\App\Http\Controllers\Auth\ForgotPasswordController::class, 'create'])->name('password.request');
+    Route::post('forgot-password', [\App\Http\Controllers\Auth\ForgotPasswordController::class, 'store'])->name('password.email');
+    Route::get('reset-password/{token}', [\App\Http\Controllers\Auth\ResetPasswordController::class, 'create'])->name('password.reset');
+    Route::post('reset-password', [\App\Http\Controllers\Auth\ResetPasswordController::class, 'store'])->name('password.store');
+
+    // Social Login
+    Route::get('auth/google', [\App\Http\Controllers\GoogleAuthController::class, 'redirectToGoogle'])->name('auth.google');
+    Route::get('auth/google/callback', [\App\Http\Controllers\GoogleAuthController::class, 'handleGoogleCallback'])->name('auth.google.callback');
 });
 
 // Authenticated routes
@@ -81,9 +91,6 @@ Route::middleware('auth')->group(function () {
     Route::delete('api/analytics/properties/{property}', [\App\Http\Controllers\AnalyticsPropertyController::class, 'destroy'])->name('analytics.properties.destroy');
     Route::put('api/analytics/properties/{property}', [\App\Http\Controllers\AnalyticsPropertyController::class, 'update'])->name('analytics.properties.update');
 
-    // Google OAuth for Analytics
-    Route::get('auth/google/redirect', [\App\Http\Controllers\GoogleAuthController::class, 'redirectToGoogle'])->name('auth.google.redirect');
-    Route::get('auth/google/callback', [\App\Http\Controllers\GoogleAuthController::class, 'handleGoogleCallback'])->name('auth.google.callback');
 
     // Campaigns
     Route::get('campaigns', [\App\Http\Controllers\SeoCampaignController::class, 'index'])->name('campaigns.index');
@@ -112,4 +119,8 @@ Route::middleware('auth')->group(function () {
         Route::post('/campaigns/{campaign}/attach', [\App\Http\Controllers\CampaignKeywordController::class, 'attachKeywords'])->name('attach');
         Route::get('/campaigns/{campaign}/performance', [\App\Http\Controllers\CampaignKeywordController::class, 'performance'])->name('campaign-performance');
     });
+
+    // Organization Selection
+    Route::get('organizations/select', [\App\Http\Controllers\OrganizationController::class, 'select'])->name('organizations.select');
+    Route::post('organizations/select', [\App\Http\Controllers\OrganizationController::class, 'store'])->name('organizations.select.store');
 });
