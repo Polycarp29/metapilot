@@ -16,7 +16,7 @@ class OpenAIService
         if (empty($this->apiKey)) {
             Log::warning("OpenAIService initialized without an API key. Check config/services.php and .env");
         }
-        $this->model = config('services.openai.model', 'gpt-4-turbo'); 
+        $this->model = config('services.openai.model'); 
     }
 
     public static function getAvailableModels()
@@ -36,14 +36,35 @@ class OpenAIService
         return $this;
     }
 
+    /**
+     * Set the AI model based on the organization's settings.
+     */
+    public function setModelFromOrganization(\App\Models\Organization $organization)
+    {
+        $model = $organization->settings['ai_model'] ?? config('services.openai.model');
+        $this->model = $model;
+        return $this;
+    }
+
+    /**
+     * Check if a model is currently set.
+     */
+    public function hasModel(): bool
+    {
+        return !empty($this->model);
+    }
+
     public function generateSchemaSuggestions(string $url, string $content)
     {
-        if (empty($this->apiKey)) {
+        if (empty($this->apiKey) || !$this->hasModel()) {
             return null;
         }
 
         try {
-            $response = Http::withToken($this->apiKey)->post('https://api.openai.com/v1/chat/completions', [
+            $response = Http::withToken($this->apiKey)
+                ->retry(3, 200)
+                ->timeout(30)
+                ->post('https://api.openai.com/v1/chat/completions', [
                 'model' => $this->model,
                 'messages' => [
                     [
@@ -80,6 +101,9 @@ class OpenAIService
 
             Log::error("OpenAI Schema Suggestion API Error [URL: {$url}]: " . $response->body());
             return null;
+        } catch (\Illuminate\Http\Client\ConnectionException $e) {
+            Log::error("OpenAI Connection Refused/Timeout [URL: {$url}]: " . $e->getMessage());
+            return null;
         } catch (\Exception $e) {
             Log::error("OpenAI Schema Suggestion Exception [URL: {$url}]: " . $e->getMessage());
             return null;
@@ -91,14 +115,17 @@ class OpenAIService
      */
     public function analyzeAnalyticsData(string $propertyName, array $currentPeriod, array $previousPeriod)
     {
-        if (empty($this->apiKey)) {
+        if (empty($this->apiKey) || !$this->hasModel()) {
             return null;
         }
 
         Log::info("Starting AI analytics analysis for property: {$propertyName}");
 
         try {
-            $response = Http::withToken($this->apiKey)->post('https://api.openai.com/v1/chat/completions', [
+            $response = Http::withToken($this->apiKey)
+                ->retry(3, 200)
+                ->timeout(30)
+                ->post('https://api.openai.com/v1/chat/completions', [
                 'model' => $this->model,
                 'messages' => [
                     [
@@ -148,6 +175,9 @@ class OpenAIService
 
             Log::error("OpenAI Analytics Analysis API Error [Property: {$propertyName}]: " . $response->body());
             return null;
+        } catch (\Illuminate\Http\Client\ConnectionException $e) {
+            Log::error("OpenAI Connection Refused/Timeout [Property: {$propertyName}]: " . $e->getMessage());
+            return null;
         } catch (\Exception $e) {
             Log::error("OpenAI Analytics Analysis Exception [Property: {$propertyName}]: " . $e->getMessage());
             return null;
@@ -158,14 +188,17 @@ class OpenAIService
      */
     public function analyzeAdPerformance(string $propertyName, array $dataContext)
     {
-        if (empty($this->apiKey)) {
+        if (empty($this->apiKey) || !$this->hasModel()) {
             return null;
         }
 
         Log::info("Starting AI Ad Performance analysis for property: {$propertyName}");
 
         try {
-            $response = Http::withToken($this->apiKey)->post('https://api.openai.com/v1/chat/completions', [
+            $response = Http::withToken($this->apiKey)
+                ->retry(3, 200)
+                ->timeout(30)
+                ->post('https://api.openai.com/v1/chat/completions', [
                 'model' => $this->model,
                 'messages' => [
                     [
@@ -215,8 +248,86 @@ class OpenAIService
 
             Log::error("OpenAI Ad Analysis API Error [Property: {$propertyName}]: " . $response->body());
             return null;
+        } catch (\Illuminate\Http\Client\ConnectionException $e) {
+            Log::error("OpenAI Connection Refused/Timeout [Property: {$propertyName}]: " . $e->getMessage());
+            return null;
         } catch (\Exception $e) {
             Log::error("OpenAI Ad Analysis Exception [Property: {$propertyName}]: " . $e->getMessage());
+            return null;
+        }
+    }
+
+    /**
+     * Generate an SEO Campaign proposal based on analytics performance data.
+     */
+    public function generateCampaignProposal(string $propertyName, array $dataContext)
+    {
+        if (empty($this->apiKey) || !$this->hasModel()) {
+            return null;
+        }
+
+        Log::info("Starting AI Campaign Proposal for property: {$propertyName}");
+
+        try {
+            $response = Http::withToken($this->apiKey)
+                ->retry(3, 200)
+                ->timeout(30)
+                ->post('https://api.openai.com/v1/chat/completions', [
+                'model' => $this->model,
+                'messages' => [
+                    [
+                        'role' => 'system',
+                        'content' => 'You are a Senior SEO Strategist. Your goal is to analyze Google Analytics 4 performance data and propose a high-impact SEO Campaign.
+
+                        Identify "Low Hanging Fruit" by looking for:
+                        1. Pages with high traffic but low conversion.
+                        2. High-volume traffic sources with low engagement.
+                        3. Sudden drops in performance for traditionally strong pages.
+                        
+                        Return a JSON object with this structure:
+                        {
+                            "campaign_name": "A catchy, professional campaign name",
+                            "objective": "Clear, data-driven objective for the campaign",
+                            "target_urls": ["/path1", "/path2"],
+                            "keywords": ["keyword 1", "keyword 2"],
+                            "strategic_rationale": "Detailed explanation of why this campaign was chosen based on the provided metrics",
+                            "priority": "low|medium|high"
+                        }
+                        
+                        Strictly return JSON only.'
+                    ],
+                    [
+                        'role' => 'user',
+                        'content' => "Analyze performance for '{$propertyName}' and suggest a campaign.
+
+                        Analytics Overview:
+                        " . json_encode($dataContext['stats']) . "
+
+                        Top Pages Performance:
+                        " . json_encode($dataContext['by_page'] ?? []) . "
+
+                        Traffic Source Breakdown:
+                        " . json_encode($dataContext['by_source'] ?? []) . "
+
+                        Provide a specific, actionable campaign proposal."
+                    ]
+                ],
+                'temperature' => 0.5,
+                'response_format' => ['type' => 'json_object']
+            ]);
+
+            if ($response->successful()) {
+                Log::info("OpenAI Campaign Proposal successful for property: {$propertyName}");
+                return json_decode($response->json()['choices'][0]['message']['content'], true);
+            }
+
+            Log::error("OpenAI Campaign Proposal API Error [Property: {$propertyName}]: " . $response->body());
+            return null;
+        } catch (\Illuminate\Http\Client\ConnectionException $e) {
+            Log::error("OpenAI Connection Refused/Timeout [Property: {$propertyName}]: " . $e->getMessage());
+            return null;
+        } catch (\Exception $e) {
+            Log::error("OpenAI Campaign Proposal Exception [Property: {$propertyName}]: " . $e->getMessage());
             return null;
         }
     }

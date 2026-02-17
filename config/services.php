@@ -50,4 +50,14 @@ return [
         'model' => env('OPENAI_MODEL', 'gpt-4-turbo'),
     ],
 
+    'google_trends' => [
+        'cache_duration' => env('GOOGLE_TRENDS_CACHE_HOURS', 24),
+        'rate_limit_per_hour' => env('GOOGLE_TRENDS_RATE_LIMIT', 100),
+        'fallback_enabled' => env('GOOGLE_TRENDS_FALLBACK_ENABLED', true),
+    ],
+
+    'serpapi' => [
+        'api_key' => env('SERPAPI_API_KEY'),
+    ],
+
 ];

@@ -94,7 +94,7 @@ class GscService
             $request->setStartDate($startDate);
             $request->setEndDate($endDate);
             $request->setDimensions([$dimension]);
-            $request->setRowLimit(10);
+            $request->setRowLimit(25);
 
             $response = $this->client->searchanalytics->query($property->gsc_site_url, $request);
             
@@ -267,5 +267,51 @@ class GscService
         }
         
         return false;
+    }
+
+    /**
+     * Get sitemap submission errors for the control engine.
+     */
+    public function getSitemapErrors(\App\Models\AnalyticsProperty $property): array
+    {
+        $sitemaps = $this->fetchSitemaps($property);
+        $errors = [];
+
+        foreach ($sitemaps as $sitemap) {
+            if (($sitemap['errors'] ?? 0) > 0 || ($sitemap['warnings'] ?? 0) > 0) {
+                $errors[] = [
+                    'path' => $sitemap['path'],
+                    'errors' => $sitemap['errors'] ?? 0,
+                    'warnings' => $sitemap['warnings'] ?? 0,
+                    'last_processed' => $sitemap['last_processed'] ?? null,
+                ];
+            }
+        }
+
+        return $errors;
+    }
+
+    /**
+     * Get crawl errors from Search Console (placeholder implementation).
+     * In a real implementation, this would use the URL Inspection API
+     * or other GSC endpoints to detect crawl errors.
+     */
+    public function getCrawlErrors(\App\Models\AnalyticsProperty $property): array
+    {
+        // Placeholder - In production, implement URL Inspection API calls
+        // to check for crawl errors on important URLs
+        return [];
+    }
+
+    /**
+     * Get index coverage issues (placeholder implementation).
+     * In a real implementation, this would use the Index Coverage API
+     * to detect pages that are excluded from indexing.
+     */
+    public function getIndexCoverage(\App\Models\AnalyticsProperty $property): array
+    {
+        // Placeholder - In production, implement Index Coverage API calls
+        // to detect indexing issues
+        return [];
     }
 }

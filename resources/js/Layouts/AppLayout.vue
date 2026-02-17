@@ -70,6 +70,16 @@
             >
               Campaigns
             </Link>
+
+            <Link
+              href="/keywords/trending"
+              class="px-5 py-2.5 rounded-xl text-sm font-semibold transition-standard"
+              :class="$page.component.startsWith('Keywords/') 
+                ? 'bg-white text-blue-600 shadow-sm border border-slate-100' 
+                : 'text-slate-500 hover:text-slate-900 hover:bg-white/50'"
+            >
+              Keywords
+            </Link>
           </div>
 
           <!-- Actions -->

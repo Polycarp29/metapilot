@@ -231,6 +231,23 @@
                 </div>
             </div>
 
+            <!-- Keyword Discovery Frequency -->
+            <div class="space-y-4 pt-6 border-t border-slate-100">
+                <label class="block font-bold text-slate-700">Keyword Discovery Frequency</label>
+                <div class="relative">
+                   <select v-model="orgForm.keyword_discovery_frequency" class="w-full bg-slate-50 border-slate-200 rounded-2xl px-6 py-4 appearance-none font-bold text-slate-700 focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 transition-all">
+                      <option :value="3">Every 3 hours</option>
+                      <option :value="6">Every 6 hours</option>
+                      <option :value="12">Every 12 hours</option>
+                      <option :value="24">Every 24 hours (Daily)</option>
+                   </select>
+                   <div class="absolute right-6 top-1/2 -translate-y-1/2 pointer-events-none text-slate-500">
+                     <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" /></svg>
+                   </div>
+                </div>
+                <p class="text-sm text-slate-500">Determine how often the Smart Engine should scan for new trending keywords tailored to your niche.</p>
+            </div>
+
             <div class="p-6 bg-blue-50 rounded-2xl border border-blue-100 flex gap-4">
                <div class="text-blue-500 shrink-0">
                  <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
@@ -580,6 +597,7 @@ const confirmButtonText = ref('Confirm')
     // Organization Form
 const orgForm = useForm({
   name: props.organization.name,
+  keyword_discovery_frequency: props.organization.keyword_discovery_frequency || 24,
   settings: {
      ai_model: props.organization.settings?.ai_model || 'gpt-4',
      ai_insights_enabled: props.organization.settings?.ai_insights_enabled !== false,

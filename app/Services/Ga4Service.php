@@ -187,12 +187,17 @@ class Ga4Service
     {
         $dimensions = [
             'by_page' => ['dim' => 'pagePath', 'metrics' => ['activeUsers', 'bounceRate']],
+            'by_page_title' => ['dim' => 'pageTitle', 'metrics' => ['activeUsers', 'screenPageViews']],
             'by_source' => ['dim' => 'sessionSourceMedium', 'metrics' => ['activeUsers']],
+            'by_first_source' => ['dim' => 'firstUserSource', 'metrics' => ['activeUsers']],
             'by_medium' => ['dim' => 'sessionMedium', 'metrics' => ['activeUsers']],
             'by_campaign' => ['dim' => 'sessionCampaignName', 'metrics' => ['activeUsers']],
             'by_device' => ['dim' => 'deviceCategory', 'metrics' => ['activeUsers']],
             'by_country' => ['dim' => 'country', 'metrics' => ['activeUsers']],
             'by_city' => ['dim' => 'city', 'metrics' => ['activeUsers']],
+            'by_screen' => ['dim' => 'unifiedPageScreen', 'metrics' => ['activeUsers', 'screenPageViews']],
+            'by_event' => ['dim' => 'eventName', 'metrics' => ['activeUsers', 'eventCount', 'conversions']],
+            'by_audience' => ['dim' => 'audienceName', 'metrics' => ['activeUsers']],
         ];
 
         $breakdowns = [];
@@ -446,7 +451,7 @@ class Ga4Service
                 foreach ($metricNames as $index => $name) {
                     $val = $row->getMetricValues()[$index]->getValue();
                     // If it's a count-like metric, cast to int, otherwise float
-                    $result[$name === 'activeUsers' ? 'value' : $name] = str_contains($name, 'Rate') || str_contains($name, 'Duration') ? (float) $val : (int) $val;
+                    $result[$name] = str_contains($name, 'Rate') || str_contains($name, 'Duration') ? (float) $val : (int) $val;
                 }
 
                 $results[] = $result;
@@ -513,6 +518,64 @@ class Ga4Service
             return true;
         }
 
+
         return false;
+    }
+
+    /**
+     * Get acquisition time series data for pattern learning.
+     * Returns array of dates => user count for the specified time period.
+     */
+    public function getAcquisitionTimeSeries(\App\Models\AnalyticsProperty $property, int $days = 30): array
+    {
+        $snapshots = \App\Models\MetricSnapshot::where('analytics_property_id', $property->id)
+            ->whereBetween('snapshot_date', [now()->subDays($days), now()])
+            ->orderBy('snapshot_date')
+            ->get();
+
+        $timeSeries = [];
+        foreach ($snapshots as $snapshot) {
+            $timeSeries[$snapshot->snapshot_date->format('Y-m-d')] = $snapshot->users ?? 0;
+        }
+
+        return $timeSeries;
+    }
+
+    /**
+     * Get engagement time series data for pattern learning.
+     * Returns array of dates => engagement rate for the specified time period.
+     */
+    public function getEngagementTimeSeries(\App\Models\AnalyticsProperty $property, int $days = 30): array
+    {
+        $snapshots = \App\Models\MetricSnapshot::where('analytics_property_id', $property->id)
+            ->whereBetween('snapshot_date', [now()->subDays($days), now()])
+            ->orderBy('snapshot_date')
+            ->get();
+
+        $timeSeries = [];
+        foreach ($snapshots as $snapshot) {
+            $timeSeries[$snapshot->snapshot_date->format('Y-m-d')] = $snapshot->engagement_rate ?? 0;
+        }
+
+        return $timeSeries;
+    }
+
+    /**
+     * Get conversion time series data for pattern learning.
+     * Returns array of dates => conversions for the specified time period.
+     */
+    public function getConversionTimeSeries(\App\Models\AnalyticsProperty $property, int $days = 30): array
+    {
+        $snapshots = \App\Models\MetricSnapshot::where('analytics_property_id', $property->id)
+            ->whereBetween('snapshot_date', [now()->subDays($days), now()])
+            ->orderBy('snapshot_date')
+            ->get();
+
+        $timeSeries = [];
+        foreach ($snapshots as $snapshot) {
+            $timeSeries[$snapshot->snapshot_date->format('Y-m-d')] = $snapshot->conversions ?? 0;
+        }
+
+        return $timeSeries;
     }
 }

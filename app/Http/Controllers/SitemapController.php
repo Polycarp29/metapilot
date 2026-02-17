@@ -9,8 +9,17 @@ use Inertia\Inertia;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\File;
 
+use App\Services\SitemapService;
+
 class SitemapController extends Controller
 {
+    protected $sitemapService;
+
+    public function __construct(SitemapService $sitemapService)
+    {
+        $this->sitemapService = $sitemapService;
+    }
+
     public function index()
     {
         $organization = auth()->user()->currentOrganization();
@@ -169,23 +178,21 @@ class SitemapController extends Controller
 
         $imported = 0;
         foreach (array_unique($urls) as $url) {
-            $url = trim($url);
+            $sanitizedUrl = $this->sitemapService->sanitizeUrl($url);
             
-            // Skip empty or common header names
-            if (empty($url) || in_array(strtolower($url), ['url', 'loc', 'location'])) {
+            if (!$sanitizedUrl || !$this->sitemapService->isValidUrl($sanitizedUrl)) {
                 continue;
             }
 
-            // Basic protocol check/fix - if it looks like a domain but lacks protocol
-            if (!preg_match('/^https?:\/\//', $url) && preg_match('/^[a-z0-9][a-z0-9-]*(\.[a-z0-9][a-z0-9-]*)+/i', $url)) {
-                $url = 'https://' . $url;
+            // Skip common header names if they somehow passed sanitization
+            if (in_array(strtolower(basename($sanitizedUrl)), ['url', 'loc', 'location'])) {
+                continue;
             }
 
-            if (filter_var($url, FILTER_VALIDATE_URL)) {
-                SitemapLink::updateOrCreate([
+            if (!$this->sitemapService->isDuplicate($sitemap->id, $sanitizedUrl)) {
+                SitemapLink::create([
                     'sitemap_id' => $sitemap->id,
-                    'url' => $url
-                ], [
+                    'url' => $sanitizedUrl,
                     'lastmod' => now()->format('Y-m-d'),
                     'changefreq' => 'daily',
                     'priority' => 0.7
@@ -200,12 +207,25 @@ class SitemapController extends Controller
     public function addLink(Request $request, Sitemap $sitemap)
     {
         $validated = $request->validate([
-            'url' => 'required|url',
+            'url' => 'required|string',
             'priority' => 'numeric|min:0|max:1',
             'changefreq' => 'string'
         ]);
 
-        SitemapLink::create(array_merge($validated, ['sitemap_id' => $sitemap->id]));
+        $sanitizedUrl = $this->sitemapService->sanitizeUrl($validated['url']);
+
+        if (!$sanitizedUrl || !$this->sitemapService->isValidUrl($sanitizedUrl)) {
+            return back()->withErrors(['url' => 'The provided URL is invalid or could not be sanitized.']);
+        }
+
+        if ($this->sitemapService->isDuplicate($sitemap->id, $sanitizedUrl)) {
+            return back()->withErrors(['url' => 'This URL already exists in this sitemap.']);
+        }
+
+        SitemapLink::create(array_merge($validated, [
+            'sitemap_id' => $sitemap->id,
+            'url' => $sanitizedUrl
+        ]));
 
         return back()->with('message', 'Link added to sitemap!');
     }
@@ -213,12 +233,22 @@ class SitemapController extends Controller
     public function updateLink(Request $request, SitemapLink $link)
     {
         $validated = $request->validate([
-            'url' => 'required|url',
+            'url' => 'required|string',
             'priority' => 'numeric|min:0|max:1',
             'changefreq' => 'string'
         ]);
 
-        $link->update($validated);
+        $sanitizedUrl = $this->sitemapService->sanitizeUrl($validated['url']);
+
+        if (!$sanitizedUrl || !$this->sitemapService->isValidUrl($sanitizedUrl)) {
+            return back()->withErrors(['url' => 'The provided URL is invalid or could not be sanitized.']);
+        }
+
+        if ($this->sitemapService->isDuplicate($link->sitemap_id, $sanitizedUrl, $link->id)) {
+            return back()->withErrors(['url' => 'This URL already exists in this sitemap.']);
+        }
+
+        $link->update(array_merge($validated, ['url' => $sanitizedUrl]));
 
         return back()->with('message', 'Link updated!');
     }

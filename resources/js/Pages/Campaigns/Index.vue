@@ -312,42 +312,61 @@ const getStatusColor = (status) => {
                     </div>
 
                 <!-- AI Ad Insights Display -->
-                <div v-if="adInsight" class="mx-8 mt-8 bg-gradient-to-br from-indigo-50 to-blue-50 rounded-[2rem] border border-blue-100 p-8 relative overflow-hidden animate-fade-in">
-                     <!-- Decorative Background -->
-                    <div class="absolute top-0 right-0 w-64 h-64 bg-blue-400/10 rounded-full blur-3xl -mr-32 -mt-32 pointer-events-none"></div>
-                    
-                    <div class="flex items-start gap-4 relative z-10">
-                        <div class="w-12 h-12 bg-white rounded-2xl flex items-center justify-center text-indigo-600 shadow-sm shrink-0">
-                            <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z" /></svg>
-                        </div>
-                        <div class="space-y-4 flex-1">
+                <div v-if="adInsight" class="mx-8 mt-8 relative overflow-hidden animate-fade-in shadow-sm">
+                    <!-- Configuration Required State -->
+                    <div v-if="adInsight.status === 'configuration_required'" class="bg-amber-50 rounded-[2rem] border border-amber-200 p-8 flex flex-col md:flex-row items-center justify-between gap-6">
+                        <div class="flex items-center gap-4">
+                            <div class="w-12 h-12 bg-amber-100 rounded-2xl flex items-center justify-center text-amber-600 shadow-sm shrink-0">
+                                <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path></svg>
+                            </div>
                             <div>
-                                <div class="flex items-center justify-between">
-                                    <h3 class="text-lg font-bold text-slate-900">{{ adInsight.title }}</h3>
-                                    <Link :href="route('organization.settings')" class="text-xs font-bold text-indigo-500 hover:text-indigo-700 bg-white/50 px-3 py-1 rounded-lg border border-indigo-100 transition-colors">
-                                        Customize Context
-                                    </Link>
-                                </div>
-                                <p class="text-sm text-slate-500 mt-1">AI Analysis based on your industry and current trends.</p>
+                                <h3 class="text-lg font-bold text-amber-900">AI Model Setup Required</h3>
+                                <p class="text-sm text-amber-700 mt-1">You haven't selected an AI model for analysis yet. Please configure it in your settings.</p>
                             </div>
-                            
-                            <div class="prose prose-sm prose-slate max-w-none bg-white/60 p-6 rounded-2xl border border-white/50 backdrop-blur-sm">
-                                <p class="text-slate-700 leading-relaxed">{{ adInsight.body }}</p>
-                            </div>
+                        </div>
+                        <Link :href="route('organization.settings', { tab: 'ai' })" class="whitespace-nowrap px-6 py-3 bg-amber-600 hover:bg-amber-700 text-white rounded-xl font-bold transition-all shadow-lg shadow-amber-600/20">
+                            Configure AI Model
+                        </Link>
+                    </div>
 
-                            <div v-if="adInsight.context" class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                <div v-if="adInsight.context.strategic_opportunities" class="bg-white/80 p-4 rounded-xl border border-white/50">
-                                    <h4 class="text-xs font-black text-indigo-400 uppercase tracking-widest mb-3">Opportunities</h4>
-                                    <ul class="space-y-2">
-                                        <li v-for="(opp, i) in adInsight.context.strategic_opportunities" :key="i" class="flex items-start gap-2 text-sm text-slate-700">
-                                            <span class="text-indigo-500 mt-1">•</span>
-                                            {{ opp }}
-                                        </li>
-                                    </ul>
+                    <!-- Normal Analysis Display -->
+                    <div v-else class="bg-gradient-to-br from-indigo-50 to-blue-50 rounded-[2rem] border border-blue-100 p-8 relative overflow-hidden">
+                        <!-- Decorative Background -->
+                        <div class="absolute top-0 right-0 w-64 h-64 bg-blue-400/10 rounded-full blur-3xl -mr-32 -mt-32 pointer-events-none"></div>
+                        
+                        <div class="flex items-start gap-4 relative z-10">
+                            <div class="w-12 h-12 bg-white rounded-2xl flex items-center justify-center text-indigo-600 shadow-sm shrink-0">
+                                <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z" /></svg>
+                            </div>
+                            <div class="space-y-4 flex-1">
+                                <div>
+                                    <div class="flex items-center justify-between">
+                                        <h3 class="text-lg font-bold text-slate-900">{{ adInsight.title }}</h3>
+                                        <Link :href="route('organization.settings')" class="text-xs font-bold text-indigo-500 hover:text-indigo-700 bg-white/50 px-3 py-1 rounded-lg border border-indigo-100 transition-colors">
+                                            Customize Context
+                                        </Link>
+                                    </div>
+                                    <p class="text-sm text-slate-500 mt-1">AI Analysis based on your industry and current trends.</p>
                                 </div>
-                                <div v-if="adInsight.context.budget_recommendations" class="bg-white/80 p-4 rounded-xl border border-white/50">
-                                    <h4 class="text-xs font-black text-emerald-500 uppercase tracking-widest mb-3">Budget Strategy</h4>
-                                    <p class="text-sm text-slate-700">{{ adInsight.context.budget_recommendations }}</p>
+                                
+                                <div class="prose prose-sm prose-slate max-w-none bg-white/60 p-6 rounded-2xl border border-white/50 backdrop-blur-sm">
+                                    <p class="text-slate-700 leading-relaxed">{{ adInsight.body }}</p>
+                                </div>
+
+                                <div v-if="adInsight.context" class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                    <div v-if="adInsight.context.strategic_opportunities" class="bg-white/80 p-4 rounded-xl border border-white/50">
+                                        <h4 class="text-xs font-black text-indigo-400 uppercase tracking-widest mb-3">Opportunities</h4>
+                                        <ul class="space-y-2">
+                                            <li v-for="(opp, i) in adInsight.context.strategic_opportunities" :key="i" class="flex items-start gap-2 text-sm text-slate-700">
+                                                <span class="text-indigo-500 mt-1">•</span>
+                                                {{ opp }}
+                                            </li>
+                                        </ul>
+                                    </div>
+                                    <div v-if="adInsight.context.budget_recommendations" class="bg-white/80 p-4 rounded-xl border border-white/50">
+                                        <h4 class="text-xs font-black text-emerald-500 uppercase tracking-widest mb-3">Budget Strategy</h4>
+                                        <p class="text-sm text-slate-700">{{ adInsight.context.budget_recommendations }}</p>
+                                    </div>
                                 </div>
                             </div>
                         </div>

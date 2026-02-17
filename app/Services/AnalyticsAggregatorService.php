@@ -72,6 +72,7 @@ class AnalyticsAggregatorService
         if (!$latestRecord || $aggregates->total_users == 0) {
             return [
                 'total_users' => 0,
+                'total_users_all' => 0,
                 'total_new_users' => 0,
                 'total_sessions' => 0,
                 'total_conversions' => 0,
@@ -83,13 +84,21 @@ class AnalyticsAggregatorService
                 'avg_duration' => 0,
                 'avg_bounce_rate' => 0,
                 'by_page' => [],
+                'by_page_title' => [],
+                'by_screen' => [],
                 'by_source' => [],
                 'by_medium' => [],
                 'by_campaign' => [],
                 'by_device' => [],
                 'by_country' => [],
                 'by_city' => [],
+                'by_event' => [],
+                'by_audience' => [],
                 'top_queries' => [],
+                'top_pages_gsc' => [],
+                'sitemaps' => [],
+                'gsc_permission_error' => \App\Models\AnalyticsProperty::where('id', $propertyId)->value('gsc_site_url') && !(\App\Models\SearchConsoleMetric::where('analytics_property_id', $propertyId)->whereBetween('snapshot_date', [$startDate, $endDate])->exists()),
+                'last_updated' => null,
             ];
         }
 
@@ -110,9 +119,9 @@ class AnalyticsAggregatorService
             ->orderBy('snapshot_date', 'desc')
             ->first();
 
-        // Check if there's a permission issue (has GSC URL but no data)
+        // Check if there's a permission issue (has GSC URL but no data) - Trigger even if core GA4 traffic is 0
         $hasGscUrl = \App\Models\AnalyticsProperty::where('id', $propertyId)->value('gsc_site_url');
-        $hasGscPermissionError = $hasGscUrl && !$latestGscRecord && $aggregates->total_users > 0;
+        $hasGscPermissionError = $hasGscUrl && !$latestGscRecord;
 
         // Combine the aggregates with the latest breakdowns
         return [
@@ -128,20 +137,26 @@ class AnalyticsAggregatorService
             'avg_engagement_rate' => $finalStats['avg_engagement_rate'],
             'avg_duration' => $finalStats['avg_duration'],
             'avg_bounce_rate' => $finalStats['avg_bounce_rate'],
-            'by_page' => $latestRecord->by_page,
-            'by_source' => $latestRecord->by_source,
-            'by_medium' => $latestRecord->by_medium,
-            'by_campaign' => $latestRecord->by_campaign,
-            'by_device' => $latestRecord->by_device,
-            'by_country' => $latestRecord->by_country,
-            'by_city' => $latestRecord->by_city,
+            'by_page' => $latestRecord?->by_page ?? [],
+            'by_page_title' => $latestRecord?->by_page_title ?? [],
+            'by_screen' => $latestRecord?->by_screen ?? [],
+            'by_source' => $latestRecord?->by_source ?? [],
+            'by_first_source' => $latestRecord?->by_first_source ?? [],
+            'by_medium' => $latestRecord?->by_medium ?? [],
+            'by_campaign' => $latestRecord?->by_campaign ?? [],
+            'by_device' => $latestRecord?->by_device ?? [],
+            'by_country' => $latestRecord?->by_country ?? [],
+            'by_city' => $latestRecord?->by_city ?? [],
+            'by_event' => $latestRecord?->by_event ?? [],
+            'by_audience' => $latestRecord?->by_audience ?? [],
             'top_queries' => $latestGscRecord?->top_queries ?? [],
+            'top_pages_gsc' => $latestGscRecord?->top_pages ?? [],
             'sitemaps' => $latestGscRecord?->sitemaps ?? [],
             'gsc_permission_error' => $hasGscPermissionError,
-            'last_updated' => max(
-                $latestRecord->updated_at?->toIso8601String(),
+            'last_updated' => collect([
+                $latestRecord?->updated_at?->toIso8601String(),
                 $latestGscRecord?->updated_at?->toIso8601String()
-            ),
+            ])->filter()->max(),
         ];
     }
 

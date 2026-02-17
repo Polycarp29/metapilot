@@ -60,7 +60,10 @@ class AnalyticsPropertyController extends Controller
 
         $property->update($validated);
 
-        return back()->with('message', 'Analytics property updated.');
+        // Dispatch background sync
+        \App\Jobs\SyncPropertyDataJob::dispatch($property);
+
+        return back()->with('message', 'Analytics property updated. Syncing data in background...');
     }
 
     /**

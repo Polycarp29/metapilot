@@ -757,10 +757,10 @@ class SchemaController extends Controller
             $aiSuggestions = null;
             $org = auth()->user()->currentOrganization();
             // Only use AI if configured and key is available (system level)
-            if ($org && !empty($org->settings['ai_model']) && config('services.openai.api_key')) {
+            if ($org && ($org->settings['ai_insights_enabled'] ?? true) && config('services.openai.api_key')) {
                 try {
                     $aiService = app(\App\Services\OpenAIService::class);
-                    $aiService->setModel($org->settings['ai_model']);
+                    $aiService->setModelFromOrganization($org);
                     $textContent = strip_tags($html);
                     // We don't block the response on AI, just attempt it
                     // In a real queue system this would be a job, but here we wait briefly

@@ -39,6 +39,7 @@ class OrganizationSettingsController extends Controller
 
         $validated = $request->validate([
             'name' => 'required|string|max:255',
+            'keyword_discovery_frequency' => 'nullable|integer|in:3,6,12,24',
             'settings' => 'array',
             'settings.ai_model' => 'nullable|string',
             'settings.ai_insights_enabled' => 'nullable|boolean',
@@ -53,6 +54,7 @@ class OrganizationSettingsController extends Controller
 
         $organization->update([
             'name' => $validated['name'],
+            'keyword_discovery_frequency' => $validated['keyword_discovery_frequency'] ?? 24,
             'settings' => $mergedSettings,
         ]);
 

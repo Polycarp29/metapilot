@@ -76,12 +76,14 @@ class AnalyticsDashboardController extends Controller
 
         Log::info("Fetching analytics overview for property {$property->id} from {$startDate} to {$endDate}." . ($request->has('refresh') ? " (FORCE REFRESH)" : ""));
         
+        $syncingQueued = false;
         if ($request->has('refresh')) {
-            $this->ga4Service->syncData($property, $startDate, $endDate);
-            $this->gscService->syncData($property, $startDate, $endDate);
+            \App\Jobs\SyncPropertyDataJob::dispatch($property);
+            $syncingQueued = true;
         }
 
         $overview = $this->aggregator->getOverview($property->id, $startDate, $endDate);
+        $overview['syncing_queued'] = $syncingQueued;
         
         Log::debug("Analytics overview data for property {$property->id}: " . json_encode($overview));
 
@@ -119,12 +121,7 @@ class AnalyticsDashboardController extends Controller
             $endDate = \Carbon\Carbon::parse($endDate)->format('Y-m-d');
         }
 
-        Log::info("Fetching analytics trends for property {$property->id}, metric: {$metric}, from {$startDate} to {$endDate}." . ($request->has('refresh') ? " (FORCE REFRESH)" : ""));
-
-        if ($request->has('refresh')) {
-            $this->ga4Service->syncData($property, $startDate, $endDate);
-            $this->gscService->syncData($property, $startDate, $endDate);
-        }
+        Log::info("Fetching analytics trends for property {$property->id}, metric: {$metric}, from {$startDate} to {$endDate}.");
 
         $trends = $this->aggregator->getTrendData($property->id, $startDate, $endDate);
         

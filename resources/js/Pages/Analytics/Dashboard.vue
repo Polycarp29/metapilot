@@ -1,6 +1,6 @@
 <script setup>
 import AppLayout from '@/Layouts/AppLayout.vue'
-import { ref, onMounted, watch } from 'vue'
+import { ref, onMounted, watch, computed } from 'vue'
 import { Head, Link, usePage } from '@inertiajs/vue3'
 import axios from 'axios'
 import { 
@@ -12,9 +12,11 @@ import {
   Title, 
   Tooltip, 
   Legend,
-  Filler
+  Filler,
+  ArcElement,
+  BarElement
 } from 'chart.js'
-import { Line } from 'vue-chartjs'
+import { Line, Doughnut, Bar } from 'vue-chartjs'
 
 ChartJS.register(
   CategoryScale,
@@ -24,7 +26,9 @@ ChartJS.register(
   Title,
   Tooltip,
   Legend,
-  Filler
+  Filler,
+  ArcElement,
+  BarElement
 )
 
 const props = defineProps({
@@ -43,10 +47,117 @@ const insightError = ref(false)
 const overview = ref(null)
 const trendData = ref(null)
 const geoTab = ref('country')
+const geoSearch = ref('')
 const chartMetric = ref('users')
 const isAutoRefreshEnabled = ref(false)
 const autoRefreshInterval = ref(null)
 const lastRefetchTime = ref(null)
+const activeTab = ref('overview')
+
+const opportunityKeywords = computed(() => {
+  if (!overview.value?.top_queries) return []
+  return overview.value.top_queries
+    .filter(q => q.impressions > 100 && q.ctr < 0.02) // High impressions, low CTR
+    .sort((a, b) => b.impressions - a.impressions)
+    .slice(0, 5)
+})
+
+const searchChartData = computed(() => {
+  if (!trendData.value) return { labels: [], datasets: [] }
+  const labels = trendData.value.map(d => new Date(d.snapshot_date).toLocaleDateString(undefined, { month: 'short', day: 'numeric' }))
+  return {
+    labels,
+    datasets: [
+      {
+        label: 'Clicks',
+        data: trendData.value.map(d => d.clicks),
+        borderColor: '#10b981',
+        backgroundColor: 'rgba(16, 185, 129, 0.1)',
+        borderWidth: 3,
+        fill: true,
+        tension: 0.4,
+        pointRadius: 0,
+        pointHoverRadius: 6,
+        yAxisID: 'y'
+      },
+      {
+        label: 'Impressions',
+        data: trendData.value.map(d => d.impressions),
+        borderColor: '#6366f1',
+        borderWidth: 2,
+        borderDash: [5, 5],
+        fill: false,
+        tension: 0.4,
+        pointRadius: 0,
+        pointHoverRadius: 4,
+        yAxisID: 'y1'
+      }
+    ]
+  }
+})
+
+const gscChartOptions = computed(() => {
+  const opts = JSON.parse(JSON.stringify(chartOptions.value))
+  opts.scales.y1.display = true
+  return opts
+})
+
+const filteredGeoData = computed(() => {
+  if (!overview.value) return []
+  const data = geoTab.value === 'country' ? overview.value.by_country : overview.value.by_city
+  if (!data) return []
+  
+  if (!geoSearch.value) return data.slice(0, 10)
+  
+  const query = geoSearch.value.toLowerCase()
+  return data.filter(item => item.name.toLowerCase().includes(query)).slice(0, 10)
+})
+
+const geoChartData = computed(() => {
+  const data = filteredGeoData.value.slice(0, 5)
+  return {
+    labels: data.map(d => d.name),
+    datasets: [{
+      data: data.map(d => d.activeUsers || d.value || 0),
+      backgroundColor: ['#10b981', '#3b82f6', '#f59e0b', '#8b5cf6', '#ec4899'],
+      borderWidth: 0
+    }]
+  }
+})
+
+const acquisitionChartData = computed(() => {
+  const data = (overview.value?.by_first_source || []).slice(0, 5)
+  return {
+    labels: data.map(d => d.name),
+    datasets: [{
+      data: data.map(d => d.activeUsers || 0),
+      backgroundColor: ['#3b82f6', '#10b981', '#f59e0b', '#8b5cf6', '#ec4899'],
+      borderWidth: 0
+    }]
+  }
+})
+
+const audienceChartData = computed(() => {
+  const data = (overview.value?.by_audience || []).slice(0, 5)
+  return {
+    labels: data.map(d => d.name),
+    datasets: [{
+      data: data.map(d => d.activeUsers || 0),
+      backgroundColor: ['#f59e0b', '#ec4899', '#3b82f6', '#10b981', '#8b5cf6'],
+      borderWidth: 0
+    }]
+  }
+})
+
+const doughnutOptions = {
+  responsive: true,
+  maintainAspectRatio: false,
+  plugins: {
+    legend: { display: false },
+    tooltip: { backgroundColor: '#1e293b', padding: 12, cornerRadius: 8 }
+  },
+  cutout: '70%'
+}
 
 const chartData = ref({
   labels: [],
@@ -172,7 +283,7 @@ const updateChart = () => {
       datasets: [
         {
           label: 'Total Users',
-          data: trendData.value.map(d => d.users),
+          data: trendData.value.map(d => d.users || 0),
           borderColor: '#3b82f6',
           backgroundColor: 'rgba(59, 130, 246, 0.1)',
           borderWidth: 3,
@@ -363,7 +474,28 @@ onUnmounted(() => {
         </div>
       </div>
 
-      <!-- Stats Grid -->
+      <!-- Tab Navigation -->
+      <div class="flex items-center gap-2 border-b border-slate-100 px-2">
+        <button 
+          @click="activeTab = 'overview'"
+          :class="activeTab === 'overview' ? 'text-blue-600 border-blue-600 bg-blue-50/50' : 'text-slate-400 border-transparent hover:text-slate-600 hover:bg-slate-50'"
+          class="flex items-center gap-2 px-8 py-4 border-b-2 font-black uppercase tracking-widest text-xs transition-all rounded-t-2xl"
+        >
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"></path></svg>
+          General Overview
+        </button>
+        <button 
+          @click="activeTab = 'gsc'"
+          :class="activeTab === 'gsc' ? 'text-emerald-600 border-emerald-600 bg-emerald-50/50' : 'text-slate-400 border-transparent hover:text-slate-600 hover:bg-slate-50'"
+          class="flex items-center gap-2 px-8 py-4 border-b-2 font-black uppercase tracking-widest text-xs transition-all rounded-t-2xl"
+        >
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path></svg>
+          Search Console
+        </button>
+      </div>
+
+      <div v-if="activeTab === 'overview'" class="space-y-10 animate-in fade-in duration-500">
+        <!-- Stats Grid -->
       <div v-if="isLoading" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
         <div v-for="i in 8" :key="i" class="bg-white p-7 rounded-[2.5rem] border border-slate-100 shadow-premium">
           <div class="skeleton h-3 w-20 rounded-full mb-2"></div>
@@ -477,33 +609,6 @@ onUnmounted(() => {
         </div>
       </div>
 
-      <!-- SEO & Sitemap Health -->
-      <div v-if="overview && overview.sitemaps && overview.sitemaps.length > 0" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 animate-in fade-in slide-in-from-bottom-4 duration-700">
-        <div v-for="sitemap in overview.sitemaps" :key="sitemap.path" class="bg-white/60 backdrop-blur-md p-6 rounded-[2rem] border border-slate-100 shadow-premium flex items-center justify-between group overflow-hidden relative">
-          <div class="absolute inset-0 bg-blue-500/5 translate-y-full group-hover:translate-y-0 transition-transform duration-500"></div>
-          <div class="relative z-10 flex items-center gap-4">
-            <div class="w-12 h-12 rounded-2xl bg-slate-900 flex items-center justify-center text-white shadow-lg">
-              <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
-              </svg>
-            </div>
-            <div>
-              <p class="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Sitemap Index</p>
-              <p class="text-sm font-bold text-slate-900 truncate max-w-[150px]" :title="sitemap.path">{{ sitemap.path.split('/').pop() }}</p>
-            </div>
-          </div>
-          <div class="relative z-10 text-right">
-            <div class="flex items-center gap-2 justify-end mb-1">
-              <span class="w-2 h-2 rounded-full" :class="sitemap.errors > 0 ? 'bg-rose-500' : 'bg-emerald-500'"></span>
-              <p class="text-xs font-black" :class="sitemap.errors > 0 ? 'text-rose-600' : 'text-emerald-600'">{{ sitemap.errors > 0 ? 'Errors' : 'Healthy' }}</p>
-            </div>
-            <p class="text-[10px] font-bold text-slate-500">
-              Discovered: <span class="text-slate-900">{{ sitemap.contents?.[0]?.count || 0 }} URLs</span>
-            </p>
-          </div>
-        </div>
-      </div>
-
       <!-- AI Performance Insights -->
       <div v-if="isLoading || (overview && overview.total_users > 0)" class="bg-gradient-to-br from-slate-900 to-slate-800 p-10 rounded-[3rem] shadow-2xl relative overflow-hidden group">
 
@@ -531,7 +636,25 @@ onUnmounted(() => {
 
           <!-- Results or Empty States -->
           <template v-if="organization?.settings?.ai_insights_enabled !== false">
-            <div v-if="insights && (!fetchingInsights || insights)" class="grid grid-cols-1 lg:grid-cols-2 gap-10">
+            <!-- Configuration Required State -->
+            <div v-if="insights?.status === 'configuration_required'" class="py-10">
+              <div class="bg-white/5 p-8 rounded-[2rem] border border-white/10 flex flex-col md:flex-row items-center justify-between gap-6">
+                <div class="flex items-center gap-4">
+                  <div class="w-12 h-12 bg-amber-500/10 rounded-2xl flex items-center justify-center text-amber-400 shadow-sm shrink-0 border border-amber-500/10">
+                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path></svg>
+                  </div>
+                  <div>
+                    <h3 class="text-lg font-bold text-white">AI Model Setup Required</h3>
+                    <p class="text-sm text-slate-400 mt-1">Select an AI model in your organization settings to enable automated performance insights.</p>
+                  </div>
+                </div>
+                <Link :href="route('organization.settings', { tab: 'ai' })" class="whitespace-nowrap px-6 py-3 bg-blue-600 hover:bg-blue-500 text-white rounded-xl font-bold transition-all shadow-lg shadow-blue-900/20">
+                  Configure AI Model
+                </Link>
+              </div>
+            </div>
+
+            <div v-else-if="insights && (!fetchingInsights || insights)" class="grid grid-cols-1 lg:grid-cols-2 gap-10">
               <!-- Summary & Findings -->
               <div class="space-y-8">
                 <div class="bg-white/5 p-8 rounded-[2rem] border border-white/10">
@@ -704,146 +827,485 @@ onUnmounted(() => {
         </div>
       </div>
 
-
-
-      <!-- Actionable Insights Grid -->
-      <div v-if="overview && overview.total_users > 0" class="grid grid-cols-1 lg:grid-cols-2 gap-8 pb-20">
-        <!-- Top Pages -->
-        <div class="bg-white p-8 rounded-[2.5rem] border border-slate-100 shadow-premium group">
-          <div class="flex items-center justify-between mb-8">
-            <h3 class="text-xl font-black text-slate-900 flex items-center gap-2">
-              <svg class="w-5 h-5 text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path></svg>
-              Top Content
+      <!-- Restored GA4 Sections -->
+      <div v-if="overview && overview.total_users > 0" class="grid grid-cols-1 lg:grid-cols-2 gap-8 pb-10">
+        
+        <!-- Acquisition & Events -->
+        <div class="space-y-8">
+          <!-- Acquisition: First User Source -->
+          <div class="bg-white p-8 rounded-[2.5rem] border border-slate-100 shadow-premium">
+            <h3 class="text-xl font-black text-slate-900 mb-8 flex items-center gap-2">
+              <svg class="w-5 h-5 text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M15 15l-2 5L9 9l11 4-5 2zm0 0l5 5M7.188 2.239l.777 2.897M5.136 7.965l-2.898-.777M13.95 4.05l-2.122 2.122m-5.657 5.656l-2.12 2.122"></path></svg>
+              Active Users by First User Source
             </h3>
+            <div class="flex flex-col md:flex-row gap-8 items-center">
+              <!-- Chart -->
+              <div class="w-40 h-40 shrink-0">
+                <Doughnut :data="acquisitionChartData" :options="doughnutOptions" />
+              </div>
+              
+              <!-- Legend/List -->
+              <div class="flex-1 space-y-4 w-full">
+                <div v-for="(source, idx) in (overview?.by_first_source?.slice(0, 5) || [])" :key="source.name" class="group">
+                  <div class="flex justify-between items-center mb-1">
+                    <div class="flex items-center gap-2 overflow-hidden">
+                      <span class="w-2.5 h-2.5 rounded-full shrink-0" :style="{ backgroundColor: acquisitionChartData.datasets[0].backgroundColor[idx] }"></span>
+                      <span class="text-xs font-bold text-slate-700 truncate" :title="source.name">{{ source.name }}</span>
+                    </div>
+                    <span class="text-xs font-black text-slate-900">{{ (source.activeUsers || 0).toLocaleString() }}</span>
+                  </div>
+                  <div class="h-1 bg-slate-50 rounded-full overflow-hidden">
+                    <div class="h-full rounded-full transition-all duration-1000 ease-out" 
+                      :style="{ width: ((source.activeUsers || 0) / (overview.total_users || 1) * 100) + '%', backgroundColor: acquisitionChartData.datasets[0].backgroundColor[idx] }"></div>
+                  </div>
+                </div>
+              </div>
+            </div>
           </div>
-          
-          <div class="space-y-6">
-            <div v-for="page in (overview.by_page || [])" :key="page.name" class="relative">
-              <div class="flex justify-between items-start mb-2">
-                <div class="flex flex-col min-w-0 flex-1 pr-4">
-                  <span class="text-sm font-bold text-slate-700 truncate" :title="page.name">{{ page.name }}</span>
-                  <div class="flex items-center gap-2 mt-1">
-                    <span class="text-[10px] font-black text-slate-400 uppercase tracking-tighter">{{ page.value }} Users</span>
-                    <div v-if="page.bounceRate !== undefined" class="flex items-center gap-2">
-                      <div class="w-1 h-1 rounded-full bg-slate-200"></div>
-                      <span class="text-[10px] font-black text-slate-400 uppercase tracking-tighter">Bounce: {{ (page.bounceRate * 100).toFixed(1) }}%</span>
-                      <span :class="getBounceRateStatus(page.bounceRate).class" class="text-[8px] font-black uppercase tracking-widest px-1.5 py-0.5 rounded-md border">
-                        {{ getBounceRateStatus(page.bounceRate).label }}
-                      </span>
+
+          <!-- Audience: Active Users by Audience -->
+          <div class="bg-white p-8 rounded-[2.5rem] border border-slate-100 shadow-premium">
+            <h3 class="text-xl font-black text-slate-900 mb-8 flex items-center gap-2">
+              <svg class="w-5 h-5 text-amber-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"></path></svg>
+              Active Users by Audience
+            </h3>
+            <div class="flex flex-col md:flex-row gap-8 items-center">
+              <!-- Chart -->
+              <div class="w-40 h-40 shrink-0">
+                <Doughnut :data="audienceChartData" :options="doughnutOptions" />
+              </div>
+
+              <!-- List -->
+              <div class="flex-1 space-y-4 w-full">
+                <div v-for="(audience, idx) in (overview?.by_audience?.slice(0, 5) || [])" :key="audience.name" class="group">
+                  <div class="flex justify-between items-center mb-1">
+                    <div class="flex items-center gap-2 overflow-hidden">
+                      <span class="w-2.5 h-2.5 rounded-full shrink-0" :style="{ backgroundColor: audienceChartData.datasets[0].backgroundColor[idx] }"></span>
+                      <span class="text-xs font-bold text-slate-700 truncate" :title="audience.name">{{ audience.name }}</span>
+                    </div>
+                    <span class="text-xs font-black text-slate-900">{{ (audience.activeUsers || 0).toLocaleString() }}</span>
+                  </div>
+                  <div class="h-1 bg-slate-50 rounded-full overflow-hidden">
+                    <div class="h-full rounded-full transition-all duration-1000 ease-out" 
+                      :style="{ width: ((audience.activeUsers || 0) / (overview.total_users || 1) * 100) + '%', backgroundColor: audienceChartData.datasets[0].backgroundColor[idx] }"></div>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <p v-if="!overview?.by_audience?.length" class="text-center py-8 text-slate-400 italic text-sm">No audience data available</p>
+          </div>
+
+
+          <!-- Events: Event Performance -->
+          <div class="bg-white p-8 rounded-[2.5rem] border border-slate-100 shadow-premium">
+            <h3 class="text-xl font-black text-slate-900 mb-8 flex items-center gap-2">
+              <svg class="w-5 h-5 text-purple-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M13 10V3L4 14h7v7l9-11h-7z"></path></svg>
+              Event Performance
+            </h3>
+            <div class="overflow-x-auto">
+              <table class="w-full text-left">
+                <thead>
+                  <tr class="border-b border-slate-50">
+                    <th class="pb-4 text-[10px] font-black text-slate-400 uppercase tracking-widest pl-4">Event Name</th>
+                    <th class="pb-4 text-[10px] font-black text-slate-400 uppercase tracking-widest text-right">Users</th>
+                    <th class="pb-4 text-[10px] font-black text-slate-400 uppercase tracking-widest text-right pr-4">Count</th>
+                  </tr>
+                </thead>
+                <tbody class="divide-y divide-slate-50">
+                  <tr v-for="event in (overview?.by_event || [])" :key="event.name" class="group hover:bg-slate-50 transition-colors">
+                    <td class="py-4 pl-4 pr-4">
+                      <span class="text-sm font-bold text-slate-700 block mb-1">{{ event.name }}</span>
+                      <div class="h-1 bg-slate-100 rounded-full overflow-hidden w-24">
+                         <div class="h-full bg-purple-500 rounded-full" 
+                          :style="{ width: Math.min(((event.eventCount || 0) / (overview?.by_event?.[0]?.eventCount || 1) * 100), 100) + '%' }"></div>
+                      </div>
+                    </td>
+                    <td class="py-4 text-right">
+                      <span class="text-sm font-black text-slate-900">{{ (event.activeUsers || 0).toLocaleString() }}</span>
+                    </td>
+                    <td class="py-4 text-right pr-4">
+                      <span class="text-sm font-medium text-slate-500">{{ (event.eventCount || 0).toLocaleString() }}</span>
+                      <span class="block text-[9px] text-purple-600 font-bold" v-if="event.conversions > 0">{{ event.conversions }} Conv.</span>
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+              <p v-if="!overview?.by_event?.length" class="text-center py-10 text-slate-400 italic text-sm">No event data available</p>
+            </div>
+          </div>
+        </div>
+
+        <!-- Geography & Pages -->
+        <div class="space-y-8">
+          <!-- Geography: Country & City -->
+          <div class="bg-white p-8 rounded-[2.5rem] border border-slate-100 shadow-premium">
+            <div class="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-8">
+              <h3 class="text-xl font-black text-slate-900 flex items-center gap-2">
+                <svg class="w-5 h-5 text-emerald-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z"></path></svg>
+                Geography Overview
+              </h3>
+              
+              <!-- Tabs & Filter -->
+              <div class="flex items-center gap-2">
+                 <div class="flex bg-slate-50 p-1 rounded-xl">
+                  <button @click="geoTab = 'country'" 
+                    :class="geoTab === 'country' ? 'bg-white text-emerald-600 shadow-sm' : 'text-slate-400 hover:text-slate-600'"
+                    class="px-4 py-1.5 text-xs font-black uppercase tracking-widest rounded-lg transition-all">Country</button>
+                  <button @click="geoTab = 'city'" 
+                    :class="geoTab === 'city' ? 'bg-white text-emerald-600 shadow-sm' : 'text-slate-400 hover:text-slate-600'"
+                    class="px-4 py-1.5 text-xs font-black uppercase tracking-widest rounded-lg transition-all">City</button>
+                </div>
+              </div>
+            </div>
+            
+             <!-- Search Filter -->
+             <div class="mb-6">
+                <div class="relative">
+                  <input v-model="geoSearch" type="text" placeholder="Search locations..." 
+                    class="w-full pl-10 pr-4 py-2 bg-slate-50 border-none rounded-xl text-sm font-medium text-slate-700 placeholder-slate-400 focus:ring-2 focus:ring-emerald-500/20">
+                    <svg class="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path></svg>
+                </div>
+             </div>
+
+            <div class="flex flex-col md:flex-row gap-8 items-start">
+               <!-- Chart -->
+               <div class="w-full md:w-1/3 h-48 shrink-0 flex items-center justify-center">
+                 <Doughnut v-if="filteredGeoData.length" :data="geoChartData" :options="doughnutOptions" />
+                 <p v-else class="text-slate-300 text-xs font-bold uppercase tracking-widest">No Data</p>
+               </div>
+
+               <!-- List -->
+               <div class="w-full md:w-2/3 space-y-3">
+                 <div v-for="(item, idx) in filteredGeoData" :key="item.name" class="flex items-center justify-between group">
+                   <div class="flex items-center gap-2 overflow-hidden">
+                      <span class="w-2.5 h-2.5 rounded-full shrink-0" 
+                        :style="{ backgroundColor: idx < 5 ? geoChartData.datasets[0].backgroundColor[idx] : '#cbd5e1' }"></span>
+                      <span class="text-sm font-bold text-slate-700 truncate" :title="item.name">{{ item.name }}</span>
+                   </div>
+                   <span class="text-sm font-black text-slate-900">{{ (item.activeUsers || item.value || 0).toLocaleString() }}</span>
+                 </div>
+                 <p v-if="!filteredGeoData.length" class="text-center py-4 text-slate-400 italic text-sm">No locations found</p>
+               </div>
+            </div>
+          </div>
+
+          <!-- Pages: Page Title & Screen Name -->
+          <div class="bg-white p-8 rounded-[2.5rem] border border-slate-100 shadow-premium">
+            <h3 class="text-xl font-black text-slate-900 mb-8 flex items-center gap-2">
+              <svg class="w-5 h-5 text-indigo-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path></svg>
+              Views by Page Title and Screen Name
+            </h3>
+            <div class="space-y-8">
+              <!-- By Page Title -->
+              <div>
+                <h4 class="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-4 flex items-center gap-2">
+                  <span class="w-1.5 h-1.5 rounded-full bg-indigo-400"></span>
+                  Top Page Titles
+                </h4>
+                <div class="space-y-4">
+                  <div v-for="(page, idx) in (overview?.by_page_title?.slice(0, 5) || [])" :key="page.name" class="group">
+                    <div class="flex justify-between items-start mb-2 gap-4">
+                      <span class="text-sm font-bold text-slate-700 leading-tight line-clamp-2" :title="page.name">{{ page.name }}</span>
+                      <div class="text-right shrink-0">
+                        <span class="block text-sm font-black text-slate-900">{{ (page.screenPageViews || page.activeUsers || 0).toLocaleString() }}</span>
+                        <span class="text-[9px] text-slate-400 font-bold uppercase tracking-wider">Views</span>
+                      </div>
+                    </div>
+                    <div class="h-1.5 bg-slate-50 rounded-full overflow-hidden">
+                      <div class="h-full bg-indigo-500 rounded-full transition-all duration-1000 opacity-80 group-hover:opacity-100" 
+                        :style="{ width: ((page.screenPageViews || page.activeUsers || 0) / (overview?.by_page_title?.[0]?.screenPageViews || overview?.by_page_title?.[0]?.activeUsers || 1) * 100) + '%' }"></div>
                     </div>
                   </div>
+                  <p v-if="!overview?.by_page_title?.length" class="text-slate-400 italic text-xs mt-2">No page title data</p>
                 </div>
               </div>
-              
-              <div class="w-full bg-slate-50 h-1.5 rounded-full overflow-hidden">
-                <div class="h-full bg-blue-400 rounded-full transition-all duration-700" 
-                  :style="{ width: `${(page.value / overview.total_users * 100) || 0}%` }">
-                </div>
-              </div>
-            </div>
-            <p v-if="!(overview.by_page?.length)" class="text-slate-400 text-sm font-medium italic text-center py-4">No content data available</p>
-          </div>
-        </div>
 
-        <!-- Top Search Queries -->
-        <div class="bg-white p-8 rounded-[2.5rem] border border-slate-100 shadow-premium group relative overflow-hidden">
-          <div v-if="overview.gsc_permission_error" class="absolute inset-0 bg-white/80 backdrop-blur-[2px] z-10 flex items-center justify-center text-center p-4">
-            <div class="flex flex-col items-center gap-3">
-              <div class="w-12 h-12 rounded-2xl bg-amber-100 text-amber-600 flex items-center justify-center">
-                <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"></path></svg>
-              </div>
-              <h3 class="text-lg font-bold text-slate-900">Search Data Unavailable</h3>
-              <p class="text-slate-500 font-medium max-w-xs">Grant Search Console permissions to view top queries.</p>
-              <Link :href="route('organization.settings', { tab: 'analytics' })" class="text-blue-600 hover:text-blue-700 font-bold text-sm">Update Permissions &rarr;</Link>
-            </div>
-          </div>
-          <div class="flex items-center justify-between mb-8">
-            <h3 class="text-xl font-black text-slate-900 flex items-center gap-2">
-              <svg class="w-5 h-5 text-emerald-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path></svg>
-              Top Queries
-            </h3>
-            <span class="text-[10px] font-black uppercase tracking-widest text-emerald-500 bg-emerald-50 px-2 py-1 rounded-md">Search Performance</span>
-          </div>
-          
-          <div class="space-y-6">
-            <div v-for="query in (overview.top_queries || [])" :key="query.name" class="relative">
-              <div class="flex justify-between items-start mb-2">
-                <div class="flex flex-col min-w-0 flex-1 pr-4">
-                  <span class="text-sm font-bold text-slate-700 truncate" :title="query.name">{{ query.name }}</span>
-                  <div class="flex items-center gap-2 mt-1">
-                    <span class="text-[10px] font-black text-slate-400 uppercase tracking-tighter">{{ query.clicks }} Clicks</span>
-                    <div class="w-1 h-1 rounded-full bg-slate-200"></div>
-                    <span class="text-[10px] font-black text-slate-400 uppercase tracking-tighter">{{ query.impressions }} Impressions</span>
-                    <div class="w-1 h-1 rounded-full bg-slate-200"></div>
-                    <span class="text-[10px] font-black text-emerald-600 uppercase tracking-tighter">Pos: {{ query.position.toFixed(1) }}</span>
+              <!-- By Screen Name -->
+              <div>
+                 <h4 class="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-4 flex items-center gap-2">
+                  <span class="w-1.5 h-1.5 rounded-full bg-pink-400"></span>
+                  Top Screen Names
+                </h4>
+                <div class="space-y-4">
+                  <div v-for="(screen, idx) in (overview?.by_screen?.slice(0, 5) || [])" :key="screen.name" class="group">
+                    <div class="flex justify-between items-center mb-2 gap-4">
+                      <span class="text-sm font-bold text-slate-700 truncate" :title="screen.name">{{ screen.name }}</span>
+                       <div class="text-right shrink-0">
+                        <span class="block text-sm font-black text-slate-900">{{ (screen.screenPageViews || screen.activeUsers || 0).toLocaleString() }}</span>
+                        <span class="text-[9px] text-slate-400 font-bold uppercase tracking-wider">Views</span>
+                      </div>
+                    </div>
+                     <div class="h-1.5 bg-slate-50 rounded-full overflow-hidden">
+                      <div class="h-full bg-pink-500 rounded-full transition-all duration-1000 opacity-80 group-hover:opacity-100" 
+                        :style="{ width: ((screen.screenPageViews || screen.activeUsers || 0) / (overview?.by_screen?.[0]?.screenPageViews || overview?.by_screen?.[0]?.activeUsers || 1) * 100) + '%' }"></div>
+                    </div>
                   </div>
+                  <p v-if="!overview?.by_screen?.length" class="text-slate-400 italic text-xs mt-2">No screen name data</p>
                 </div>
-              </div>
-              
-              <div class="w-full bg-slate-50 h-1.5 rounded-full overflow-hidden">
-                <div class="h-full bg-emerald-400 rounded-full transition-all duration-700" 
-                  :style="{ width: `${(query.clicks / (overview.total_clicks || 1) * 100) || 0}%` }">
-                </div>
-              </div>
-            </div>
-            <p v-if="!(overview.top_queries?.length)" class="text-slate-400 text-sm font-medium italic text-center py-4">No query data available</p>
-          </div>
-        </div>
-
-        <!-- Acquisition Channels -->
-        <div class="bg-white p-8 rounded-[2.5rem] border border-slate-100 shadow-premium">
-          <div class="flex items-center justify-between mb-6">
-            <h3 class="text-xl font-black text-slate-900 flex items-center gap-2">
-                <svg class="w-5 h-5 text-indigo-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M11 3.055A9.001 9.001 0 1020.945 13H11V3.055z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M20.488 9H15V3.512A9.025 9.025 0 0120.488 9z"></path></svg>
-                Acquisition
-            </h3>
-            <Link :href="route('campaigns.index')" class="text-[10px] font-black uppercase tracking-widest text-indigo-500 bg-indigo-50 px-3 py-1.5 rounded-lg hover:bg-indigo-100 transition-colors">
-                View Campaigns &rarr;
-            </Link>
-          </div>
-          <div class="space-y-4">
-            <div v-for="source in (overview.by_source || [])" :key="source.name" class="group">
-              <div class="flex justify-between items-center mb-1">
-                <span class="text-sm font-bold text-slate-700 truncate max-w-[200px]">{{ source.name }}</span>
-                <span class="text-xs font-black text-slate-400 group-hover:text-indigo-500 transition-colors">{{ source.value }}</span>
-              </div>
-              <div class="w-full bg-slate-50 h-2 rounded-full overflow-hidden">
-                <div class="bg-indigo-500 h-full rounded-full transition-all duration-500" :style="{ width: `${(source.value / overview.total_users * 100) || 0}%` }"></div>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <!-- Geography -->
-        <div class="bg-white p-8 rounded-[2.5rem] border border-slate-100 shadow-premium">
-          <div class="flex items-center justify-between mb-8">
-            <h3 class="text-xl font-black text-slate-900 flex items-center gap-2">
-              <svg class="w-5 h-5 text-emerald-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M3.055 11H5a2 2 0 012 2v1a2 2 0 002 2 2 2 0 012 2v2.945M8 3.935V5.5A2.5 2.5 0 0010.5 8h.5a2 2 0 012 2 2 2 0 104 0 2 2 0 012-2h1.064M15 20.488V18a2 2 0 012-2h3.064M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
-              Top Locations
-            </h3>
-            <div class="flex bg-slate-50 p-1 rounded-xl">
-              <button @click="geoTab = 'country'" 
-                :class="geoTab === 'country' ? 'bg-white text-emerald-600 shadow-sm' : 'text-slate-400 hover:text-slate-600'"
-                class="px-3 py-1 text-[10px] font-black uppercase tracking-widest rounded-lg transition-all">Country</button>
-              <button @click="geoTab = 'city'" 
-                :class="geoTab === 'city' ? 'bg-white text-emerald-600 shadow-sm' : 'text-slate-400 hover:text-slate-600'"
-                class="px-3 py-1 text-[10px] font-black uppercase tracking-widest rounded-lg transition-all">City</button>
-            </div>
-          </div>
-
-          <div class="space-y-4">
-            <div v-for="loc in (geoTab === 'country' ? overview.by_country : overview.by_city) || []" :key="loc.name" class="group">
-              <div class="flex justify-between items-center mb-1">
-                <span class="text-sm font-bold text-slate-700 truncate max-w-[200px]">{{ loc.name }}</span>
-                <span class="text-xs font-black text-slate-400 group-hover:text-emerald-500 transition-colors">{{ loc.value }}</span>
-              </div>
-              <div class="w-full bg-slate-50 h-2 rounded-full overflow-hidden">
-                <div class="bg-emerald-500 h-full rounded-full transition-all duration-500" :style="{ width: `${(loc.value / overview.total_users * 100) || 0}%` }"></div>
               </div>
             </div>
           </div>
         </div>
       </div>
+    </div> <!-- End Overview Tab -->
+
+      <div v-if="activeTab === 'gsc'" class="space-y-10 animate-in fade-in duration-500">
+        <!-- Permission Required State -->
+        <div v-if="overview?.gsc_permission_error" class="bg-gradient-to-br from-slate-900 to-slate-800 p-12 rounded-[3rem] shadow-2xl relative overflow-hidden group">
+          <!-- Decorative background elements -->
+          <div class="absolute top-0 right-0 -mt-20 -mr-20 w-80 h-80 bg-emerald-500/10 rounded-full blur-[100px] group-hover:bg-emerald-500/20 transition-all duration-1000"></div>
+          <div class="absolute bottom-0 left-0 -mb-20 -ml-20 w-80 h-80 bg-blue-500/10 rounded-full blur-[100px] group-hover:bg-blue-500/20 transition-all duration-1000"></div>
+
+          <div class="relative z-10 flex flex-col items-center text-center max-w-2xl mx-auto">
+            <div class="w-24 h-24 bg-white/10 rounded-[2.5rem] flex items-center justify-center mb-8 text-emerald-400 shadow-xl border border-white/10 backdrop-blur-sm group-hover:scale-110 transition-transform duration-500">
+              <svg class="w-12 h-12" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path>
+              </svg>
+            </div>
+            
+            <h2 class="text-4xl font-black text-white mb-4">Unlock Deep Search Insights</h2>
+            <p class="text-slate-400 text-lg font-medium leading-relaxed mb-10">
+              Connect Google Search Console to see exactly how customers find you. This data is critical for:
+            </p>
+
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4 w-full mb-12">
+              <div class="flex items-center gap-4 bg-white/5 p-5 rounded-2xl border border-white/5 text-left">
+                <div class="w-10 h-10 rounded-xl bg-emerald-500/20 flex items-center justify-center text-emerald-400 shrink-0">✨</div>
+                <span class="text-slate-200 font-bold">Smart Keyword Discovery</span>
+              </div>
+              <div class="flex items-center gap-4 bg-white/5 p-5 rounded-2xl border border-white/5 text-left">
+                <div class="w-10 h-10 rounded-xl bg-blue-500/20 flex items-center justify-center text-blue-400 shrink-0">📍</div>
+                <span class="text-slate-200 font-bold">Competitor Comparison</span>
+              </div>
+              <div class="flex items-center gap-4 bg-white/5 p-5 rounded-2xl border border-white/5 text-left">
+                <div class="w-10 h-10 rounded-xl bg-purple-500/20 flex items-center justify-center text-purple-400 shrink-0">🔍</div>
+                <span class="text-slate-200 font-bold">AI Suggestive Content</span>
+              </div>
+              <div class="flex items-center gap-4 bg-white/5 p-5 rounded-2xl border border-white/5 text-left">
+                <div class="w-10 h-10 rounded-xl bg-amber-500/20 flex items-center justify-center text-amber-400 shrink-0">🛣️</div>
+                <span class="text-slate-200 font-bold">Sitemap Health Tracking</span>
+              </div>
+            </div>
+
+            <Link :href="route('organization.settings', { tab: 'analytics' })" 
+              class="inline-flex items-center gap-3 bg-emerald-600 hover:bg-emerald-500 text-white px-10 py-4 rounded-2xl font-black transition-all shadow-xl shadow-emerald-900/40 active:scale-95">
+              Reconnect Search Console
+            </Link>
+          </div>
+        </div>
+
+        <!-- Normal State (Only if no permission error) -->
+        <template v-else>
+          <!-- GSC specific Stats Grid -->
+          <div v-if="overview" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+            <!-- GSC: Impressions -->
+            <div class="bg-white p-7 rounded-[2.5rem] border border-slate-100 shadow-premium group hover:border-emerald-500/30 transition-all">
+              <div class="flex flex-col">
+                <p class="text-emerald-700 font-bold text-xs uppercase tracking-wider">Total Impressions</p>
+                <p class="text-[9px] text-slate-400 font-medium mt-0.5">Visibility in Search Engine</p>
+              </div>
+              <h3 class="text-3xl font-black text-slate-900 mt-3">{{ (overview?.total_impressions || 0).toLocaleString() }}</h3>
+            </div>
+
+            <!-- GSC: Clicks -->
+            <div class="bg-white p-7 rounded-[2.5rem] border border-slate-100 shadow-premium group hover:border-emerald-500/30 transition-all">
+              <div class="flex flex-col">
+                <p class="text-emerald-700 font-bold text-xs uppercase tracking-wider">Total Clicks</p>
+                <p class="text-[9px] text-slate-400 font-medium mt-0.5">Traffic from Search Console</p>
+              </div>
+              <h3 class="text-3xl font-black text-slate-900 mt-3">{{ (overview?.total_clicks || 0).toLocaleString() }}</h3>
+            </div>
+
+            <!-- GSC: Avg. Position -->
+            <div class="bg-white p-7 rounded-[2.5rem] border border-slate-100 shadow-premium group hover:border-emerald-500/30 transition-all">
+              <div class="flex flex-col">
+                <p class="text-emerald-700 font-bold text-xs uppercase tracking-wider">Avg. Position</p>
+                <p class="text-[9px] text-slate-400 font-medium mt-0.5">Mean rank across all queries</p>
+              </div>
+              <h3 class="text-3xl font-black text-slate-900 mt-3">{{ (overview?.avg_position || 0).toFixed(1) }}</h3>
+            </div>
+
+            <!-- GSC: Avg. CTR -->
+            <div class="bg-white p-7 rounded-[2.5rem] border border-slate-100 shadow-premium group hover:border-emerald-500/30 transition-all">
+              <div class="flex flex-col">
+                <p class="text-emerald-700 font-bold text-xs uppercase tracking-wider">Avg. CTR</p>
+                <p class="text-[9px] text-slate-400 font-medium mt-0.5">Click-through rate average</p>
+              </div>
+              <h3 class="text-3xl font-black text-slate-900 mt-3">{{ ((overview?.avg_ctr || 0) * 100).toFixed(2) }}%</h3>
+            </div>
+          </div>
+
+          <!-- GSC Performance Trend Chart -->
+          <div v-if="trendData && trendData.length > 0" class="bg-white p-10 rounded-[3rem] border border-slate-100 shadow-premium">
+            <div class="flex items-center justify-between mb-10">
+              <div>
+                <h2 class="text-2xl font-black text-slate-900">Search Performance Trends</h2>
+                <p class="text-slate-500 font-medium mt-1">Clicks vs Impressions over time</p>
+              </div>
+              <div class="flex items-center gap-4">
+                <div class="flex items-center gap-2">
+                  <div class="w-3 h-3 rounded-full bg-emerald-500"></div>
+                  <span class="text-xs font-bold text-slate-500 uppercase tracking-widest">Clicks</span>
+                </div>
+                <div class="flex items-center gap-2">
+                  <div class="w-3 h-3 rounded-full bg-indigo-500"></div>
+                  <span class="text-xs font-bold text-slate-500 uppercase tracking-widest">Impressions</span>
+                </div>
+              </div>
+            </div>
+            <div class="h-[400px]">
+              <Line :data="searchChartData" :options="gscChartOptions" />
+            </div>
+          </div>
+
+          <!-- Keyword Opportunities & Sitemap Health -->
+          <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
+            <!-- Keyword Opportunities -->
+            <div class="lg:col-span-2 bg-gradient-to-br from-slate-900 to-slate-800 p-8 rounded-[3rem] shadow-premium relative overflow-hidden">
+              <div class="absolute top-0 right-0 -mt-10 -mr-10 w-40 h-40 bg-emerald-500/10 rounded-full blur-[60px]"></div>
+              <div class="relative z-10">
+                <div class="flex items-center gap-3 mb-8">
+                  <div class="p-3 bg-emerald-500/20 rounded-xl border border-emerald-500/20">
+                    <svg class="w-5 h-5 text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M13 10V3L4 14h7v7l9-11h-7z"></path></svg>
+                  </div>
+                  <div>
+                    <h3 class="text-lg font-black text-white">Keyword Opportunities</h3>
+                    <p class="text-xs text-slate-400 font-medium">High impressions with low CTR - Potential for optimization</p>
+                  </div>
+                </div>
+
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div v-for="query in opportunityKeywords" :key="query.name" 
+                    class="bg-white/5 p-5 rounded-2xl border border-white/5 hover:bg-white/[0.08] transition-all group">
+                    <div class="flex justify-between items-start mb-3">
+                      <p class="text-sm font-bold text-white group-hover:text-emerald-400 transition-colors">{{ query.name || 'Unknown' }}</p>
+                      <span class="text-[10px] font-black text-emerald-500 bg-emerald-500/10 px-2 py-0.5 rounded-md border border-emerald-500/20">Opportunity</span>
+                    </div>
+                    <div class="flex items-center gap-4">
+                      <div class="flex flex-col">
+                        <span class="text-[10px] font-black text-slate-500 uppercase tracking-widest">Impressions</span>
+                        <span class="text-xs font-bold text-slate-300">{{ (query.impressions || 0).toLocaleString() }}</span>
+                      </div>
+                      <div class="w-px h-6 bg-white/10"></div>
+                      <div class="flex flex-col">
+                        <span class="text-[10px] font-black text-slate-500 uppercase tracking-widest">Position</span>
+                        <span class="text-xs font-bold text-slate-300">{{ (query.position || 0).toFixed(1) }}</span>
+                      </div>
+                      <div class="w-px h-6 bg-white/10"></div>
+                      <div class="flex flex-col">
+                        <span class="text-[10px] font-black text-slate-500 uppercase tracking-widest">CTR</span>
+                        <span class="text-xs font-bold text-rose-400">{{ ((query.ctr || 0) * 100).toFixed(2) }}%</span>
+                      </div>
+                    </div>
+                  </div>
+                  <div v-if="!opportunityKeywords.length" class="col-span-2 text-center py-10">
+                    <p class="text-slate-500 text-sm font-medium italic">No clear optimization opportunities detected in the current query set.</p>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Sitemap Health (Moved) -->
+            <div class="flex flex-col gap-6">
+              <h3 class="text-sm font-black text-slate-400 uppercase tracking-widest px-2">Sitemap Health</h3>
+              <div v-if="overview?.sitemaps?.length" class="space-y-4">
+                <div v-for="sitemap in overview.sitemaps" :key="sitemap.path" 
+                  class="bg-white p-5 rounded-3xl border border-slate-100 shadow-sm flex items-center justify-between group">
+                  <div class="flex items-center gap-3">
+                    <div class="w-10 h-10 rounded-xl bg-slate-900 flex items-center justify-center text-white shrink-0">
+                      <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path></svg>
+                    </div>
+                    <div class="min-w-0">
+                      <p class="text-xs font-bold text-slate-900 truncate max-w-[120px]" :title="sitemap.path">{{ sitemap.path.split('/').pop() }}</p>
+                      <p class="text-[9px] font-black text-slate-400 uppercase">{{ sitemap.contents?.[0]?.count || 0 }} URLs</p>
+                    </div>
+                  </div>
+                  <div class="text-right">
+                    <span class="w-2 h-2 rounded-full inline-block" :class="sitemap.errors > 0 ? 'bg-rose-500' : 'bg-emerald-500'"></span>
+                    <p class="text-[10px] font-black" :class="sitemap.errors > 0 ? 'text-rose-600' : 'text-emerald-600'">{{ sitemap.errors > 0 ? 'Error' : 'Healthy' }}</p>
+                  </div>
+                </div>
+              </div>
+              <div v-else class="text-center py-10 bg-slate-50 rounded-3xl border-2 border-dashed border-slate-200">
+                <p class="text-slate-400 text-xs font-bold">No sitemap data</p>
+              </div>
+            </div>
+          </div>
+
+          <!-- Detailed Tables -->
+          <div class="grid grid-cols-1 lg:grid-cols-2 gap-8 pb-10">
+            <!-- Detailed Top Queries -->
+            <div class="bg-white p-8 rounded-[2.5rem] border border-slate-100 shadow-premium">
+              <h3 class="text-xl font-black text-slate-900 mb-8 flex items-center gap-2">
+                <svg class="w-5 h-5 text-emerald-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path></svg>
+                Top Search Queries
+              </h3>
+              <div class="overflow-x-auto">
+                <table class="w-full text-left">
+                  <thead>
+                    <tr class="border-b border-slate-50">
+                      <th class="pb-4 text-[10px] font-black text-slate-400 uppercase tracking-widest">Query</th>
+                      <th class="pb-4 text-[10px] font-black text-slate-400 uppercase tracking-widest text-right">Clicks</th>
+                      <th class="pb-4 text-[10px] font-black text-slate-400 uppercase tracking-widest text-right">Impressions</th>
+                      <th class="pb-4 text-[10px] font-black text-slate-400 uppercase tracking-widest text-right">Pos.</th>
+                    </tr>
+                  </thead>
+                  <tbody class="divide-y divide-slate-50">
+                    <tr v-for="query in (overview?.top_queries || [])" :key="query.name" class="group hover:bg-slate-50 transition-colors">
+                      <td class="py-4 pr-4">
+                        <span class="text-sm font-bold text-slate-700 block truncate max-w-[200px]" :title="query.name">{{ query.name }}</span>
+                      </td>
+                      <td class="py-4 text-right">
+                        <span class="text-sm font-black text-slate-900">{{ (query.clicks || 0).toLocaleString() }}</span>
+                      </td>
+                      <td class="py-4 text-right">
+                        <span class="text-sm font-medium text-slate-500">{{ (query.impressions || 0).toLocaleString() }}</span>
+                      </td>
+                      <td class="py-4 text-right">
+                        <span class="text-sm font-bold" :class="(query.position || 0) <= 3 ? 'text-emerald-500' : 'text-slate-600'">{{ (query.position || 0).toFixed(1) }}</span>
+                      </td>
+                    </tr>
+                  </tbody>
+                </table>
+                <p v-if="!overview?.top_queries?.length" class="text-center py-10 text-slate-400 italic text-sm">No query data available</p>
+              </div>
+            </div>
+
+            <!-- Detailed Top Pages (GSC) -->
+            <div class="bg-white p-8 rounded-[2.5rem] border border-slate-100 shadow-premium">
+              <h3 class="text-xl font-black text-slate-900 mb-8 flex items-center gap-2">
+                <svg class="w-5 h-5 text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path></svg>
+                Top Pages (GSC)
+              </h3>
+              <div class="overflow-x-auto">
+                <table class="w-full text-left">
+                  <thead>
+                    <tr class="border-b border-slate-50">
+                      <th class="pb-4 text-[10px] font-black text-slate-400 uppercase tracking-widest">Page URL</th>
+                      <th class="pb-4 text-[10px] font-black text-slate-400 uppercase tracking-widest text-right">Clicks</th>
+                      <th class="pb-4 text-[10px] font-black text-slate-400 uppercase tracking-widest text-right">Pos.</th>
+                    </tr>
+                  </thead>
+                  <tbody class="divide-y divide-slate-50">
+                    <tr v-for="page in (overview?.top_pages_gsc || [])" :key="page.name" class="group hover:bg-slate-50 transition-colors">
+                      <td class="py-4 pr-4">
+                        <span class="text-sm font-bold text-slate-700 block truncate max-w-[250px]" :title="page.name">{{ page.name.replace(/^https?:\/\/[^\/]+/, '') || '/' }}</span>
+                      </td>
+                      <td class="py-4 text-right">
+                        <span class="text-sm font-black text-slate-900">{{ (page.clicks || 0).toLocaleString() }}</span>
+                      </td>
+                      <td class="py-4 text-right">
+                        <span class="text-sm font-bold text-slate-600">{{ (page.position || 0).toFixed(1) }}</span>
+                      </td>
+                    </tr>
+                  </tbody>
+                </table>
+                <p v-if="!overview?.top_pages_gsc?.length" class="text-center py-10 text-slate-400 italic text-sm">No page data available</p>
+              </div>
+            </div>
+          </div>
+        </template>
+      </div> <!-- End GSC Tab -->
 
 
       <div v-if="!properties.length" class="text-center py-20 bg-slate-50 rounded-[3rem] border-2 border-dashed border-slate-200">

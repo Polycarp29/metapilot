@@ -21,24 +21,26 @@ class StrategyService
      */
     public function proposeCampaign(AnalyticsProperty $property)
     {
-        $aggregator = new AnalyticsAggregatorService();
+        $aggregator = new AnalyticsAggregatorService(new Ga4Service()); // Ensure properly initialized
         $stats = $aggregator->getOverview($property->id, now()->subDays(30)->format('Y-m-d'), now()->yesterday()->format('Y-m-d'));
 
-        // Identify "Low Hanging Fruit": High traffic, low conversion
-        $prompt = "As an SEO Strategist, analyze this 30-day performance data for '{$property->name}':
-        - Total Users: {$stats->total_users}
-        - Total Conversions: {$stats->total_conversions}
-        - Engagement Rate: " . ($stats->avg_engagement_rate * 100) . "%
-        
-        Suggest a specific SEO Campaign focusing on improving conversions. 
-        Provide:
-        1. Campaign Name
-        2. Primary Objective
-        3. 3-5 Target URLs or Keywords
-        4. Strategic rationale based on the data.";
+        // Prepare context for the AI
+        $context = [
+            'stats' => [
+                'total_users' => $stats['total_users'] ?? 0,
+                'total_conversions' => $stats['total_conversions'] ?? 0,
+                'avg_engagement_rate' => $stats['avg_engagement_rate'] ?? 0,
+                'total_sessions' => $stats['total_sessions'] ?? 0,
+            ],
+            'by_page' => $stats['by_page'] ?? [],
+            'by_source' => $stats['by_source'] ?? [],
+        ];
+
+        // Set the AI model from the organization settings
+        $this->openai->setModelFromOrganization($property->organization);
 
         try {
-            $suggestion = $this->openai->generateSchemaSuggestions($property->website_url, $prompt);
+            $suggestion = $this->openai->generateCampaignProposal($property->name, $context);
             return $suggestion;
         } catch (\Exception $e) {
             Log::error('Campaign Proposal Failed: ' . $e->getMessage());

@@ -32,8 +32,11 @@ class InsightService
         }
 
         // Set AI Model based on settings
-        $aiModel = $org->settings['ai_model'] ?? 'gpt-4-turbo';
-        $this->openai->setModel($aiModel);
+        $this->openai->setModelFromOrganization($org);
+
+        if (!$this->openai->hasModel()) {
+            return ['status' => 'configuration_required', 'message' => 'AI Model not configured. Please set up your AI model in organization settings.'];
+        }
 
         $currentStart = Carbon::parse($startDate);
         $currentEnd = Carbon::parse($endDate);
@@ -57,10 +60,9 @@ class InsightService
         $currentData['top_keywords'] = $currentRaw['top_queries'] ?? [];
 
         // Apply organization AI model preference
-        $org = $property->organization;
-        if ($org && !empty($org->settings['ai_model'])) {
-            $this->openai->setModel($org->settings['ai_model']);
-            Log::info("Using organization-specific AI model: {$org->settings['ai_model']} for property: {$property->id}");
+        if ($org) {
+            $this->openai->setModelFromOrganization($org);
+            Log::info("Using organization-specific AI model for property: {$property->id}");
         }
 
         try {
@@ -130,25 +132,30 @@ class InsightService
         $businessProfile = $org->settings['business_profile'] ?? [];
         
         // Set AI Model based on settings
-        $aiModel = $org->settings['ai_model'] ?? 'gpt-4-turbo'; // Default to turbo if not set
-        $this->openai->setModel($aiModel);
+        $this->openai->setModelFromOrganization($org);
+
+        if (!$this->openai->hasModel()) {
+            return ['status' => 'configuration_required', 'message' => 'AI Model not configured. Please set up your AI model in organization settings.'];
+        }
 
         // Prepare Data for AI
-        // We only send campaigns that have ad spend to save tokens and focus on ads
-        $activeCampaigns = array_filter($adData, fn($c) => ($c['ad_cost'] ?? 0) > 0);
+        // We send campaigns that have either ad spend or sessions to provide a broader analysis
+        $activeCampaigns = array_filter($adData, fn($c) => ($c['ad_cost'] ?? 0) > 0 || ($c['sessions'] ?? 0) > 0);
         
-        // If no active ad campaigns, return no insight
+        // If no active campaigns found at all, return no insight
         if (empty($activeCampaigns)) {
+            Log::info("No active campaigns (cost or sessions) found for property: {$property->id}. Skipping Ad Insight.");
             return null;
         }
 
         // Simplify data for prompt
         $campaignSummary = array_map(function($c) {
             return [
-                'name' => $c['campaign'],
-                'cost' => $c['ad_cost'],
-                'clicks' => $c['ad_clicks'],
-                'roas' => $c['roas'],
+                'name' => $c['campaign'] ?? 'Unknown',
+                'cost' => $c['ad_cost'] ?? 0,
+                'sessions' => $c['sessions'] ?? 0,
+                'clicks' => $c['ad_clicks'] ?? 0,
+                'roas' => $c['roas'] ?? 0,
                 'top_keywords' => array_column(($c['keywords'] ?? []), 'keyword'),
             ];
         }, array_values($activeCampaigns));

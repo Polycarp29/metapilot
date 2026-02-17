@@ -92,4 +92,24 @@ Route::middleware('auth')->group(function () {
     Route::get('campaigns/{campaign}', [\App\Http\Controllers\SeoCampaignController::class, 'show'])->name('campaigns.show');
     Route::get('api/campaigns/propose/{property}', [\App\Http\Controllers\SeoCampaignController::class, 'propose'])->name('api.campaigns.propose');
     Route::get('api/campaigns/{campaign}/performance', [\App\Http\Controllers\SeoCampaignController::class, 'performance'])->name('api.campaigns.performance');
+
+    // Keywords Hub
+    Route::get('keywords/trending', [\App\Http\Controllers\KeywordController::class, 'trending'])->name('keywords.trending');
+    Route::get('keywords/research', [\App\Http\Controllers\KeywordController::class, 'research'])->name('keywords.research');
+
+    // Keyword Wallet API
+    Route::prefix('api/keywords/wallet')->name('api.keywords.wallet.')->group(function () {
+        Route::get('/', [\App\Http\Controllers\KeywordWalletController::class, 'index'])->name('index');
+        Route::post('/', [\App\Http\Controllers\KeywordWalletController::class, 'store'])->name('store');
+        Route::delete('/{savedKeyword}', [\App\Http\Controllers\KeywordWalletController::class, 'destroy'])->name('destroy');
+    });
+
+    // Trending Keywords for Campaigns
+    Route::prefix('api/trending-keywords')->name('api.trending-keywords.')->group(function () {
+        Route::get('/', [\App\Http\Controllers\CampaignKeywordController::class, 'index'])->name('index');
+        Route::get('/suggestions', [\App\Http\Controllers\CampaignKeywordController::class, 'suggestions'])->name('suggestions');
+        Route::post('/discover', [\App\Http\Controllers\CampaignKeywordController::class, 'discover'])->name('discover');
+        Route::post('/campaigns/{campaign}/attach', [\App\Http\Controllers\CampaignKeywordController::class, 'attachKeywords'])->name('attach');
+        Route::get('/campaigns/{campaign}/performance', [\App\Http\Controllers\CampaignKeywordController::class, 'performance'])->name('campaign-performance');
+    });
 });

@@ -11,10 +11,14 @@ class Organization extends Model
         'slug',
         'description',
         'settings',
+        'keyword_discovery_frequency',
+        'last_keyword_discovery_at',
     ];
 
     protected $casts = [
         'settings' => 'array',
+        'keyword_discovery_frequency' => 'integer',
+        'last_keyword_discovery_at' => 'datetime',
     ];
 
     /**
@@ -81,5 +85,29 @@ class Organization extends Model
         $userPivot = $this->users()->where('user_id', $user->id)->first();
         
         return $userPivot && in_array($userPivot->pivot->role, $roles);
+    }
+
+    /**
+     * Get the trend patterns for the organization.
+     */
+    public function trendPatterns()
+    {
+        return $this->hasMany(TrendPattern::class);
+    }
+
+    /**
+     * Get the niche intelligence for the organization.
+     */
+    public function nicheIntelligence()
+    {
+        return $this->hasOne(NicheIntelligence::class);
+    }
+
+    /**
+     * Get the control engine alerts for the organization.
+     */
+    public function controlEngineAlerts()
+    {
+        return $this->hasMany(ControlEngineAlert::class);
     }
 }
