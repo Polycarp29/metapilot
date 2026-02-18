@@ -10,9 +10,11 @@ class TrendsAnalysisService
 {
     protected int $cacheHours;
     protected int $rateLimit;
+    protected SerperService $serper;
 
-    public function __construct()
+    public function __construct(SerperService $serper)
     {
+        $this->serper = $serper;
         $this->cacheHours = config('services.google_trends.cache_duration', 24);
         $this->rateLimit = config('services.google_trends.rate_limit_per_hour', 100);
     }
@@ -220,7 +222,20 @@ class TrendsAnalysisService
         string $geo,
         string $timeframe
     ): ?array {
-        // Strategy 1: SerpAPI (Primary)
+        // Strategy 1: Serper API (Primary/Requested)
+        if (config('services.serper.api_key')) {
+            try {
+                $data = $this->fetchFromSerper($keyword, $geo, $timeframe);
+                if ($data) return $data;
+            } catch (\Exception $e) {
+                Log::warning("Serper Trends failed", [
+                    'keyword' => $keyword,
+                    'error' => $e->getMessage()
+                ]);
+            }
+        }
+
+        // Strategy 2: SerpAPI (Secondary)
         if (config('services.serpapi.api_key')) {
             try {
                 $data = $this->fetchFromSerpApi($keyword, $geo, $timeframe);
@@ -253,6 +268,36 @@ class TrendsAnalysisService
         }
 
         return null;
+    }
+
+    /**
+     * Fetch from Serper.dev Trends API.
+     */
+    protected function fetchFromSerper(string $keyword, string $geo, string $timeframe): ?array
+    {
+        $json = $this->serper->googleTrends($keyword, $geo, 'TIMESERIES', $timeframe);
+
+        if (!$json || !isset($json['interestOverTime']['timelineData'])) {
+            return null;
+        }
+
+        // Transform to standard format
+        $timeline = [];
+        foreach ($json['interestOverTime']['timelineData'] as $point) {
+            $timeline[] = [
+                'date' => $point['formattedTime'] ?? $point['time'],
+                'value' => $point['value'][0] ?? 0,
+            ];
+        }
+
+        // Fetch related queries separately
+        $relatedJson = $this->serper->googleTrends($keyword, $geo, 'RELATED_QUERIES', $timeframe);
+
+        return [
+            'interest_over_time' => $timeline,
+            'related_queries' => $relatedJson['relatedQueries']['top'] ?? [],
+            'rising_queries' => $relatedJson['relatedQueries']['rising'] ?? [],
+        ];
     }
 
     /**

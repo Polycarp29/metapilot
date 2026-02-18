@@ -61,7 +61,7 @@ return [
     ],
 
     'serper' => [
-        'api_key' => env('SERPER_API_KEY'),
+        'api_key' => env('SERPER_API'),
     ],
 
 ];

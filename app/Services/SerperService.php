@@ -8,7 +8,8 @@ use Illuminate\Support\Facades\Log;
 class SerperService
 {
     protected string $apiKey;
-    protected string $baseUrl = 'https://google.serper.dev/search';
+    protected string $searchUrl = 'https://google.serper.dev/search';
+    protected string $trendsUrl = 'https://google.serper.dev/trends';
 
     public function __construct()
     {
@@ -23,7 +24,32 @@ class SerperService
      * @param string $hl Language code (e.g., 'en')
      * @return array|null
      */
-    public function search(string $query, string $gl = 'us', string $hl = 'en'): ?array
+    public function search(string $query, string $gl = 'ke', string $hl = 'en'): ?array
+    {
+        return $this->makeRequest($this->searchUrl, [
+            'q' => $query,
+            'gl' => $gl,
+            'hl' => $hl,
+        ]);
+    }
+
+    /**
+     * Fetch Google Trends data using Serper.dev
+     */
+    public function googleTrends(string $query, string $gl = 'KE', string $type = 'TIMESERIES', string $date = 'today 12-m'): ?array
+    {
+        return $this->makeRequest($this->trendsUrl, [
+            'q' => $query,
+            'gl' => $gl,
+            'type' => $type,
+            'date' => $date,
+        ]);
+    }
+
+    /**
+     * Common request handler
+     */
+    protected function makeRequest(string $url, array $payload): ?array
     {
         if (empty($this->apiKey)) {
             Log::error('Serper API key is missing.');
@@ -34,11 +60,7 @@ class SerperService
             $response = Http::withHeaders([
                 'X-API-KEY' => $this->apiKey,
                 'Content-Type' => 'application/json',
-            ])->post($this->baseUrl, [
-                'q' => $query,
-                'gl' => $gl,
-                'hl' => $hl,
-            ]);
+            ])->post($url, $payload);
 
             if ($response->successful()) {
                 return $response->json();
@@ -47,13 +69,13 @@ class SerperService
             Log::error('Serper API request failed', [
                 'status' => $response->status(),
                 'body' => $response->body(),
-                'query' => $query
+                'payload' => $payload
             ]);
 
         } catch (\Exception $e) {
             Log::error('Serper API exception', [
                 'message' => $e->getMessage(),
-                'query' => $query
+                'payload' => $payload
             ]);
         }
 

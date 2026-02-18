@@ -18,11 +18,14 @@ class TrendingKeyword extends Model
         'recommendation_type',
         'trending_date',
         'used_in_campaign',
+        'intent',
+        'serp_data',
     ];
 
     protected $casts = [
         'growth_rate' => 'decimal:2',
         'related_queries' => 'array',
+        'serp_data' => 'array',
         'trending_date' => 'date',
         'used_in_campaign' => 'boolean',
     ];

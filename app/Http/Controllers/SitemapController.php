@@ -10,6 +10,7 @@ use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\File;
 
 use App\Services\SitemapService;
+use App\Jobs\CrawlSitemapJob;
 
 class SitemapController extends Controller
 {
@@ -299,5 +300,44 @@ class SitemapController extends Controller
         return response($xml)
             ->header('Content-Type', 'application/xml; charset=utf-8')
             ->header('Content-Disposition', 'attachment; filename="' . $sitemap->filename . '"');
+    }
+
+    public function crawl(Request $request, Sitemap $sitemap)
+    {
+        $validated = $request->validate([
+            'starting_url' => 'nullable|url',
+            'max_depth' => 'nullable|integer|min:1|max:10',
+            'render_js' => 'boolean'
+        ]);
+
+        CrawlSitemapJob::dispatch(
+            $sitemap, 
+            $validated['starting_url'] ?? null,
+            $validated
+        );
+
+        return back()->with('message', 'Crawl job dispatched! Results will appear soon.');
+    }
+
+    public function getTree(Sitemap $sitemap)
+    {
+        $links = $sitemap->links()->get();
+        
+        // Basic hierarchical builder based on path depth
+        $tree = [];
+        foreach ($links as $link) {
+            $path = parse_url($link->url, PHP_URL_PATH) ?: '/';
+            $tree[] = [
+                'id' => $link->id,
+                'url' => $link->url,
+                'path' => $path,
+                'title' => $link->title,
+                'status' => $link->status,
+                'level' => $link->structure_level,
+                'parent_url' => $link->parent_url
+            ];
+        }
+
+        return response()->json($tree);
     }
 }

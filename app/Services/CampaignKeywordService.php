@@ -5,19 +5,24 @@ namespace App\Services;
 use App\Models\TrendingKeyword;
 use App\Models\Organization;
 use App\Models\SeoCampaign;
+use App\Traits\KeywordIntelligence;
 use Illuminate\Support\Facades\Log;
 
 class CampaignKeywordService
 {
+    use KeywordIntelligence;
     protected NicheDetectionService $nicheDetection;
     protected TrendsAnalysisService $trendsAnalysis;
+    protected SerperService $serper;
 
     public function __construct(
         NicheDetectionService $nicheDetection,
-        TrendsAnalysisService $trendsAnalysis
+        TrendsAnalysisService $trendsAnalysis,
+        SerperService $serper
     ) {
         $this->nicheDetection = $nicheDetection;
         $this->trendsAnalysis = $trendsAnalysis;
+        $this->serper = $serper;
     }
 
     /**
@@ -60,11 +65,11 @@ class CampaignKeywordService
         $geoLocations = $this->nicheDetection->getTopGeoLocations($organization, 3);
         
         if (empty($geoLocations)) {
-            Log::info("No geo data available, using default fallback (US)", [
+            Log::info("No geo data available, using default fallback (KE)", [
                 'organization_id' => $organization->id
             ]);
             $geoLocations = [
-                ['country' => 'US', 'city' => null, 'users' => 0]
+                ['country' => 'KE', 'city' => null, 'users' => 0]
             ];
         }
 
@@ -89,6 +94,10 @@ class CampaignKeywordService
             );
 
             foreach ($trending as $trendData) {
+                // Enrich with Serper data (Hybrid)
+                $serpResults = $this->serper->search($trendData['keyword'], $countryCode);
+                $intent = $serpResults ? $this->detectIntentFromSerp($serpResults['organic'] ?? []) : null;
+
                 // Store each trending keyword
                 $keyword = TrendingKeyword::updateOrCreate(
                     [
@@ -104,10 +113,17 @@ class CampaignKeywordService
                         'related_queries' => $trendData['related_queries'] ?? null,
                         'recommendation_type' => $this->classifyRecommendation($trendData),
                         'trending_date' => now()->toDateString(),
+                        'intent' => $intent,
+                        'serp_data' => $serpResults,
                     ]
                 );
 
                 $discoveredKeywords[] = $keyword;
+
+                // Respect Serper rate limiting if doing bulk enrichment
+                if ($serpResults) {
+                    usleep(200000); // 0.2s delay
+                }
             }
         }
 

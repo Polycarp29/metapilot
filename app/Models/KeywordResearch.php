@@ -18,11 +18,14 @@ class KeywordResearch extends Model
         'niche',
         'intent',
         'results',
+        'growth_rate',
+        'current_interest',
         'last_searched_at',
     ];
 
     protected $casts = [
         'results' => 'array',
+        'growth_rate' => 'decimal:2',
         'last_searched_at' => 'datetime',
     ];
 

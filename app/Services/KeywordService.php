@@ -4,23 +4,28 @@ namespace App\Services;
 
 use App\Models\KeywordResearch;
 use App\Models\Organization;
+use App\Traits\KeywordIntelligence;
 use App\Services\SerperService;
 use Illuminate\Support\Facades\Log;
 
 class KeywordService
 {
-    protected SerperService $serper;
+    use KeywordIntelligence;
 
-    public function __construct(SerperService $serper)
+    protected SerperService $serper;
+    protected TrendsAnalysisService $trends;
+
+    public function __construct(SerperService $serper, TrendsAnalysisService $trends)
     {
         $this->serper = $serper;
+        $this->trends = $trends;
     }
 
     /**
      * Perform hybrid keyword research.
      * Checks cache first, then calls Serper API, classifies, and stores.
      */
-    public function research(Organization $organization, string $query, string $gl = 'us', string $hl = 'en'): array
+    public function research(Organization $organization, string $query, string $gl = 'ke', string $hl = 'en'): array
     {
         // 1. Check Cache (within last 7 days)
         $cached = KeywordResearch::where('organization_id', $organization->id)
@@ -36,6 +41,8 @@ class KeywordService
                 'results' => $cached->results,
                 'intent' => $cached->intent,
                 'niche' => $cached->niche,
+                'growth_rate' => $cached->growth_rate,
+                'current_interest' => $cached->current_interest,
                 'cached' => true,
                 'last_searched_at' => $cached->last_searched_at->diffForHumans(),
             ];
@@ -51,8 +58,13 @@ class KeywordService
             ];
         }
 
+        // 2.5 Hybrid: Fetch Trend Data
+        $trendMetrics = $this->trends->compareTrend($query);
+        $growthRate = $trendMetrics['change'] ?? 0;
+        $currentInterest = $trendMetrics['current'] ?? 0;
+
         // 3. Process & Classify
-        $intent = $this->detectIntent($results['organic'] ?? []);
+        $intent = $this->detectIntentFromSerp($results['organic'] ?? []);
         $niche = $this->determineNiche($organization, $query, $results['organic'] ?? []);
 
         // 4. Store Results
@@ -67,6 +79,8 @@ class KeywordService
                 'intent' => $intent,
                 'niche' => $niche,
                 'results' => $results,
+                'growth_rate' => $growthRate,
+                'current_interest' => $currentInterest,
                 'last_searched_at' => now(),
             ]
         );
@@ -75,30 +89,11 @@ class KeywordService
             'results' => $results,
             'intent' => $intent,
             'niche' => $niche,
+            'growth_rate' => $growthRate,
+            'current_interest' => $currentInterest,
             'cached' => false,
             'last_searched_at' => 'just now',
         ];
-    }
-
-    /**
-     * Detect intent based on search results.
-     */
-    protected function detectIntent(array $organicResults): string
-    {
-        if (empty($organicResults)) return 'Unknown';
-
-        $text = '';
-        foreach (array_slice($organicResults, 0, 5) as $result) {
-            $text .= ($result['title'] ?? '') . ' ' . ($result['snippet'] ?? '') . ' ';
-        }
-        $text = strtolower($text);
-
-        if (preg_match('/buy|price|shop|discount|coupon|shipping|store|cheap/', $text)) return 'Commercial';
-        if (preg_match('/how to|what is|guide|tutorial|steps|learn|meaning|why/', $text)) return 'Informational';
-        if (preg_match('/best|review|top|comparison|vs|rating/', $text)) return 'Transactional';
-        if (preg_match('/login|sign in|official|portal|dashboard/', $text)) return 'Navigational';
-
-        return 'Informational'; // Default fallback
     }
 
     /**
@@ -106,6 +101,7 @@ class KeywordService
      */
     protected function determineNiche(Organization $organization, string $query, array $organicResults): string
     {
+        // ... (rest of the file)
         // Primary: User organization's niche if already detected
         $nicheIntel = $organization->nicheIntelligence;
         if ($nicheIntel && $nicheIntel->detected_niche) {

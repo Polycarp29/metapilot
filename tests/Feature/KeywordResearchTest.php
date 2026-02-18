@@ -8,6 +8,7 @@ use Illuminate\Support\Facades\Http;
 use Tests\TestCase;
 use App\Models\User;
 use App\Models\Organization;
+use App\Models\KeywordResearch;
 
 class KeywordResearchTest extends TestCase
 {
@@ -62,25 +63,43 @@ class KeywordResearchTest extends TestCase
         Http::fake([
             'google.serper.dev/search' => Http::response([
                 'organic' => [['title' => 'Hybrid Result', 'link' => 'https://example.com', 'snippet' => 'Commercial snippet buy price']]
+            ], 200),
+            'google.serper.dev/trends' => Http::response([
+                'interestOverTime' => [
+                    'timelineData' => [
+                        ['time' => '1641000000', 'value' => [50]],
+                        ['time' => '1641086400', 'value' => [75]]
+                    ]
+                ],
+                'relatedQueries' => [
+                    'top' => ['related 1', 'related 2'],
+                    'rising' => []
+                ]
             ], 200)
         ]);
 
         config(['services.serper.api_key' => 'test-key']);
+        config(['services.serpapi.api_key' => 'test-serp-key']);
 
         $response = $this->get(route('keywords.research', ['q' => 'buy shoes']));
 
         $response->assertInertia(fn ($page) => $page
             ->component('Keywords/Research')
-            ->has('results.organic')
+            ->where('filters.gl', 'ke')
             ->where('results.organic.0.title', 'Hybrid Result')
             ->where('intent', 'Commercial')
+            ->where('growth_rate', 50) // (75-50)/50 * 100 = 50%
+            ->where('current_interest', 75)
             ->where('cached', false)
         );
 
         // Verify it's stored in DB
         $this->assertDatabaseHas('keyword_researches', [
             'query' => 'buy shoes',
-            'intent' => 'Commercial'
+            'gl' => 'ke',
+            'intent' => 'Commercial',
+            'growth_rate' => 50,
+            'current_interest' => 75
         ]);
     }
 
@@ -97,10 +116,10 @@ class KeywordResearchTest extends TestCase
         session(['current_organization_id' => $organization->id]);
 
         // Create a cached record
-        \App\Models\KeywordResearch::create([
+        KeywordResearch::create([
             'organization_id' => $organization->id,
             'query' => 'cached query',
-            'gl' => 'us',
+            'gl' => 'ke',
             'hl' => 'en',
             'intent' => 'Informational',
             'niche' => 'General',

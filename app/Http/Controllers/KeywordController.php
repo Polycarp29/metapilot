@@ -32,7 +32,7 @@ class KeywordController extends Controller
     public function research(Request $request)
     {
         $query = $request->input('q');
-        $gl = $request->input('gl', 'us');
+        $gl = $request->input('gl', 'ke');
         $hl = $request->input('hl', 'en');
 
         $data = null;
@@ -49,6 +49,8 @@ class KeywordController extends Controller
             'results' => $data['results'] ?? null,
             'intent' => $data['intent'] ?? null,
             'niche' => $data['niche'] ?? null,
+            'growth_rate' => $data['growth_rate'] ?? null,
+            'current_interest' => $data['current_interest'] ?? null,
             'cached' => $data['cached'] ?? false,
             'last_searched' => $data['last_searched_at'] ?? null,
             'filters' => [

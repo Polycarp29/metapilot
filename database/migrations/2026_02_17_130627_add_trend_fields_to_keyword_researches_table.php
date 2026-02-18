@@ -11,9 +11,9 @@ return new class extends Migration
      */
     public function up(): void
     {
-        Schema::table('trending_keywords', function (Blueprint $table) {
-            $table->string('intent')->nullable()->after('keyword');
-            $table->json('serp_data')->nullable()->after('related_queries');
+        Schema::table('keyword_researches', function (Blueprint $table) {
+            $table->decimal('growth_rate', 8, 2)->nullable()->after('hl');
+            $table->integer('current_interest')->nullable()->after('growth_rate');
         });
     }
 
@@ -22,8 +22,8 @@ return new class extends Migration
      */
     public function down(): void
     {
-        Schema::table('trending_keywords', function (Blueprint $table) {
-            $table->dropColumn(['intent', 'serp_data']);
+        Schema::table('keyword_researches', function (Blueprint $table) {
+            $table->dropColumn(['growth_rate', 'current_interest']);
         });
     }
 };

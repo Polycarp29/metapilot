@@ -19,6 +19,13 @@
                   <span v-if="intent" class="px-2 py-0.5 bg-purple-50 text-purple-600 text-[10px] font-bold rounded uppercase tracking-wider">
                      Global Intent: {{ intent }}
                   </span>
+                  <span v-if="growth_rate > 0" class="px-2 py-0.5 bg-emerald-50 text-emerald-600 text-[10px] font-bold rounded uppercase tracking-wider flex items-center gap-1">
+                    <svg class="w-2 h-2" fill="currentColor" viewBox="0 0 20 20"><path d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-8.707l-3-3a1 1 0 00-1.414 0l-3 3a1 1 0 001.414 1.414L9 9.414V13a1 1 0 102 0V9.414l1.293 1.293a1 1 0 001.414-1.414z"/></svg>
+                    +{{ growth_rate }}% Growth
+                  </span>
+                  <span v-if="current_interest > 50" class="px-2 py-0.5 bg-orange-50 text-orange-600 text-[10px] font-bold rounded uppercase tracking-wider">
+                     Rising Trend
+                  </span>
                 </div>
               </div>
             </div>
@@ -37,11 +44,11 @@
                     v-model="form.gl" 
                     class="bg-slate-50 border-none rounded-xl text-xs font-bold text-slate-600 focus:ring-0 cursor-pointer hover:bg-slate-100 transition-colors"
                   >
+                    <option value="ke">KE (Kenya)</option>
+                    <option value="ng">NG (Nigeria)</option>
+                    <option value="za">ZA (South Africa)</option>
                     <option value="us">US</option>
                     <option value="uk">UK</option>
-                    <option value="ca">CA</option>
-                    <option value="au">AU</option>
-                    <option value="de">DE</option>
                   </select>
                   <button
                     type="submit"
@@ -170,6 +177,8 @@ const props = defineProps({
   results: Object,
   intent: String,
   niche: String,
+  growth_rate: [String, Number],
+  current_interest: [String, Number],
   cached: Boolean,
   last_searched: String,
   filters: Object,
@@ -177,7 +186,7 @@ const props = defineProps({
 
 const form = useForm({
   q: props.filters?.q || '',
-  gl: props.filters?.gl || 'us',
+  gl: props.filters?.gl || 'ke',
   hl: props.filters?.hl || 'en',
 });
 

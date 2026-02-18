@@ -57,6 +57,8 @@ Route::middleware('auth')->group(function () {
     Route::delete('/sitemaps/{sitemap}', [SitemapController::class, 'destroy'])->name('sitemaps.destroy');
     Route::post('/sitemaps/{sitemap}/import', [SitemapController::class, 'import'])->name('sitemaps.import');
     Route::get('/sitemaps/{sitemap}/generate', [SitemapController::class, 'generate'])->name('sitemaps.generate');
+    Route::post('/sitemaps/{sitemap}/crawl', [SitemapController::class, 'crawl'])->name('sitemaps.crawl');
+    Route::get('/sitemaps/{sitemap}/tree', [SitemapController::class, 'getTree'])->name('sitemaps.tree');
     Route::post('/sitemaps/{sitemap}/links', [SitemapController::class, 'addLink'])->name('sitemaps.links.store');
     Route::put('/sitemaps/links/{link}', [SitemapController::class, 'updateLink'])->name('sitemaps.links.update');
     Route::delete('/sitemaps/links/{link}', [SitemapController::class, 'destroyLink'])->name('sitemaps.links.destroy');
