@@ -8,12 +8,12 @@
       </div>
 
       <!-- Tabs -->
-      <div class="flex space-x-1 bg-slate-100/50 p-1 rounded-xl w-fit">
+      <div class="flex flex-wrap gap-1 bg-slate-100/50 p-1.5 rounded-xl w-fit max-w-full">
         <button 
           v-for="tab in tabs" 
           :key="tab.id"
           @click="activeTab = tab.id"
-          class="px-5 py-2 rounded-lg text-sm font-bold transition-all"
+          class="px-5 py-2.5 rounded-lg text-sm font-bold transition-all whitespace-nowrap"
           :class="activeTab === tab.id 
             ? 'bg-white text-blue-600 shadow-sm' 
             : 'text-slate-500 hover:text-slate-700 hover:bg-white/50'"
@@ -288,11 +288,14 @@
           <div class="space-y-10">
             <!-- Property Connection Form -->
             <div class="p-8 bg-blue-50/30 rounded-[2rem] border border-blue-100/50">
-              <div class="flex items-center justify-between mb-6">
-                <h3 class="text-lg font-bold text-slate-900">Connect GA4 Property</h3>
+              <div class="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-8">
+                <div>
+                  <h3 class="text-lg font-bold text-slate-900">Connect GA4 Property</h3>
+                  <p class="text-sm text-slate-500 mt-1">Link your website's analytics data to track performance.</p>
+                </div>
                 <a 
-                  :href="route('auth.google.redirect')" 
-                  class="flex items-center gap-2 bg-white border border-slate-200 px-4 py-2 rounded-xl font-bold hover:shadow-md transition-all text-sm"
+                  :href="route('auth.google')" 
+                  class="flex items-center justify-center gap-2 bg-white border border-slate-200 px-5 py-3 rounded-xl font-bold hover:shadow-md hover:border-blue-200 transition-all text-sm shrink-0"
                 >
                   <img src="https://www.gstatic.com/images/branding/product/1x/gsa_512dp.png" class="w-5 h-5" alt="Google">
                   Connect Google Account
@@ -303,14 +306,16 @@
                 {{ $page.props.flash.message }}
               </div>
 
-              <form @submit.prevent="addProperty" class="grid grid-cols-1 md:grid-cols-3 gap-6">
-                <div class="space-y-2">
-                  <label class="text-sm font-bold text-slate-700">Display Name</label>
-                  <input v-model="propertyForm.name" type="text" placeholder="e.g. My Main Site" class="w-full px-4 py-3 rounded-xl border border-slate-200 focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10 bg-white">
-                </div>
-                <div class="space-y-2">
-                  <label class="text-sm font-bold text-slate-700">GA4 Property ID</label>
-                  <input v-model="propertyForm.property_id" type="text" placeholder="e.g. 123456789" class="w-full px-4 py-3 rounded-xl border border-slate-200 focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10 bg-white">
+              <form @submit.prevent="addProperty" class="flex flex-col gap-5">
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-5">
+                  <div class="space-y-2">
+                    <label class="text-sm font-bold text-slate-700">Display Name</label>
+                    <input v-model="propertyForm.name" type="text" placeholder="e.g. My Main Site" class="w-full px-4 py-3 rounded-xl border border-slate-200 focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10 bg-white">
+                  </div>
+                  <div class="space-y-2">
+                    <label class="text-sm font-bold text-slate-700">GA4 Property ID</label>
+                    <input v-model="propertyForm.property_id" type="text" placeholder="e.g. 123456789" class="w-full px-4 py-3 rounded-xl border border-slate-200 focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10 bg-white">
+                  </div>
                 </div>
                 <div class="space-y-2">
                   <label class="text-sm font-bold text-slate-700">Website URL</label>
@@ -320,8 +325,8 @@
                   <label class="text-sm font-bold text-slate-700">Search Console Site URL</label>
                   <input v-model="propertyForm.gsc_site_url" type="text" placeholder="sc-domain:example.com" class="w-full px-4 py-3 rounded-xl border border-slate-200 focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10 bg-white">
                 </div>
-                <div class="md:col-span-3 flex justify-end">
-                  <button type="submit" :disabled="propertyForm.processing" class="bg-blue-600 text-white px-8 py-3 rounded-2xl font-bold hover:bg-blue-700 transition-all shadow-lg shadow-blue-200">
+                <div class="flex justify-end pt-2">
+                  <button type="submit" :disabled="propertyForm.processing" class="bg-blue-600 text-white px-8 py-3.5 rounded-2xl font-bold hover:bg-blue-700 transition-all shadow-lg shadow-blue-200 active:scale-95 disabled:opacity-50">
                     {{ propertyForm.processing ? 'Connecting...' : 'Connect Property' }}
                   </button>
                 </div>
@@ -336,18 +341,18 @@
               </div>
               
               <div v-if="analyticsProperties.length" class="grid grid-cols-1 gap-4">
-                <div v-for="prop in analyticsProperties" :key="prop.id" class="p-6 bg-white rounded-3xl border border-slate-100 flex items-center justify-between group hover:border-blue-500/30 transition-all">
-                  <div class="flex items-center gap-5">
-                    <div class="w-12 h-12 bg-slate-50 rounded-2xl flex items-center justify-center text-slate-400">
+                <div v-for="prop in analyticsProperties" :key="prop.id" class="p-4 md:p-6 bg-white rounded-3xl border border-slate-100 flex flex-col md:flex-row md:items-center justify-between gap-4 group hover:border-blue-500/30 transition-all">
+                  <div class="flex items-start md:items-center gap-4 md:gap-5">
+                    <div class="w-12 h-12 bg-slate-50 rounded-2xl flex shrink-0 items-center justify-center text-slate-400">
                       <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" /></svg>
                     </div>
-                    <div>
-                      <p class="font-bold text-slate-900">{{ prop.name }}</p>
-                      <p class="text-sm text-slate-400 font-medium">GA4: {{ prop.property_id }} • GSC: {{ prop.gsc_site_url || 'Not set' }}</p>
-                      <p class="text-xs text-slate-400">{{ prop.website_url }}</p>
+                    <div class="min-w-0">
+                      <p class="font-bold text-slate-900 truncate">{{ prop.name }}</p>
+                      <p class="text-sm text-slate-400 font-medium truncate">GA4: {{ prop.property_id }} • GSC: {{ prop.gsc_site_url || 'Not set' }}</p>
+                      <p class="text-xs text-slate-400 break-all">{{ prop.website_url }}</p>
                     </div>
                   </div>
-                  <div class="flex items-center gap-4">
+                  <div class="flex items-center gap-4 md:gap-6 pt-3 md:pt-0 border-t md:border-0 border-slate-50 justify-end md:justify-start">
                     <button @click="editProperty(prop)" class="text-slate-400 hover:text-blue-600 font-bold text-sm transition-colors">Edit</button>
                     <button @click="disconnectProperty(prop.id)" class="text-slate-400 hover:text-red-600 font-bold text-sm transition-colors">Disconnect</button>
                   </div>
