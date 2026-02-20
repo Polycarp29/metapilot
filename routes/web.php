@@ -8,6 +8,11 @@ use App\Http\Controllers\SitemapController;
 use App\Http\Controllers\CrawlScheduleController;
 use Illuminate\Support\Facades\Route;
 
+// Public Legal Routes
+Route::get('privacy', [\App\Http\Controllers\LegalController::class, 'privacy'])->name('privacy');
+Route::get('terms', [\App\Http\Controllers\LegalController::class, 'terms'])->name('terms');
+Route::get('cookies', [\App\Http\Controllers\LegalController::class, 'cookies'])->name('cookies');
+
 // Guest routes (Login & Register)
 Route::middleware('guest')->group(function () {
     Route::get('login', [LoginController::class, 'create'])->name('login');

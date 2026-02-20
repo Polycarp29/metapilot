@@ -15,7 +15,7 @@
               </svg>
             </div>
             <Link href="/" class="text-xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-slate-900 to-slate-700 tracking-tight">
-              JSON-LD Manager
+              MetaPilot
             </Link>
           </div>
 
@@ -110,10 +110,11 @@
     <!-- Footer -->
     <footer class="mt-auto border-t border-slate-200/50 py-10 px-6">
       <div class="max-w-[1440px] mx-auto flex flex-col md:flex-row justify-between items-center gap-6">
-        <p class="text-slate-500 text-sm">© 2026 Admin Panel • JSON-LD Management System</p>
+        <p class="text-slate-500 text-sm">© 2026 MetaPilot • AI-Powered SEO Management</p>
         <div class="flex items-center space-x-6">
-          <a href="#" class="text-slate-400 hover:text-blue-600 text-xs font-medium transition-colors uppercase tracking-widest">Documentation</a>
-          <a href="#" class="text-slate-400 hover:text-blue-600 text-xs font-medium transition-colors uppercase tracking-widest">Support</a>
+          <Link :href="route('privacy')" class="text-slate-400 hover:text-blue-600 text-xs font-medium transition-colors uppercase tracking-widest">Privacy</Link>
+          <Link :href="route('terms')" class="text-slate-400 hover:text-blue-600 text-xs font-medium transition-colors uppercase tracking-widest">Terms</Link>
+          <Link :href="route('cookies')" class="text-slate-400 hover:text-blue-600 text-xs font-medium transition-colors uppercase tracking-widest">Cookies</Link>
         </div>
       </div>
     </footer>
