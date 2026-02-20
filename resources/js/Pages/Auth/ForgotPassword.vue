@@ -64,12 +64,24 @@
         </form>
       </div>
 
-      <!-- Footer -->
-      <p class="text-center text-sm font-medium text-slate-500">
+      <!-- Footer Links -->
+      <p class="text-center text-sm font-medium text-slate-500 mb-12">
         Remembered your password?
         <a :href="route('login')" class="text-primary hover:text-primary-hover font-bold underline-offset-4 hover:underline transition-all">Back to sign in</a>
       </p>
     </div>
+
+    <!-- Persistent Legal Footer -->
+    <footer class="relative z-10 py-8 border-t border-slate-200/50 mt-auto">
+      <div class="max-w-md mx-auto px-6 flex flex-col items-center gap-4">
+        <div class="flex items-center space-x-6 text-[10px] font-bold uppercase tracking-widest">
+          <a :href="route('privacy')" class="text-slate-400 hover:text-primary transition-colors">Privacy Policy</a>
+          <a :href="route('terms')" class="text-slate-400 hover:text-primary transition-colors">Terms of Service</a>
+          <a :href="route('cookies')" class="text-slate-400 hover:text-primary transition-colors">Cookie Policy</a>
+        </div>
+        <p class="text-slate-400 text-[10px] font-medium tracking-wider">© 2026 MetaPilot • AI-POWERED SEO</p>
+      </div>
+    </footer>
   </div>
 </template>
 
