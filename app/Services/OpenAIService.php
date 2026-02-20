@@ -331,4 +331,67 @@ class OpenAIService
             return null;
         }
     }
+    /**
+     * Extract rich, professional structured data from page content.
+     */
+    public function extractProfessionalSchemaData(string $url, string $content)
+    {
+        if (empty($this->apiKey) || !$this->hasModel()) {
+            return null;
+        }
+
+        try {
+            $response = Http::withToken($this->apiKey)
+                ->retry(3, 200)
+                ->timeout(60) // High quality extraction takes longer
+                ->post('https://api.openai.com/v1/chat/completions', [
+                'model' => $this->model,
+                'messages' => [
+                    [
+                        'role' => 'system',
+                        'content' => 'You are a Senior Technical SEO & Schema.org Specialist. Your goal is to analyze the provided page content and synthesize a professional, highly-detailed JSON-LD representation.
+                        
+                        Instructions:
+                        1. Identify the primary type (Article, Product, FAQPage, HowTo, LocalBusiness, Service, or Event).
+                        2. Extract deep fields:
+                           - For FAQ: All Q/A pairs.
+                           - For Product: Name, description, image URL (if seen), price, currency, brand, SKU.
+                           - For HowTo: All steps (name, text, url).
+                           - For Article: Headline, description, author, datePublished.
+                        3. Ensure the JSON follows Schema.org standards exactly.
+                        4. DO NOT include the @context or @id here; return only the internal fields.
+                        
+                        Return a JSON object with this structure:
+                        {
+                            "type": "Article",
+                            "data": {
+                                "headline": "...",
+                                "description": "...",
+                                ... other fields ...
+                            }
+                        }
+                        
+                        Strictly return JSON only.'
+                    ],
+                    [
+                        'role' => 'user',
+                        'content' => "Synthesize professional schema data for this page ({$url}):\n\n" . mb_substr($content, 0, 15000)
+                    ]
+                ],
+                'temperature' => 0.2,
+                'response_format' => ['type' => 'json_object']
+            ]);
+
+            if ($response->successful()) {
+                Log::info("OpenAI Professional Synthesis successful for URL: {$url}");
+                return json_decode($response->json()['choices'][0]['message']['content'], true);
+            }
+
+            Log::error("OpenAI Professional Synthesis API Error [URL: {$url}]: " . $response->body());
+            return null;
+        } catch (\Exception $e) {
+            Log::error("OpenAI Professional Synthesis Exception [URL: {$url}]: " . $e->getMessage());
+            return null;
+        }
+    }
 }

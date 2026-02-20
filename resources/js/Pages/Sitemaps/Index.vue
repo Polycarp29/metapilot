@@ -16,6 +16,13 @@
           </svg>
           New Sitemap
         </button>
+        <Link 
+          href="/crawl-schedules"
+          class="flex items-center gap-2 bg-white border border-slate-200 text-slate-700 px-6 py-4 rounded-2xl font-bold text-sm hover:bg-slate-50 transition-standard active:scale-95"
+        >
+          <svg class="w-4 h-4 text-emerald-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+          Schedules
+        </Link>
       </div>
 
       <!-- Sitemap Grid -->
@@ -61,10 +68,15 @@
                   </svg>
                 </button>
                 <span v-if="sitemap.is_index" class="bg-indigo-50 text-indigo-600 px-4 py-1.5 rounded-full text-[10px] font-black uppercase tracking-widest">Master Index</span>
+                <span v-if="sitemap.schedule" class="bg-emerald-50 text-emerald-600 px-3 py-1 rounded-full text-[9px] font-black uppercase tracking-wider flex items-center gap-1">
+                  <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                  {{ sitemap.schedule.frequency }}
+                </span>
               </div>
             </div>
 
             <h3 class="text-2xl font-black text-slate-900 group-hover:text-blue-600 transition-colors mb-2">{{ sitemap.name }}</h3>
+            <p v-if="sitemap.site_url" class="text-xs font-bold text-blue-500 mb-1 truncate">{{ sitemap.site_url }}</p>
             <code class="text-xs font-mono text-slate-400 mb-6 block">/{{ sitemap.filename }}</code>
 
             <div class="grid grid-cols-2 gap-4 mt-auto border-t border-slate-50 pt-6">
@@ -120,6 +132,12 @@
             <div class="space-y-3">
               <label class="block text-[10px] font-black text-slate-400 uppercase tracking-widest ml-4">Internal Label</label>
               <input v-model="form.name" type="text" placeholder="e.g., SEO Game Pages" class="w-full px-8 py-4 rounded-2xl bg-slate-50 border-transparent focus:bg-white focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 transition-standard font-bold" required />
+            </div>
+
+            <div class="space-y-3">
+              <label class="block text-[10px] font-black text-slate-400 uppercase tracking-widest ml-4">Site Link / Domain</label>
+              <input v-model="form.site_url" type="url" placeholder="https://example.com" class="w-full px-8 py-4 rounded-2xl bg-slate-50 border-transparent focus:bg-white focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 transition-standard font-bold" />
+              <p v-if="form.errors.site_url" class="text-red-500 text-[10px] font-bold ml-4">{{ form.errors.site_url }}</p>
             </div>
 
             <div class="space-y-3">
@@ -207,6 +225,7 @@ const sitemapToDelete = ref(null)
 
 const form = useForm({
   name: '',
+  site_url: '',
   filename: '',
   is_index: false
 })
@@ -215,6 +234,7 @@ const editSitemap = (sitemap) => {
   isEditing.value = true
   editingId.value = sitemap.id
   form.name = sitemap.name
+  form.site_url = sitemap.site_url
   form.filename = sitemap.filename
   form.is_index = !!sitemap.is_index
   showCreateModal.value = true

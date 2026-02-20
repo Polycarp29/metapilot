@@ -46,4 +46,42 @@ class SitemapLogicTest extends TestCase
         
         $this->assertEquals('https://example.com/double/slash', $sanitized);
     }
+
+    public function test_url_structure_analysis_detects_deep_nesting(): void
+    {
+        $url = 'https://example.com/a/b/c/d/e/deep-page';
+        $bottlenecks = $this->service->analyzeUrlStructure($url);
+        
+        $this->assertContains('deep_nesting', array_column($bottlenecks, 'type'));
+    }
+
+    public function test_url_structure_analysis_detects_long_slug(): void
+    {
+        $longSlug = str_repeat('a', 80);
+        $url = "https://example.com/blog/{$longSlug}";
+        $bottlenecks = $this->service->analyzeUrlStructure($url);
+        
+        $this->assertContains('long_slug', array_column($bottlenecks, 'type'));
+    }
+
+    public function test_url_structure_analysis_detects_underscores(): void
+    {
+        $url = 'https://example.com/page_with_underscores';
+        $bottlenecks = $this->service->analyzeUrlStructure($url);
+        
+        $this->assertContains('underscores', array_column($bottlenecks, 'type'));
+    }
+
+    public function test_slug_quality_assessment(): void
+    {
+        $goodUrl = 'https://example.com/good-slug';
+        $this->assertEquals('good', $this->service->assessSlugQuality($goodUrl));
+
+        $warningUrl = 'https://example.com/a/b/c/d/e/warning-slug'; // Deep nesting
+        $this->assertEquals('warning', $this->service->assessSlugQuality($warningUrl));
+
+        $longSlug = str_repeat('a', 80);
+        $poorUrl = "https://example.com/a/b/c/d/e/f/{$longSlug}"; // Deep + Long slug
+        $this->assertEquals('poor', $this->service->assessSlugQuality($poorUrl));
+    }
 }

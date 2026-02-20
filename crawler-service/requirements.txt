@@ -1,8 +1,0 @@
-scrapy
-scrapy-playwright
-redis
-beautifulsoup4
-rake-nltk
-spacy
-pydantic
-python-dotenv

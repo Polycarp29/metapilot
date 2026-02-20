@@ -34,18 +34,21 @@ class CrawlSitemapJob implements ShouldQueue
     /**
      * Execute the job.
      */
-    public function handle(): void
+    public function handle(\App\Services\Crawler\CrawlerManager $crawlerManager): void
     {
-        $jobId = (string) Str::uuid();
+        $jobId = $this->options['job_id'] ?? (string) \Illuminate\Support\Str::uuid();
 
-        $payload = [
-            'id' => $jobId,
-            'sitemap_id' => $this->sitemap->id,
-            'starting_url' => $this->startingUrl,
-            'max_depth' => $this->options['max_depth'],
-            'options' => $this->options
-        ];
-
-        Redis::rpush('crawler:jobs', json_encode($payload));
+        $crawlerManager->dispatch(
+            $this->sitemap->id,
+            $this->startingUrl,
+            $this->options['max_depth'] ?? 3,
+            $this->options
+        );
+        
+        $this->sitemap->update([
+            'last_crawl_status' => 'dispatched',
+            'last_crawl_job_id' => $jobId
+        ]);
     }
+
 }

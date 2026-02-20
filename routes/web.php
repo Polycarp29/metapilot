@@ -5,6 +5,7 @@ use App\Http\Controllers\Auth\RegisterController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\SchemaController;
 use App\Http\Controllers\SitemapController;
+use App\Http\Controllers\CrawlScheduleController;
 use Illuminate\Support\Facades\Route;
 
 // Guest routes (Login & Register)
@@ -56,12 +57,26 @@ Route::middleware('auth')->group(function () {
     Route::put('/sitemaps/{sitemap}', [SitemapController::class, 'update'])->name('sitemaps.update');
     Route::delete('/sitemaps/{sitemap}', [SitemapController::class, 'destroy'])->name('sitemaps.destroy');
     Route::post('/sitemaps/{sitemap}/import', [SitemapController::class, 'import'])->name('sitemaps.import');
-    Route::get('/sitemaps/{sitemap}/generate', [SitemapController::class, 'generate'])->name('sitemaps.generate');
+    Route::post('/sitemaps/{sitemap}/generate', [SitemapController::class, 'generate'])->name('sitemaps.generate');
+    Route::get('/sitemaps/{sitemap}/export', [SitemapController::class, 'exportReport'])->name('sitemaps.export');
+    Route::get('/sitemaps/{sitemap}/export-pdf', [SitemapController::class, 'exportPdf'])->name('sitemaps.export-pdf');
     Route::post('/sitemaps/{sitemap}/crawl', [SitemapController::class, 'crawl'])->name('sitemaps.crawl');
+    Route::post('/sitemaps/{sitemap}/recrawl-all', [SitemapController::class, 'recrawlAll'])->name('sitemaps.recrawl-all');
+    Route::post('/sitemaps/{sitemap}/cancel-crawl', [SitemapController::class, 'cancelCrawl'])->name('sitemaps.cancel-crawl');
+    Route::get('/sitemaps/jobs/{jobId}/progress', [SitemapController::class, 'getJobProgress'])->name('sitemaps.jobs.progress');
     Route::get('/sitemaps/{sitemap}/tree', [SitemapController::class, 'getTree'])->name('sitemaps.tree');
+    Route::post('/sitemaps/links/{link}/ai-analyze', [SitemapController::class, 'aiAnalyze'])->name('sitemaps.links.ai-analyze');
+    Route::post('/sitemaps/links/{link}/generate-json-ld', [SitemapController::class, 'generateJsonLd'])->name('sitemaps.links.generate-json-ld');
+    Route::post('/sitemaps/links/{link}/recrawl', [SitemapController::class, 'recrawlLink'])->name('sitemaps.links.recrawl');
     Route::post('/sitemaps/{sitemap}/links', [SitemapController::class, 'addLink'])->name('sitemaps.links.store');
     Route::put('/sitemaps/links/{link}', [SitemapController::class, 'updateLink'])->name('sitemaps.links.update');
     Route::delete('/sitemaps/links/{link}', [SitemapController::class, 'destroyLink'])->name('sitemaps.links.destroy');
+
+    // Crawl Schedules
+    Route::get('/crawl-schedules', [CrawlScheduleController::class, 'index'])->name('crawl-schedules.index');
+    Route::post('/crawl-schedules', [CrawlScheduleController::class, 'store'])->name('crawl-schedules.store');
+    Route::put('/crawl-schedules/{schedule}', [CrawlScheduleController::class, 'update'])->name('crawl-schedules.update');
+    Route::delete('/crawl-schedules/{schedule}', [CrawlScheduleController::class, 'destroy'])->name('crawl-schedules.destroy');
 
     // Schema Type Actions
     Route::get('schema-types/{schemaType}/required-fields', [SchemaController::class, 'getRequiredFields'])->name('schema-types.required-fields');

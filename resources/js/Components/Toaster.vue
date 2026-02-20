@@ -77,20 +77,37 @@ import { useToastStore } from '../stores/useToastStore'
 const toastStore = useToastStore()
 const page = usePage()
 
+// Track last handled flash message to prevent loops during router reloads
+let lastFlashMessage = null
+let lastFlashError = null
+
 // Watch Inertia flash messages
 watch(() => page.props.flash, (flash) => {
-  if (flash.message) {
+  if (flash.message && flash.message !== lastFlashMessage) {
     toastStore.success(flash.message)
+    lastFlashMessage = flash.message
+  } else if (!flash.message) {
+    lastFlashMessage = null
   }
-  if (flash.error) {
+
+  if (flash.error && flash.error !== lastFlashError) {
     toastStore.error(flash.error)
+    lastFlashError = flash.error
+  } else if (!flash.error) {
+    lastFlashError = null
   }
 }, { deep: true })
 
 onMounted(() => {
   // Check if there's an initial flash
-  if (page.props.flash.message) toastStore.success(page.props.flash.message)
-  if (page.props.flash.error) toastStore.error(page.props.flash.error)
+  if (page.props.flash.message) {
+    toastStore.success(page.props.flash.message)
+    lastFlashMessage = page.props.flash.message
+  }
+  if (page.props.flash.error) {
+    toastStore.error(page.props.flash.error)
+    lastFlashError = page.props.flash.error
+  }
 })
 </script>
 

@@ -64,4 +64,10 @@ return [
         'api_key' => env('SERPER_API'),
     ],
 
+    'crawler' => [
+        'url' => env('CRAWLER_SERVICE_URL', 'http://localhost:5000'),
+        'webhook_secret' => env('CRAWLER_WEBHOOK_SECRET'),
+    ],
+
 ];
+
