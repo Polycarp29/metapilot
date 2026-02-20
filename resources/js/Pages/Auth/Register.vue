@@ -144,10 +144,17 @@
       </div>
 
       <!-- Footer -->
-      <p class="text-center text-sm font-medium text-slate-500">
+      <p class="text-center text-sm font-medium text-slate-500 mb-6">
         Already have an account?
         <a :href="route('login')" class="text-primary hover:text-primary-hover font-bold underline-offset-4 hover:underline transition-all">Sign in here</a>
       </p>
+
+      <!-- Legal Links -->
+      <div class="flex flex-wrap justify-center gap-x-6 gap-y-2 text-[10px] font-bold uppercase tracking-widest text-slate-400">
+        <a :href="route('privacy')" class="hover:text-primary transition-colors">Privacy Policy</a>
+        <a :href="route('terms')" class="hover:text-primary transition-colors">Terms of Service</a>
+        <a :href="route('cookies')" class="hover:text-primary transition-colors">Cookie Policy</a>
+      </div>
     </div>
   </div>
 </template>
