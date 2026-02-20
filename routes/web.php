@@ -6,12 +6,16 @@ use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\SchemaController;
 use App\Http\Controllers\SitemapController;
 use App\Http\Controllers\CrawlScheduleController;
+use App\Http\Controllers\WelcomeController;
 use Illuminate\Support\Facades\Route;
 
 // Public Legal Routes
 Route::get('privacy', [\App\Http\Controllers\LegalController::class, 'privacy'])->name('privacy');
 Route::get('terms', [\App\Http\Controllers\LegalController::class, 'terms'])->name('terms');
 Route::get('cookies', [\App\Http\Controllers\LegalController::class, 'cookies'])->name('cookies');
+
+// Landing Page
+Route::get('/', [WelcomeController::class, 'index'])->name('welcome');
 
 // Guest routes (Login & Register)
 Route::middleware('guest')->group(function () {
@@ -37,7 +41,7 @@ Route::middleware('auth')->group(function () {
     Route::post('logout', [LoginController::class, 'destroy'])->name('logout');
 
     // Dashboard
-    Route::get('/', [DashboardController::class, 'index'])->name('dashboard');
+    Route::get('/dashboard', [DashboardController::class, 'index'])->name('dashboard');
 
     // Schema Management
     Route::get('schemas/automated/create', [SchemaController::class, 'automatedCreate'])->name('schemas.automated.create');
