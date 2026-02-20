@@ -11,7 +11,11 @@
           </div>
           MetaPilot
         </Link>
-        <Link href="/login" class="text-sm font-bold text-blue-600 hover:text-blue-700 transition-colors">Sign In</Link>
+        <div v-if="$page.props.auth.user" class="flex items-center gap-4">
+          <span class="text-sm font-medium text-slate-500">Hi, {{ $page.props.auth.user.name }}</span>
+          <Link href="/dashboard" class="text-sm font-bold text-blue-600 hover:text-blue-700 transition-colors">Go to Dashboard</Link>
+        </div>
+        <Link v-else href="/login" class="text-sm font-bold text-blue-600 hover:text-blue-700 transition-colors">Sign In</Link>
       </div>
     </nav>
 
