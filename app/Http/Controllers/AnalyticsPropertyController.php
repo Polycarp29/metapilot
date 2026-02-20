@@ -36,10 +36,13 @@ class AnalyticsPropertyController extends Controller
             ]
         );
 
+        // Dispatch background sync immediately
+        \App\Jobs\SyncPropertyDataJob::dispatch($property);
+
         // Clear session after use
         session()->forget(['google_access_token', 'google_refresh_token', 'google_token_expires_at']);
 
-        return back()->with('message', 'Analytics property connected successfully.');
+        return back()->with('message', 'Analytics property connected successfully. Syncing data in background...');
     }
 
     /**
@@ -58,7 +61,19 @@ class AnalyticsPropertyController extends Controller
             'is_active' => 'boolean',
         ]);
 
-        $property->update($validated);
+        $updateData = $validated;
+        
+        // If user just connected Google account, attach tokens
+        if (session()->has('google_access_token')) {
+            $updateData['access_token'] = session('google_access_token');
+            $updateData['refresh_token'] = session('google_refresh_token');
+            $updateData['token_expires_at'] = session('google_token_expires_at');
+            
+            // Clear session after use
+            session()->forget(['google_access_token', 'google_refresh_token', 'google_token_expires_at']);
+        }
+
+        $property->update($updateData);
 
         // Dispatch background sync
         \App\Jobs\SyncPropertyDataJob::dispatch($property);
