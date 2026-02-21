@@ -46,6 +46,8 @@ const fetchingInsights = ref(false)
 const insightError = ref(false)
 const overview = ref(null)
 const trendData = ref(null)
+const forecastData = ref(null)
+const seoIntelligence = ref(null)
 const geoTab = ref('country')
 const geoSearch = ref('')
 const chartMetric = ref('users')
@@ -226,15 +228,19 @@ const fetchData = async (forceRefresh = false) => {
       params.refresh = 1
     }
 
-    const [overviewRes, trendsRes, acquisitionRes] = await Promise.all([
+    const [overviewRes, trendsRes, acquisitionRes, forecastRes, intelligenceRes] = await Promise.all([
       axios.get(route('api.analytics.overview', { property: selectedPropertyId.value }), { params }),
       axios.get(route('api.analytics.trends', { property: selectedPropertyId.value }), { params }),
-      axios.get(route('api.analytics.acquisition', { property: selectedPropertyId.value }), { params })
+      axios.get(route('api.analytics.acquisition', { property: selectedPropertyId.value }), { params }),
+      axios.get(route('api.analytics.forecast', { property: selectedPropertyId.value }), { params }),
+      axios.get(route('api.analytics.seo-intelligence', { property: selectedPropertyId.value }))
     ])
     
     overview.value = overviewRes.data
     trendData.value = trendsRes.data
     campaigns.value = acquisitionRes.data
+    forecastData.value = forecastRes.data
+    seoIntelligence.value = intelligenceRes.data
     lastRefetchTime.value = new Date()
     updateChart()
 
@@ -537,19 +543,35 @@ onUnmounted(() => {
         </div>
       </div>
 
-      <!-- Permission Warning -->
-      <div v-if="overview?.gsc_permission_error" class="bg-amber-50 border border-amber-200 rounded-3xl p-6 flex flex-col md:flex-row items-center justify-between gap-4 animate-in fade-in slide-in-from-top-4 duration-500">
+      <!-- Google Connection Error Warning -->
+      <div v-if="overview?.google_token_invalid" class="mb-10 bg-rose-50 border border-rose-200 rounded-3xl p-6 flex flex-col md:flex-row items-center justify-between gap-4 animate-in fade-in slide-in-from-top-4 duration-500">
+        <div class="flex items-center gap-4">
+          <div class="w-12 h-12 rounded-2xl bg-rose-100 text-rose-600 flex items-center justify-center shrink-0">
+            <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path></svg>
+          </div>
+          <div>
+            <h3 class="text-lg font-bold text-rose-800">Google Connection Expired</h3>
+            <p class="text-rose-700 font-medium">Your Google access token has expired or was revoked. Please reconnect to restore analytics.</p>
+          </div>
+        </div>
+        <Link :href="route('auth.google', { intent: 'connect' })" class="whitespace-nowrap px-6 py-3 bg-rose-600 hover:bg-rose-700 text-white rounded-xl font-bold transition-all shadow-lg shadow-rose-600/20">
+          Reconnect Google
+        </Link>
+      </div>
+
+      <!-- Search Console Permission Warning (Only if confirmed 403) -->
+      <div v-if="overview?.gsc_permission_error" class="mb-10 bg-amber-50 border border-amber-200 rounded-3xl p-6 flex flex-col md:flex-row items-center justify-between gap-4 animate-in fade-in slide-in-from-top-4 duration-500">
         <div class="flex items-center gap-4">
           <div class="w-12 h-12 rounded-2xl bg-amber-100 text-amber-600 flex items-center justify-center shrink-0">
             <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path></svg>
           </div>
           <div>
-            <h3 class="text-lg font-bold text-amber-800">Search Console Permissions Missing</h3>
-            <p class="text-amber-700 font-medium">We can't access your Search Console data. Please reconnect your account with the required permissions.</p>
+            <h3 class="text-lg font-bold text-amber-800">Search Console Permission Denied</h3>
+            <p class="text-amber-700 font-medium">Google returned a permission error for this site. Click below to re-authorize with full Search Console access.</p>
           </div>
         </div>
-        <Link :href="route('organization.settings', { tab: 'analytics' })" class="whitespace-nowrap px-6 py-3 bg-amber-600 hover:bg-amber-700 text-white rounded-xl font-bold transition-all shadow-lg shadow-amber-600/20">
-          Reconnect Account
+        <Link :href="route('auth.google', { intent: 'connect' })" class="whitespace-nowrap px-6 py-3 bg-amber-600 hover:bg-amber-700 text-white rounded-xl font-bold transition-all shadow-lg shadow-amber-600/20">
+          Re-authorize GSC
         </Link>
       </div>
 
@@ -578,7 +600,12 @@ onUnmounted(() => {
         <!-- GSC: Impressions -->
         <div class="bg-white p-7 rounded-[2.5rem] border border-slate-100 shadow-premium hover:border-emerald-500/30 transition-all relative overflow-hidden group">
           <div v-if="overview.gsc_permission_error" class="absolute inset-0 bg-white/80 backdrop-blur-[2px] z-10 flex items-center justify-center text-center p-4">
-            <span class="text-xs font-bold text-amber-600 bg-amber-50 px-3 py-1.5 rounded-lg border border-amber-100">Permission Required</span>
+            <span class="text-xs font-bold text-amber-600 bg-amber-50 px-3 py-1.5 rounded-lg border border-amber-100">Permission Denied</span>
+          </div>
+          <div v-else-if="overview.total_impressions === 0" class="absolute inset-0 bg-white/80 backdrop-blur-[2px] z-10 flex items-center justify-center text-center p-4">
+            <div class="flex flex-col items-center">
+              <span class="text-[10px] font-bold text-blue-600 bg-blue-50 px-3 py-1.5 rounded-lg border border-blue-100 animate-pulse">Syncing data...</span>
+            </div>
           </div>
           <div class="flex flex-col">
             <p class="text-emerald-700 font-bold text-xs uppercase tracking-wider">Impressions</p>
@@ -1141,6 +1168,8 @@ onUnmounted(() => {
               <tr class="border-b border-slate-50">
                 <th class="pb-6 text-[11px] font-black text-slate-400 uppercase tracking-widest px-4">Page Path</th>
                 <th class="pb-6 text-[11px] font-black text-slate-400 uppercase tracking-widest text-center">Users</th>
+                <th class="pb-6 text-[11px] font-black text-slate-400 uppercase tracking-widest text-center">Engaged</th>
+                <th class="pb-6 text-[11px] font-black text-slate-400 uppercase tracking-widest text-center">Avg. Time</th>
                 <th class="pb-6 text-[11px] font-black text-slate-400 uppercase tracking-widest text-center">Bounce Rate</th>
                 <th class="pb-6 text-[11px] font-black text-slate-400 uppercase tracking-widest text-right pr-4">SEO Status</th>
               </tr>
@@ -1152,6 +1181,12 @@ onUnmounted(() => {
                 </td>
                 <td class="py-5 text-center">
                   <span class="text-sm font-black text-slate-900">{{ (page.activeUsers || 0).toLocaleString() }}</span>
+                </td>
+                <td class="py-5 text-center">
+                  <span class="text-sm font-bold text-slate-600">{{ (page.engagedSessions || 0).toLocaleString() }}</span>
+                </td>
+                <td class="py-5 text-center">
+                  <span class="text-xs font-black text-slate-500">{{ formatDuration(page.averageSessionDuration) }}</span>
                 </td>
                 <td class="py-5 text-center">
                   <div class="flex flex-col items-center gap-1">

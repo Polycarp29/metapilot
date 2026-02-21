@@ -238,7 +238,7 @@ class Ga4Service
     public function fetchBreakdowns(\App\Models\AnalyticsProperty $property, string $startDate, string $endDate)
     {
         $dimensions = [
-            'by_page' => ['dim' => 'pagePath', 'metrics' => ['activeUsers', 'bounceRate']],
+            'by_page' => ['dim' => 'pagePath', 'metrics' => ['activeUsers', 'bounceRate', 'averageSessionDuration', 'engagedSessions']],
             'by_page_title' => ['dim' => 'pageTitle', 'metrics' => ['activeUsers', 'screenPageViews']],
             'by_source' => ['dim' => 'sessionSourceMedium', 'metrics' => ['activeUsers']],
             'by_first_source' => ['dim' => 'firstUserSource', 'metrics' => ['activeUsers']],

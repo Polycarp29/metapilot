@@ -97,7 +97,9 @@ class AnalyticsAggregatorService
                 'top_queries' => [],
                 'top_pages_gsc' => [],
                 'sitemaps' => [],
-                'gsc_permission_error' => \App\Models\AnalyticsProperty::where('id', $propertyId)->value('gsc_site_url') && !(\App\Models\SearchConsoleMetric::where('analytics_property_id', $propertyId)->whereBetween('snapshot_date', [$startDate, $endDate])->exists()),
+                'gsc_permission_error' => (bool) ($property?->gsc_permission_error ?? false),
+                'google_token_invalid' => (bool) ($property?->google_token_invalid ?? false),
+                'gsc_permission_error_info' => $property?->gsc_permission_error,
                 'last_updated' => null,
             ];
         }
@@ -120,8 +122,8 @@ class AnalyticsAggregatorService
             ->first();
 
         // Check if there's a permission issue (has GSC URL but no data) - Trigger even if core GA4 traffic is 0
-        $hasGscUrl = \App\Models\AnalyticsProperty::where('id', $propertyId)->value('gsc_site_url');
-        $hasGscPermissionError = $hasGscUrl && !$latestGscRecord;
+        $hasGscPermissionError = (bool) ($property?->gsc_permission_error ?? false);
+        $hasGoogleTokenInvalid = (bool) ($property?->google_token_invalid ?? false);
 
         // 4. Final aggregation of breakdown data (fetch live if DB is empty)
         $breakdowns = [];
@@ -168,6 +170,7 @@ class AnalyticsAggregatorService
             'top_pages_gsc' => $latestGscRecord?->top_pages ?? [],
             'sitemaps' => $latestGscRecord?->sitemaps ?? [],
             'gsc_permission_error' => $hasGscPermissionError,
+            'google_token_invalid' => $hasGoogleTokenInvalid,
             'last_updated' => collect([
                 $latestRecord?->updated_at?->toIso8601String(),
                 $latestGscRecord?->updated_at?->toIso8601String()

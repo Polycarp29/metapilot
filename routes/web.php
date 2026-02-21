@@ -112,6 +112,8 @@ Route::middleware('auth')->group(function () {
     Route::get('/analytics/trends/{property}', [\App\Http\Controllers\AnalyticsDashboardController::class, 'getTrends'])->name('api.analytics.trends');
     Route::get('/analytics/insights/{property}', [\App\Http\Controllers\AnalyticsDashboardController::class, 'getInsights'])->name('api.analytics.insights');
     Route::get('/analytics/acquisition/{property}', [\App\Http\Controllers\AnalyticsDashboardController::class, 'getAcquisition'])->name('api.analytics.acquisition');
+    Route::get('/analytics/forecast/{property}', [\App\Http\Controllers\AnalyticsDashboardController::class, 'getForecast'])->name('api.analytics.forecast');
+    Route::get('/analytics/seo-intelligence/{property}', [\App\Http\Controllers\AnalyticsDashboardController::class, 'getSEOIntelligence'])->name('api.analytics.seo-intelligence');
     Route::post('/analytics/ad-insights/{property}', [\App\Http\Controllers\AnalyticsDashboardController::class, 'getAdInsights'])->name('api.analytics.ad-insights');
     Route::post('api/analytics/properties', [\App\Http\Controllers\AnalyticsPropertyController::class, 'store'])->name('analytics.properties.store');
     Route::delete('api/analytics/properties/{property}', [\App\Http\Controllers\AnalyticsPropertyController::class, 'destroy'])->name('analytics.properties.destroy');

@@ -19,6 +19,7 @@ class AnalyticsProperty extends Model
         'refresh_token',
         'token_expires_at',
         'google_token_invalid',
+        'gsc_permission_error',
     ];
 
     protected $casts = [
@@ -26,6 +27,7 @@ class AnalyticsProperty extends Model
         'is_active' => 'boolean',
         'token_expires_at' => 'datetime',
         'google_token_invalid' => 'boolean',
+        'gsc_permission_error' => 'boolean',
     ];
 
     /**

@@ -11,21 +11,25 @@ use Inertia\Inertia;
 
 class AnalyticsDashboardController extends Controller
 {
-    protected $aggregator;
-    protected $insightService;
     protected $ga4Service;
     protected $gscService;
+    protected $forecastService;
+    protected $controlEngine;
 
     public function __construct(
         AnalyticsAggregatorService $aggregator, 
         InsightService $insightService,
         \App\Services\Ga4Service $ga4Service,
-        \App\Services\GscService $gscService
+        \App\Services\GscService $gscService,
+        \App\Services\ForecastService $forecastService,
+        \App\Services\ControlEngineService $controlEngine
     ) {
         $this->aggregator = $aggregator;
         $this->insightService = $insightService;
         $this->ga4Service = $ga4Service;
         $this->gscService = $gscService;
+        $this->forecastService = $forecastService;
+        $this->controlEngine = $controlEngine;
     }
 
     public function index(Request $request)
@@ -247,5 +251,37 @@ class AnalyticsDashboardController extends Controller
             Log::error("Ad Insight Generation Error: " . $e->getMessage());
             return response()->json(['error' => 'Failed to generate ad insights'], 500);
         }
+    }
+
+    /**
+     * Get predictive forecast for the property.
+     */
+    public function getForecast(AnalyticsProperty $property, Request $request)
+    {
+        $lookback = (int) $request->get('lookback', 30);
+        $days = (int) $request->get('days', 14);
+
+        $forecast = $this->forecastService->forecast($property->id, $lookback, $days);
+
+        return response()->json($forecast);
+    }
+
+    /**
+     * Get SEO intelligence alerts and technical health signals.
+     */
+    public function getSEOIntelligence(AnalyticsProperty $property)
+    {
+        $alerts = $this->controlEngine->getActiveAlerts($property->organization);
+        $niche = $this->controlEngine->getNicheIntelligence($property->organization);
+
+        return response()->json([
+            'alerts' => $alerts,
+            'niche' => $niche,
+            'summary' => [
+                'critical_count' => collect($alerts)->where('severity', 'critical')->count(),
+                'high_count' => collect($alerts)->where('severity', 'high')->count(),
+                'opportunity_count' => collect($alerts)->where('alert_type', 'trend_opportunity')->count(),
+            ]
+        ]);
     }
 }

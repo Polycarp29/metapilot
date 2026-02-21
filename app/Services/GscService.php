@@ -57,9 +57,15 @@ class GscService
 
             $response = $this->client->searchanalytics->query($property->gsc_site_url, $request);
             
+            // Success! Reset permission error flag if it was set
+            if ($property->gsc_permission_error) {
+                $property->update(['gsc_permission_error' => false]);
+            }
+
             return $this->parsePerformanceResponse($response);
         } catch (\Google\Service\Exception $e) {
             if ($this->isPermissionError($e)) {
+                $property->update(['gsc_permission_error' => true]);
                 Log::warning("GSC Permission Denied for Property {$property->id}. User needs to reconnect with Search Console permissions.");
             } else {
                 Log::error("GSC Performance Fetch Failed for Property {$property->id}: " . $e->getMessage());
@@ -98,6 +104,11 @@ class GscService
 
             $response = $this->client->searchanalytics->query($property->gsc_site_url, $request);
             
+            // Success reset
+            if ($property->gsc_permission_error) {
+                $property->update(['gsc_permission_error' => false]);
+            }
+
             $results = [];
             foreach ($response->getRows() as $row) {
                 $results[] = [
@@ -112,6 +123,7 @@ class GscService
             return $results;
         } catch (\Google\Service\Exception $e) {
             if ($this->isPermissionError($e)) {
+                $property->update(['gsc_permission_error' => true]);
                 Log::warning("GSC Permission Denied for Property {$property->id} breakdown ({$dimension}).");
             } else {
                 Log::error("GSC Breakdown Fetch Failed for Property {$property->id} ({$dimension}): " . $e->getMessage());
