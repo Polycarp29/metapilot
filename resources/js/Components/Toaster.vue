@@ -79,6 +79,7 @@ const page = usePage()
 
 // Track last handled flash message to prevent loops during router reloads
 let lastFlashMessage = null
+let lastFlashSuccess = null
 let lastFlashError = null
 
 // Watch Inertia flash messages
@@ -88,6 +89,13 @@ watch(() => page.props.flash, (flash) => {
     lastFlashMessage = flash.message
   } else if (!flash.message) {
     lastFlashMessage = null
+  }
+
+  if (flash.success && flash.success !== lastFlashSuccess) {
+    toastStore.success(flash.success)
+    lastFlashSuccess = flash.success
+  } else if (!flash.success) {
+    lastFlashSuccess = null
   }
 
   if (flash.error && flash.error !== lastFlashError) {
@@ -100,9 +108,9 @@ watch(() => page.props.flash, (flash) => {
 
 onMounted(() => {
   // Check if there's an initial flash
-  if (page.props.flash.message) {
-    toastStore.success(page.props.flash.message)
-    lastFlashMessage = page.props.flash.message
+  if (page.props.flash.success) {
+    toastStore.success(page.props.flash.success)
+    lastFlashSuccess = page.props.flash.success
   }
   if (page.props.flash.error) {
     toastStore.error(page.props.flash.error)

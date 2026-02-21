@@ -25,7 +25,19 @@ class OrganizationSettingsController extends Controller
             'invitations' => $organization->invitations()->orderBy('created_at', 'desc')->get(),
             'currentUserRole' => auth()->user()->getRoleIn($organization),
             'aiModels' => \App\Services\OpenAIService::getAvailableModels(),
-            'analyticsProperties' => $organization->analyticsProperties()->latest()->get(),
+            'analyticsProperties' => $organization->analyticsProperties()->latest()->get()->map(function ($p) {
+                return [
+                    'id'                   => $p->id,
+                    'name'                 => $p->name,
+                    'property_id'          => $p->property_id,
+                    'website_url'          => $p->website_url,
+                    'gsc_site_url'         => $p->gsc_site_url,
+                    'is_active'            => $p->is_active,
+                    'google_token_invalid' => (bool) $p->google_token_invalid,
+                    'has_google_token'     => !empty($p->refresh_token),
+                    'token_expires_at'     => $p->token_expires_at?->toIso8601String(),
+                ];
+            }),
         ]);
     }
 

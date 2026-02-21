@@ -52,11 +52,15 @@ class FetchGa4MetricsTest extends TestCase
                         'conversions' => 5,
                     ]
                 ]);
+
+            $mock->shouldReceive('fetchBreakdowns')
+                ->once()
+                ->andReturn([]);
         });
 
         $this->artisan('analytics:fetch-metrics --days=1')
             ->assertExitCode(0)
-            ->expectsOutputToContain('Successfully saved metrics for: Test Property');
+            ->expectsOutputToContain('Successfully saved metrics and breakdowns for: Test Property');
 
         $this->assertDatabaseHas('metric_snapshots', [
             'analytics_property_id' => $property->id,

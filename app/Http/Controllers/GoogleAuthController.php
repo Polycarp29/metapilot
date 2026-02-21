@@ -23,8 +23,12 @@ class GoogleAuthController extends Controller
     /**
      * Redirect the user to the Google authentication page.
      */
-    public function redirectToGoogle()
+    public function redirectToGoogle(Request $request)
     {
+        if ($request->query('intent') === 'connect') {
+            session(['is_connecting_google' => true]);
+        }
+
         return Socialite::driver('google')
             ->scopes([
                 'https://www.googleapis.com/auth/analytics.readonly',
@@ -99,20 +103,33 @@ class GoogleAuthController extends Controller
             }
 
             // Redirect based on whether it was a connection or a login
-            if ($currentUser) {
-                return redirect()->route('organization.settings', ['tab' => 'analytics'])
-                    ->with('message', 'Google account connected! You can now add your GA4 property.');
-            }
+            $isConnecting = session('is_connecting_google');
+            session()->forget('is_connecting_google');
 
-            // Set organization context
-            if ($user->organizations()->count() > 1 && !session('current_organization_id')) {
-                return redirect()->route('organizations.select');
+            if ($isConnecting) {
+                // Reset stale-token flag on all org properties — user just re-authorized
+                if ($organization) {
+                    \App\Models\AnalyticsProperty::where('organization_id', $organization->id)
+                        ->update(['google_token_invalid' => false]);
+                }
+
+                return redirect()->route('organization.settings', ['tab' => 'analytics'])
+                    ->with('success', '✅ Google account connected! You can now add your GA4 property ID below.');
             }
 
             return redirect()->intended(route('dashboard'));
                 
         } catch (\Exception $e) {
+            $isConnecting = session('is_connecting_google');
+            session()->forget('is_connecting_google');
+            
             Log::error('Google Auth Failed: ' . $e->getMessage());
+            
+            if ($isConnecting) {
+                return redirect()->route('organization.settings', ['tab' => 'analytics'])
+                    ->with('error', 'Google connection failed: ' . $e->getMessage());
+            }
+            
             return redirect()->route('login')->with('error', 'Google authentication failed.');
         }
     }

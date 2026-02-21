@@ -294,7 +294,7 @@
                   <p class="text-sm text-slate-500 mt-1">Link your website's analytics data to track performance.</p>
                 </div>
                 <a 
-                  :href="route('auth.google')" 
+                  :href="route('auth.google', { intent: 'connect' })" 
                   class="flex items-center justify-center gap-2 bg-white border border-slate-200 px-5 py-3 rounded-xl font-bold hover:shadow-md hover:border-blue-200 transition-all text-sm shrink-0"
                 >
                   <img src="https://www.gstatic.com/images/branding/product/1x/gsa_512dp.png" class="w-5 h-5" alt="Google">
@@ -302,8 +302,24 @@
                 </a>
               </div>
 
+              <!-- Success flash (from OAuth callback redirect) -->
+              <div v-if="$page.props.flash.success" class="mb-6 p-4 bg-green-50 text-green-700 rounded-xl border border-green-200 font-medium text-sm flex items-center gap-3">
+                <svg class="w-5 h-5 shrink-0 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" /></svg>
+                {{ $page.props.flash.success }}
+              </div>
+
+              <!-- Generic message flash -->
               <div v-if="$page.props.flash.message" class="mb-6 p-4 bg-green-50 text-green-700 rounded-xl border border-green-100 font-medium text-sm">
                 {{ $page.props.flash.message }}
+              </div>
+
+              <!-- Reconnect warning: show if any property has invalid tokens -->
+              <div v-if="hasInvalidTokens" class="mb-6 p-4 bg-amber-50 text-amber-800 rounded-xl border border-amber-200 font-medium text-sm flex items-start gap-3">
+                <svg class="w-5 h-5 shrink-0 text-amber-600 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" /></svg>
+                <div>
+                  <p class="font-bold">Google connection expired</p>
+                  <p class="mt-0.5">One or more of your GA4 properties can't connect to Google. Please reconnect your Google account to restore analytics data.</p>
+                </div>
               </div>
 
               <form @submit.prevent="addProperty" class="flex flex-col gap-5">
@@ -341,18 +357,46 @@
               </div>
               
               <div v-if="analyticsProperties.length" class="grid grid-cols-1 gap-4">
-                <div v-for="prop in analyticsProperties" :key="prop.id" class="p-4 md:p-6 bg-white rounded-3xl border border-slate-100 flex flex-col md:flex-row md:items-center justify-between gap-4 group hover:border-blue-500/30 transition-all">
+                <div
+                  v-for="prop in analyticsProperties"
+                  :key="prop.id"
+                  class="p-4 md:p-6 bg-white rounded-3xl border flex flex-col md:flex-row md:items-center justify-between gap-4 group transition-all"
+                  :class="prop.google_token_invalid ? 'border-amber-300 bg-amber-50/30' : 'border-slate-100 hover:border-blue-500/30'"
+                >
                   <div class="flex items-start md:items-center gap-4 md:gap-5">
-                    <div class="w-12 h-12 bg-slate-50 rounded-2xl flex shrink-0 items-center justify-center text-slate-400">
-                      <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" /></svg>
+                    <div
+                      class="w-12 h-12 rounded-2xl flex shrink-0 items-center justify-center"
+                      :class="prop.google_token_invalid ? 'bg-amber-100 text-amber-600' : 'bg-slate-50 text-slate-400'"
+                    >
+                      <!-- Warning icon for invalid token -->
+                      <svg v-if="prop.google_token_invalid" class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" /></svg>
+                      <!-- Normal analytics icon -->
+                      <svg v-else class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" /></svg>
                     </div>
                     <div class="min-w-0">
                       <p class="font-bold text-slate-900 truncate">{{ prop.name }}</p>
                       <p class="text-sm text-slate-400 font-medium truncate">GA4: {{ prop.property_id }} • GSC: {{ prop.gsc_site_url || 'Not set' }}</p>
                       <p class="text-xs text-slate-400 break-all">{{ prop.website_url }}</p>
+                      <!-- Token invalid inline badge -->
+                      <span v-if="prop.google_token_invalid" class="inline-flex items-center gap-1 mt-1 text-xs font-bold text-amber-700 bg-amber-100 px-2 py-0.5 rounded-full">
+                        <svg class="w-3 h-3" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clip-rule="evenodd" /></svg>
+                        Token expired — reconnect required
+                      </span>
+                      <span v-else-if="prop.has_google_token" class="inline-flex items-center gap-1 mt-1 text-xs font-bold text-green-700 bg-green-100 px-2 py-0.5 rounded-full">
+                        <svg class="w-3 h-3" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd" /></svg>
+                        Google connected
+                      </span>
                     </div>
                   </div>
                   <div class="flex items-center gap-4 md:gap-6 pt-3 md:pt-0 border-t md:border-0 border-slate-50 justify-end md:justify-start">
+                    <a
+                      v-if="prop.google_token_invalid"
+                      :href="route('auth.google', { intent: 'connect' })"
+                      class="flex items-center gap-1.5 text-amber-700 hover:text-amber-900 font-bold text-sm transition-colors bg-amber-100 hover:bg-amber-200 px-3 py-1.5 rounded-lg"
+                    >
+                      <img src="https://www.gstatic.com/images/branding/product/1x/gsa_512dp.png" class="w-4 h-4" alt="Google">
+                      Reconnect
+                    </a>
                     <button @click="editProperty(prop)" class="text-slate-400 hover:text-blue-600 font-bold text-sm transition-colors">Edit</button>
                     <button @click="disconnectProperty(prop.id)" class="text-slate-400 hover:text-red-600 font-bold text-sm transition-colors">Disconnect</button>
                   </div>
@@ -553,7 +597,7 @@
 
 
 <script setup>
-import { ref, onMounted } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { useForm, router, usePage } from '@inertiajs/vue3'
 import AppLayout from '../../Layouts/AppLayout.vue'
 import ConfirmationModal from '../../Components/ConfirmationModal.vue'
@@ -580,6 +624,11 @@ const tabs = [
 ]
 
 const activeTab = ref('general')
+
+// Computed: true if any property has an expired/invalid Google token
+const hasInvalidTokens = computed(() =>
+  props.analyticsProperties?.some(p => p.google_token_invalid) ?? false
+)
 
 onMounted(() => {
     const params = new URLSearchParams(window.location.search)

@@ -24,15 +24,16 @@ class AnalyticsPropertyController extends Controller
         $property = AnalyticsProperty::updateOrCreate(
             ['property_id' => $validated['property_id']],
             [
-                'organization_id' => $organization->id,
-                'user_id' => $request->user()->id,
-                'name' => $validated['name'],
-                'website_url' => $validated['website_url'],
-                'gsc_site_url' => $validated['gsc_site_url'],
-                'is_active' => true,
-                'access_token' => session('google_access_token'),
-                'refresh_token' => session('google_refresh_token'),
-                'token_expires_at' => session('google_token_expires_at'),
+                'organization_id'      => $organization->id,
+                'user_id'              => $request->user()->id,
+                'name'                 => $validated['name'],
+                'website_url'          => $validated['website_url'],
+                'gsc_site_url'         => $validated['gsc_site_url'],
+                'is_active'            => true,
+                'access_token'         => session('google_access_token'),
+                'refresh_token'        => session('google_refresh_token'),
+                'token_expires_at'     => session('google_token_expires_at'),
+                'google_token_invalid' => false,
             ]
         );
 
@@ -65,10 +66,11 @@ class AnalyticsPropertyController extends Controller
         
         // If user just connected Google account, attach tokens
         if (session()->has('google_access_token')) {
-            $updateData['access_token'] = session('google_access_token');
-            $updateData['refresh_token'] = session('google_refresh_token');
-            $updateData['token_expires_at'] = session('google_token_expires_at');
-            
+            $updateData['access_token']         = session('google_access_token');
+            $updateData['refresh_token']        = session('google_refresh_token');
+            $updateData['token_expires_at']     = session('google_token_expires_at');
+            $updateData['google_token_invalid'] = false;
+
             // Clear session after use
             session()->forget(['google_access_token', 'google_refresh_token', 'google_token_expires_at']);
         }

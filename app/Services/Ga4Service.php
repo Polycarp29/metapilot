@@ -24,11 +24,19 @@ class Ga4Service
      */
     protected function initializeClient(\App\Models\AnalyticsProperty $property)
     {
-        // Check if token needs refresh
-        if ($property->token_expires_at && $property->token_expires_at->isPast()) {
-            $this->refreshAccessToken($property);
+        // If the token is already known invalid, skip initialization entirely
+        if ($property->google_token_invalid) {
+            Log::warning("GA4 client init skipped — token marked invalid for property: {$property->id}. User must re-authorize.");
+            return;
         }
 
+        if (!$property->refresh_token) {
+            Log::warning("GA4 client init skipped — no refresh token for property: {$property->id}");
+            return;
+        }
+
+        // UserRefreshCredentials handles token refresh automatically on each request
+        // We do NOT manually pre-refresh here to avoid double 401 storms.
         $credentials = new UserRefreshCredentials(
             ['https://www.googleapis.com/auth/analytics.readonly'],
             [
@@ -40,11 +48,13 @@ class Ga4Service
 
         $this->client = new BetaAnalyticsDataClient([
             'credentials' => $credentials,
+            'transport'   => 'rest', // Force REST transport because grpc extension might be missing in production
         ]);
     }
 
     /**
-     * Refresh the OAuth access token.
+     * Refresh the OAuth access token manually (only called explicitly, not on every request).
+     * Marks the property as token-invalid if Google rejects the credentials.
      */
     protected function refreshAccessToken(\App\Models\AnalyticsProperty $property)
     {
@@ -55,24 +65,51 @@ class Ga4Service
 
         try {
             $response = \Illuminate\Support\Facades\Http::asForm()->post('https://oauth2.googleapis.com/token', [
-                'grant_type' => 'refresh_token',
+                'grant_type'    => 'refresh_token',
                 'refresh_token' => $property->refresh_token,
-                'client_id' => config('services.google.client_id'),
+                'client_id'     => config('services.google.client_id'),
                 'client_secret' => config('services.google.client_secret'),
             ]);
 
             if ($response->successful()) {
                 $data = $response->json();
                 $property->update([
-                    'access_token' => $data['access_token'],
-                    'token_expires_at' => now()->addSeconds($data['expires_in']),
+                    'access_token'        => $data['access_token'],
+                    'token_expires_at'    => now()->addSeconds($data['expires_in']),
+                    'google_token_invalid' => false,
                 ]);
                 Log::info("Refreshed access token for property: {$property->id}");
             } else {
-                Log::error("Token refresh failed for property {$property->id}: " . $response->body());
+                $errorData = $response->json();
+                $errorCode = $errorData['error'] ?? '';
+
+                // Permanent credential failures — user must re-authorize via OAuth
+                if (in_array($errorCode, ['invalid_client', 'invalid_grant'])) {
+                    Log::error("Token permanently invalid for property {$property->id} (error: {$errorCode}). Marking as invalid — user must reconnect Google.");
+                    $property->update(['google_token_invalid' => true]);
+                } else {
+                    Log::error("Token refresh failed for property {$property->id}: " . $response->body());
+                }
             }
         } catch (\Exception $e) {
             Log::error("Token refresh exception for property {$property->id}: " . $e->getMessage());
+        }
+    }
+
+    /**
+     * Handle GA4 API exceptions and detect if they are due to invalid credentials.
+     */
+    protected function handleApiException(\Exception $e, \App\Models\AnalyticsProperty $property)
+    {
+        $message = $e->getMessage();
+        
+        // Detect 'invalid_grant' or 'invalid_client' in the exception message/body
+        // The Google SDK often embeds the raw JSON error in the exception message
+        if (str_contains($message, 'invalid_grant') || str_contains($message, 'invalid_client')) {
+            Log::error("GA4 Permanent Auth Error for Property {$property->id}: {$message}. Marking token as invalid.");
+            $property->update(['google_token_invalid' => true]);
+        } else {
+            Log::error("GA4 API Error for Property {$property->id}: " . $message);
         }
     }
 
@@ -116,7 +153,7 @@ class Ga4Service
 
             return $this->parseReportResponse($response);
         } catch (\Exception $e) {
-            Log::error("GA4 Fetch Failed for Property {$property->id}: " . $e->getMessage());
+            $this->handleApiException($e, $property);
             return null;
         }
     }
@@ -175,7 +212,7 @@ class Ga4Service
             
             return null;
         } catch (\Exception $e) {
-            Log::error("GA4 Aggregate Fetch Failed for Property {$property->id}: " . $e->getMessage());
+            $this->handleApiException($e, $property);
             return null;
         }
     }

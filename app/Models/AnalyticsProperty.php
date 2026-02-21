@@ -18,12 +18,14 @@ class AnalyticsProperty extends Model
         'access_token',
         'refresh_token',
         'token_expires_at',
+        'google_token_invalid',
     ];
 
     protected $casts = [
         'config' => 'array',
         'is_active' => 'boolean',
         'token_expires_at' => 'datetime',
+        'google_token_invalid' => 'boolean',
     ];
 
     /**
