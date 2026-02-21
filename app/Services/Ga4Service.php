@@ -149,7 +149,16 @@ class Ga4Service
                 ],
             ]);
 
+            Log::debug("GA4 Request (Daily) for Property ID: {$property->property_id}", [
+                'start_date' => $startDate,
+                'end_date' => $endDate
+            ]);
+
             $response = $this->client->runReport($request);
+            
+            Log::debug("GA4 Response (Daily) for Property ID: {$property->property_id}", [
+                'row_count' => $response->getRowCount()
+            ]);
 
             return $this->parseReportResponse($response);
         } catch (\Exception $e) {
@@ -192,7 +201,13 @@ class Ga4Service
                 ],
             ]);
 
+            Log::debug("GA4 Request (Aggregate) for Property ID: {$property->property_id}");
+
             $response = $this->client->runReport($request);
+
+            Log::debug("GA4 Response (Aggregate) for Property ID: {$property->property_id}", [
+                'row_count' => $response->getRowCount()
+            ]);
 
             if ($response->getRowCount() > 0) {
                 $metricValues = $response->getRows()[0]->getMetricValues();
@@ -291,7 +306,11 @@ class Ga4Service
             // Actually, sessionGoogleAdsCampaignName IS compatible with session metrics. It was checking against ad_cost etc. 
             // So I will KEEP it here for context, but if it fails again I'll remove it.
             
+            Log::debug("GA4 Request (Campaign Traffic) for Property ID: {$property->property_id}");
             $trafficResponse = $this->client->runReport($trafficRequest);
+            Log::debug("GA4 Response (Campaign Traffic) for Property ID: {$property->property_id}", [
+                'row_count' => $trafficResponse->getRowCount()
+            ]);
 
             $campaigns = [];
             $campaignNames = [];
@@ -365,7 +384,11 @@ class Ga4Service
                     ]);
 
                     try {
+                        Log::debug("GA4 Request (Campaign Ads) for Property ID: {$property->property_id}");
                         $adResponse = $this->client->runReport($adRequest);
+                        Log::debug("GA4 Response (Campaign Ads) for Property ID: {$property->property_id}", [
+                            'row_count' => $adResponse->getRowCount()
+                        ]);
 
                         foreach ($adResponse->getRows() as $row) {
                             $name = $row->getDimensionValues()[0]->getValue();
@@ -443,7 +466,7 @@ class Ga4Service
             return array_values($campaigns);
 
         } catch (\Exception $e) {
-            \Illuminate\Support\Facades\Log::error("GA4 Campaign Fetch Failed for Property {$property->id}: " . $e->getMessage());
+            \Illuminate\Support\Facades\Log::error("GA4 Campaign Fetch Failed for Property {$property->id} (ID: {$property->property_id}): " . $e->getMessage());
             return [];
         }
     }
@@ -478,6 +501,10 @@ class Ga4Service
             ]);
 
             $response = $this->client->runReport($request);
+
+            Log::debug("GA4 Response (Breakdown: {$dimensionName}) for Property ID: {$property->property_id}", [
+                'row_count' => $response->getRowCount()
+            ]);
             
             $results = [];
             foreach ($response->getRows() as $row) {

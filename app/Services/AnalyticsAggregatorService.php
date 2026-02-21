@@ -69,7 +69,7 @@ class AnalyticsAggregatorService
             'avg_bounce_rate' => $liveAggregates ? $liveAggregates['bounce_rate'] : (float) $aggregates->avg_bounce_rate,
         ];
 
-        if (!$latestRecord || $aggregates->total_users == 0) {
+        if (!$latestRecord && !$liveAggregates) {
             return [
                 'total_users' => 0,
                 'total_users_all' => 0,
