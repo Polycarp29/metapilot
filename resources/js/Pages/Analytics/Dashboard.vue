@@ -357,12 +357,45 @@ const toggleAutoRefresh = () => {
   }
 }
 
-const getBounceRateStatus = (rate) => {
-  const percentage = rate * 100
-  if (percentage < 40) return { label: 'Optimum', class: 'bg-emerald-500/10 text-emerald-500 border-emerald-500/20' }
-  if (percentage < 70) return { label: 'Fair', class: 'bg-amber-500/10 text-amber-500 border-amber-500/20' }
-  return { label: 'High', class: 'bg-rose-500/10 text-rose-500 border-rose-500/20' }
+const getSEOStatus = (rate, deviceType = 'desktop') => {
+  const percentage = (rate || 0) * 100
+  const isMobile = deviceType?.toLowerCase() === 'mobile' || deviceType?.toLowerCase() === 'tablet'
+  
+  // Mobile thresholds are typically higher due to network/intent differences
+  const thresholds = isMobile 
+    ? { optimum: 55, fair: 75 } // Mobile: <55% is good, 55-75% is fair
+    : { optimum: 45, fair: 65 } // Desktop: <45% is good, 45-65% is fair
+
+  if (percentage < thresholds.optimum) {
+    return { 
+      label: 'Optimum', 
+      class: 'bg-emerald-500/10 text-emerald-500 border-emerald-500/20',
+      icon: '✨',
+      description: 'Excellent engagement. Users are finding exactly what they need.'
+    }
+  }
+  if (percentage < thresholds.fair) {
+    return { 
+      label: 'Fair', 
+      class: 'bg-amber-500/10 text-amber-500 border-amber-500/20',
+      icon: '⚖️',
+      description: 'Average performance. Consider optimizing content or CTA placement.'
+    }
+  }
+  return { 
+    label: 'Poor', 
+    class: 'bg-rose-500/10 text-rose-500 border-rose-500/20',
+    icon: '🚩',
+    description: 'High bounce rate. Page may have loading issues or low relevance.'
+  }
 }
+
+const deviceStats = computed(() => {
+  if (!overview.value?.by_device) return null
+  const mobile = overview.value.by_device.find(d => d.name.toLowerCase() === 'mobile')
+  const desktop = overview.value.by_device.find(d => d.name.toLowerCase() === 'desktop')
+  return { mobile, desktop }
+})
 
 onMounted(() => {
   if (selectedPropertyId.value) {
@@ -606,6 +639,50 @@ onUnmounted(() => {
             <p class="text-[9px] text-slate-400 font-medium mt-0.5">Time per visit (GA4)</p>
           </div>
           <h3 class="text-3xl font-black text-slate-900 mt-3">{{ formatDuration(overview.avg_duration) }}</h3>
+        </div>
+      </div>
+
+      <!-- Bounce Rate SEO Health Banner -->
+      <div v-if="overview && overview.total_users > 0 && deviceStats" class="grid grid-cols-1 md:grid-cols-2 gap-6 animate-in slide-in-from-bottom-4 duration-700">
+        <div class="bg-gradient-to-br from-slate-900 to-slate-800 p-8 rounded-[2.5rem] border border-white/5 relative overflow-hidden group">
+          <div class="absolute top-0 right-0 -mt-10 -mr-10 w-32 h-32 bg-blue-500/10 rounded-full blur-[40px]"></div>
+          <div class="relative z-10">
+            <div class="flex items-center justify-between mb-6">
+              <div class="flex items-center gap-3">
+                <div class="p-2 bg-blue-500/20 rounded-lg text-blue-400">
+                  <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 18h.01M8 21h8a2 2 0 002-2V5a2 2 0 00-2-2H8a2 2 0 00-2 2v14a2 2 0 002 2z"></path></svg>
+                </div>
+                <h3 class="text-sm font-black text-white uppercase tracking-widest">Mobile Bounce Health</h3>
+              </div>
+              <span v-if="deviceStats.mobile" class="px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest border" :class="getSEOStatus(deviceStats.mobile.bounceRate, 'mobile').class">
+                {{ getSEOStatus(deviceStats.mobile.bounceRate, 'mobile').label }}
+              </span>
+            </div>
+            <div v-if="deviceStats.mobile" class="flex items-end gap-3">
+              <h4 class="text-4xl font-black text-white">{{ (deviceStats.mobile.bounceRate * 100).toFixed(1) }}%</h4>
+              <p class="text-slate-400 text-xs mb-1.5 font-medium">{{ getSEOStatus(deviceStats.mobile.bounceRate, 'mobile').description }}</p>
+            </div>
+            <p v-else class="text-slate-500 italic text-sm">Insufficient mobile traffic data</p>
+          </div>
+        </div>
+
+        <div class="bg-white p-8 rounded-[2.5rem] border border-slate-100 shadow-premium relative overflow-hidden group hover:border-indigo-500/30 transition-all">
+          <div class="flex items-center justify-between mb-6">
+            <div class="flex items-center gap-3">
+              <div class="p-2 bg-indigo-50 text-indigo-500 rounded-lg">
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"></path></svg>
+              </div>
+              <h3 class="text-sm font-black text-slate-500 uppercase tracking-widest">Desktop Bounce Health</h3>
+            </div>
+            <span v-if="deviceStats.desktop" class="px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest border" :class="getSEOStatus(deviceStats.desktop.bounceRate, 'desktop').class">
+              {{ getSEOStatus(deviceStats.desktop.bounceRate, 'desktop').label }}
+            </span>
+          </div>
+          <div v-if="deviceStats.desktop" class="flex items-end gap-3">
+            <h4 class="text-4xl font-black text-slate-900">{{ (deviceStats.desktop.bounceRate * 100).toFixed(1) }}%</h4>
+            <p class="text-slate-500 text-xs mb-1.5 font-medium">{{ getSEOStatus(deviceStats.desktop.bounceRate, 'desktop').description }}</p>
+          </div>
+          <p v-else class="text-slate-400 italic text-sm">Insufficient desktop traffic data</p>
         </div>
       </div>
 
@@ -1045,6 +1122,65 @@ onUnmounted(() => {
               </div>
             </div>
           </div>
+        </div>
+      </div>
+
+      <!-- Discovered Page Performance: Detailed SEO Status -->
+      <div v-if="overview && overview.total_users > 0" class="bg-white p-10 rounded-[3rem] border border-slate-100 shadow-premium mb-12 animate-in fade-in duration-700">
+        <div class="flex items-center justify-between mb-10">
+          <h3 class="text-2xl font-black text-slate-900 flex items-center gap-2">
+            <svg class="w-6 h-6 text-emerald-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M19.428 15.428a2 2 0 00-1.022-.547l-2.387-.477a6 6 0 00-3.86.517l-.318.158a6 6 0 01-3.86.517L6.05 15.21a2 2 0 00-1.806.547M8 4h8l-1 1v5.172a2 2 0 00.586 1.414l5 5c1.26 1.26.367 3.414-1.415 3.414H4.828c-1.782 0-2.674-2.154-1.414-3.414l5-5A2 2 0 009 10.172V5L8 4z"></path></svg>
+            Discovered Page Performance
+          </h3>
+          <span class="text-xs font-black text-slate-400 uppercase tracking-widest">SEO Optimization Overview</span>
+        </div>
+        
+        <div class="overflow-x-auto">
+          <table class="w-full text-left">
+            <thead>
+              <tr class="border-b border-slate-50">
+                <th class="pb-6 text-[11px] font-black text-slate-400 uppercase tracking-widest px-4">Page Path</th>
+                <th class="pb-6 text-[11px] font-black text-slate-400 uppercase tracking-widest text-center">Users</th>
+                <th class="pb-6 text-[11px] font-black text-slate-400 uppercase tracking-widest text-center">Bounce Rate</th>
+                <th class="pb-6 text-[11px] font-black text-slate-400 uppercase tracking-widest text-right pr-4">SEO Status</th>
+              </tr>
+            </thead>
+            <tbody class="divide-y divide-slate-50">
+              <tr v-for="page in (overview?.by_page || [])" :key="page.name" class="group hover:bg-slate-50/50 transition-all">
+                <td class="py-5 px-4 max-w-md">
+                  <span class="text-sm font-bold text-slate-700 truncate block transition-colors group-hover:text-blue-600" :title="page.name">{{ page.name }}</span>
+                </td>
+                <td class="py-5 text-center">
+                  <span class="text-sm font-black text-slate-900">{{ (page.activeUsers || 0).toLocaleString() }}</span>
+                </td>
+                <td class="py-5 text-center">
+                  <div class="flex flex-col items-center gap-1">
+                    <span class="text-sm font-bold" :class="getSEOStatus(page.bounceRate).label === 'Poor' ? 'text-rose-500' : 'text-slate-700'">
+                      {{ (page.bounceRate * 100).toFixed(1) }}%
+                    </span>
+                    <div class="w-20 h-1 bg-slate-100 rounded-full overflow-hidden">
+                      <div class="h-full rounded-full transition-all duration-1000" 
+                        :class="getSEOStatus(page.bounceRate).label === 'Optimum' ? 'bg-emerald-500' : (getSEOStatus(page.bounceRate).label === 'Fair' ? 'bg-amber-500' : 'bg-rose-500')"
+                        :style="{ width: (100 - (page.bounceRate * 100)) + '%' }"></div>
+                    </div>
+                  </div>
+                </td>
+                <td class="py-5 text-right pr-4">
+                  <div class="flex items-center justify-end gap-2 group/status relative">
+                    <span class="text-lg">{{ getSEOStatus(page.bounceRate).icon }}</span>
+                    <span class="px-3 py-1 rounded-lg text-[10px] font-black uppercase tracking-widest border transition-all" :class="getSEOStatus(page.bounceRate).class">
+                      {{ getSEOStatus(page.bounceRate).label }}
+                    </span>
+                    <!-- Tooltip hint -->
+                    <div class="absolute bottom-full right-0 mb-2 w-48 p-2 bg-slate-900 text-white text-[9px] font-medium rounded-lg opacity-0 group-hover/status:opacity-100 pointer-events-none transition-opacity z-20 shadow-xl">
+                      {{ getSEOStatus(page.bounceRate).description }}
+                    </div>
+                  </div>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+          <p v-if="!overview?.by_page?.length" class="text-center py-20 bg-slate-50/50 rounded-[2rem] border-2 border-dashed border-slate-200 text-slate-400 italic text-sm m-4">No discovered page data available for this range</p>
         </div>
       </div>
     </div> <!-- End Overview Tab -->

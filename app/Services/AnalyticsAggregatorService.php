@@ -123,32 +123,47 @@ class AnalyticsAggregatorService
         $hasGscUrl = \App\Models\AnalyticsProperty::where('id', $propertyId)->value('gsc_site_url');
         $hasGscPermissionError = $hasGscUrl && !$latestGscRecord;
 
+        // 4. Final aggregation of breakdown data (fetch live if DB is empty)
+        $breakdowns = [];
+        if ($latestRecord) {
+            $breakdowns = [
+                'by_page' => $latestRecord->by_page ?? [],
+                'by_page_title' => $latestRecord->by_page_title ?? [],
+                'by_screen' => $latestRecord->by_screen ?? [],
+                'by_source' => $latestRecord->by_source ?? [],
+                'by_first_source' => $latestRecord->by_first_source ?? [],
+                'by_medium' => $latestRecord->by_medium ?? [],
+                'by_campaign' => $latestRecord->by_campaign ?? [],
+                'by_device' => $latestRecord->by_device ?? [],
+                'by_country' => $latestRecord->by_country ?? [],
+                'by_city' => $latestRecord->by_city ?? [],
+                'by_event' => $latestRecord->by_event ?? [],
+                'by_audience' => $latestRecord->by_audience ?? [],
+            ];
+        } else {
+            // Fetch live breakdowns directly from API as a fallback
+            try {
+                $breakdowns = $this->ga4Service->fetchBreakdowns($property, $startDate, $endDate) ?? [];
+            } catch (\Exception $e) {
+                \Illuminate\Support\Facades\Log::warning("Live breakdown fetch failed for property {$propertyId}: " . $e->getMessage());
+                $breakdowns = [];
+            }
+            
+            // Ensure all keys exist to avoid frontend errors
+            reset($breakdowns);
+            $breakdowns = array_merge([
+                'by_page' => [], 'by_page_title' => [], 'by_screen' => [], 'by_source' => [], 
+                'by_first_source' => [], 'by_medium' => [], 'by_campaign' => [], 'by_device' => [], 
+                'by_country' => [], 'by_city' => [], 'by_event' => [], 'by_audience' => [],
+            ], $breakdowns);
+        }
+
         // Combine the aggregates with the latest breakdowns
-        return [
-            'total_users' => $finalStats['total_users'],
-            'total_users_all' => $finalStats['total_users_all'],
-            'total_new_users' => $finalStats['total_new_users'],
-            'total_sessions' => $finalStats['total_sessions'],
-            'total_conversions' => $finalStats['total_conversions'],
+        return array_merge($finalStats, $breakdowns, [
             'total_clicks' => (int) ($gscAggregates?->total_clicks ?? 0),
             'total_impressions' => (int) ($gscAggregates?->total_impressions ?? 0),
             'avg_ctr' => (float) ($gscAggregates?->avg_ctr ?? 0),
             'avg_position' => (float) ($gscAggregates?->avg_position ?? 0),
-            'avg_engagement_rate' => $finalStats['avg_engagement_rate'],
-            'avg_duration' => $finalStats['avg_duration'],
-            'avg_bounce_rate' => $finalStats['avg_bounce_rate'],
-            'by_page' => $latestRecord?->by_page ?? [],
-            'by_page_title' => $latestRecord?->by_page_title ?? [],
-            'by_screen' => $latestRecord?->by_screen ?? [],
-            'by_source' => $latestRecord?->by_source ?? [],
-            'by_first_source' => $latestRecord?->by_first_source ?? [],
-            'by_medium' => $latestRecord?->by_medium ?? [],
-            'by_campaign' => $latestRecord?->by_campaign ?? [],
-            'by_device' => $latestRecord?->by_device ?? [],
-            'by_country' => $latestRecord?->by_country ?? [],
-            'by_city' => $latestRecord?->by_city ?? [],
-            'by_event' => $latestRecord?->by_event ?? [],
-            'by_audience' => $latestRecord?->by_audience ?? [],
             'top_queries' => $latestGscRecord?->top_queries ?? [],
             'top_pages_gsc' => $latestGscRecord?->top_pages ?? [],
             'sitemaps' => $latestGscRecord?->sitemaps ?? [],
@@ -157,7 +172,7 @@ class AnalyticsAggregatorService
                 $latestRecord?->updated_at?->toIso8601String(),
                 $latestGscRecord?->updated_at?->toIso8601String()
             ])->filter()->max(),
-        ];
+        ]);
     }
 
     /**
@@ -165,7 +180,7 @@ class AnalyticsAggregatorService
      */
     public function getTrendData($propertyId, $startDate, $endDate)
     {
-        return MetricSnapshot::where('metric_snapshots.analytics_property_id', $propertyId)
+        $trends = MetricSnapshot::where('metric_snapshots.analytics_property_id', $propertyId)
             ->whereBetween('metric_snapshots.snapshot_date', [$startDate, $endDate])
             ->leftJoin('search_console_metrics', function($join) {
                 $join->on('metric_snapshots.analytics_property_id', '=', 'search_console_metrics.analytics_property_id')
@@ -181,6 +196,29 @@ class AnalyticsAggregatorService
             ])
             ->orderBy('metric_snapshots.snapshot_date', 'asc')
             ->get();
+
+        if ($trends->isEmpty()) {
+            $property = \App\Models\AnalyticsProperty::find($propertyId);
+            if ($property) {
+                try {
+                    $liveDaily = $this->ga4Service->fetchDailyMetrics($property, $startDate, $endDate);
+                    if ($liveDaily) {
+                        return collect($liveDaily)->map(fn($day) => (object) [
+                            'snapshot_date' => $day['date'],
+                            'users' => $day['users'],
+                            'sessions' => $day['sessions'],
+                            'conversions' => $day['conversions'],
+                            'clicks' => 0,
+                            'impressions' => 0,
+                        ]);
+                    }
+                } catch (\Exception $e) {
+                    \Illuminate\Support\Facades\Log::warning("Live trend fetch failed for property {$propertyId}: " . $e->getMessage());
+                }
+            }
+        }
+
+        return $trends;
     }
 
     /**

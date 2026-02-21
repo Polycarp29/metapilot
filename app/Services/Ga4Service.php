@@ -244,7 +244,7 @@ class Ga4Service
             'by_first_source' => ['dim' => 'firstUserSource', 'metrics' => ['activeUsers']],
             'by_medium' => ['dim' => 'sessionMedium', 'metrics' => ['activeUsers']],
             'by_campaign' => ['dim' => 'sessionCampaignName', 'metrics' => ['activeUsers']],
-            'by_device' => ['dim' => 'deviceCategory', 'metrics' => ['activeUsers']],
+            'by_device' => ['dim' => 'deviceCategory', 'metrics' => ['activeUsers', 'bounceRate']],
             'by_country' => ['dim' => 'country', 'metrics' => ['activeUsers']],
             'by_city' => ['dim' => 'city', 'metrics' => ['activeUsers']],
             'by_screen' => ['dim' => 'unifiedPageScreen', 'metrics' => ['activeUsers', 'screenPageViews']],
