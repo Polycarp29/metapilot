@@ -8,6 +8,7 @@ Artisan::command('inspire', function () {
 })->purpose('Display an inspiring quote');
 
 \Illuminate\Support\Facades\Schedule::command('analytics:fetch-metrics')->dailyAt('02:00');
+\Illuminate\Support\Facades\Schedule::command('analytics:fetch-gsc')->dailyAt('03:00');
 \Illuminate\Support\Facades\Schedule::command('analytics:weekly-report')->mondays()->at('07:00');
 \Illuminate\Support\Facades\Schedule::job(new \App\Jobs\DiscoverTrendingKeywordsJob)->hourly();
 \Illuminate\Support\Facades\Schedule::command('crawl:run-scheduled')->everyFiveMinutes();

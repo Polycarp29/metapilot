@@ -77,6 +77,48 @@ class GscService
         }
     }
 
+    /**
+     * Fetch aggregate performance metrics for a date range (no dimensions).
+     */
+    public function fetchAggregatePerformance(\App\Models\AnalyticsProperty $property, string $startDate, string $endDate)
+    {
+        if (!$property->gsc_site_url) {
+            return null;
+        }
+
+        $this->initializeClient($property);
+
+        try {
+            $request = new \Google\Service\SearchConsole\SearchAnalyticsQueryRequest();
+            $request->setStartDate($startDate);
+            $request->setEndDate($endDate);
+            // No dimensions = aggregate total
+
+            $response = $this->client->searchanalytics->query($property->gsc_site_url, $request);
+            
+            $rows = $response->getRows();
+            if (empty($rows)) {
+                return [
+                    'clicks' => 0,
+                    'impressions' => 0,
+                    'ctr' => 0,
+                    'position' => 0,
+                ];
+            }
+
+            $data = $rows[0];
+            return [
+                'clicks' => $data->getClicks(),
+                'impressions' => $data->getImpressions(),
+                'ctr' => $data->getCtr(),
+                'position' => $data->getPosition(),
+            ];
+        } catch (\Exception $e) {
+            Log::error("GSC Aggregate Performance Fetch Failed for Property {$property->id}: " . $e->getMessage());
+            return null;
+        }
+    }
+
     public function fetchBreakdowns(\App\Models\AnalyticsProperty $property, string $startDate, string $endDate)
     {
         if (!$property->gsc_site_url) {

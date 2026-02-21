@@ -12,10 +12,12 @@ class AnalyticsAggregatorService
      * Get overview stats for a property and date range.
      */
     protected $ga4Service;
+    protected $gscService;
 
-    public function __construct(\App\Services\Ga4Service $ga4Service)
+    public function __construct(\App\Services\Ga4Service $ga4Service, \App\Services\GscService $gscService)
     {
         $this->ga4Service = $ga4Service;
+        $this->gscService = $gscService;
     }
 
     /**
@@ -115,11 +117,78 @@ class AnalyticsAggregatorService
             ])
             ->first();
 
-        // 4. Get the latest Search Console breakdown (queries)
-        $latestGscRecord = \App\Models\SearchConsoleMetric::where('analytics_property_id', $propertyId)
+        // 3.5 Try to fetch live GSC aggregates if DB is empty
+        $liveGscAggregates = null;
+        if ((int) $gscAggregates->total_impressions === 0 && (int) $gscAggregates->total_clicks === 0) {
+            try {
+                $liveGscAggregates = $this->gscService->fetchAggregatePerformance($property, $startDate, $endDate);
+            } catch (\Exception $e) {
+                \Illuminate\Support\Facades\Log::warning("Live GSC aggregate fetch failed for property {$propertyId}: " . $e->getMessage());
+            }
+        }
+
+        // 4. Get all Search Console records for the range to aggregate breakdowns
+        $gscRecords = \App\Models\SearchConsoleMetric::where('analytics_property_id', $propertyId)
             ->whereBetween('snapshot_date', [$startDate, $endDate])
             ->orderBy('snapshot_date', 'desc')
-            ->first();
+            ->get();
+
+        $latestGscRecord = $gscRecords->first();
+        
+        $aggregatedQueries = [];
+        $aggregatedPages = [];
+        
+        if ($gscRecords->isNotEmpty()) {
+            foreach ($gscRecords as $record) {
+                // Aggregate Queries
+                foreach ($record->top_queries ?? [] as $q) {
+                    $key = $q['name'] ?? ($q['query'] ?? 'unknown');
+                    if (!isset($aggregatedQueries[$key])) {
+                        $aggregatedQueries[$key] = ['name' => $key, 'clicks' => 0, 'impressions' => 0, 'position' => 0, 'count' => 0];
+                    }
+                    $aggregatedQueries[$key]['clicks'] += $q['clicks'] ?? 0;
+                    $aggregatedQueries[$key]['impressions'] += $q['impressions'] ?? 0;
+                    $aggregatedQueries[$key]['position'] += $q['position'] ?? 0;
+                    $aggregatedQueries[$key]['count']++;
+                }
+                
+                // Aggregate Pages
+                foreach ($record->top_pages ?? [] as $p) {
+                    $key = $p['name'] ?? ($p['page'] ?? 'unknown');
+                    if (!isset($aggregatedPages[$key])) {
+                        $aggregatedPages[$key] = ['name' => $key, 'clicks' => 0, 'impressions' => 0, 'position' => 0, 'count' => 0];
+                    }
+                    $aggregatedPages[$key]['clicks'] += $p['clicks'] ?? 0;
+                    $aggregatedPages[$key]['impressions'] += $p['impressions'] ?? 0;
+                    $aggregatedPages[$key]['position'] += $p['position'] ?? 0;
+                    $aggregatedPages[$key]['count']++;
+                }
+            }
+            
+            // Finalize averages and sort Queries
+            foreach ($aggregatedQueries as &$q) {
+                $q['position'] = $q['position'] / $q['count'];
+                $q['ctr'] = $q['impressions'] > 0 ? $q['clicks'] / $q['impressions'] : 0;
+                unset($q['count']);
+            }
+            usort($aggregatedQueries, fn($a, $b) => $b['clicks'] <=> $a['clicks']);
+            
+            // Finalize averages and sort Pages
+            foreach ($aggregatedPages as &$p) {
+                $p['position'] = $p['position'] / $p['count'];
+                unset($p['count']);
+            }
+            usort($aggregatedPages, fn($a, $b) => $b['clicks'] <=> $a['clicks']);
+        }
+
+        $latestGscBreakdowns = null;
+        if ($gscRecords->isEmpty()) {
+            try {
+                $latestGscBreakdowns = $this->gscService->fetchBreakdowns($property, $startDate, $endDate);
+            } catch (\Exception $e) {
+                \Illuminate\Support\Facades\Log::warning("Live GSC breakdown fetch failed for property {$propertyId}: " . $e->getMessage());
+            }
+        }
 
         // Check if there's a permission issue (has GSC URL but no data) - Trigger even if core GA4 traffic is 0
         $hasGscPermissionError = (bool) ($property?->gsc_permission_error ?? false);
@@ -162,12 +231,12 @@ class AnalyticsAggregatorService
 
         // Combine the aggregates with the latest breakdowns
         return array_merge($finalStats, $breakdowns, [
-            'total_clicks' => (int) ($gscAggregates?->total_clicks ?? 0),
-            'total_impressions' => (int) ($gscAggregates?->total_impressions ?? 0),
-            'avg_ctr' => (float) ($gscAggregates?->avg_ctr ?? 0),
-            'avg_position' => (float) ($gscAggregates?->avg_position ?? 0),
-            'top_queries' => $latestGscRecord?->top_queries ?? [],
-            'top_pages_gsc' => $latestGscRecord?->top_pages ?? [],
+            'total_clicks' => (int) ($liveGscAggregates['clicks'] ?? $gscAggregates->total_clicks),
+            'total_impressions' => (int) ($liveGscAggregates['impressions'] ?? $gscAggregates->total_impressions),
+            'avg_ctr' => (float) ($liveGscAggregates['ctr'] ?? $gscAggregates->avg_ctr),
+            'avg_position' => (float) ($liveGscAggregates['position'] ?? $gscAggregates->avg_position),
+            'top_queries' => $latestGscBreakdowns['top_queries'] ?? ($aggregatedQueries ?: []),
+            'top_pages_gsc' => $latestGscBreakdowns['top_pages'] ?? ($aggregatedPages ?: []),
             'sitemaps' => $latestGscRecord?->sitemaps ?? [],
             'gsc_permission_error' => $hasGscPermissionError,
             'google_token_invalid' => $hasGoogleTokenInvalid,
