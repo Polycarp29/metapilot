@@ -579,7 +579,7 @@
             <span class="text-[9px] bg-indigo-50 text-indigo-500 font-black uppercase tracking-widest px-2.5 py-1 rounded-full group-hover:bg-indigo-100 group-hover:text-indigo-700 transition-colors">Async</span>
           </button>
 
-          <!-- Option C: Manual Crawl (PHP) -->
+          <!-- Option C: Manual Crawl -->
           <button
             @click="manualCrawl(selectedLink)"
             class="group col-span-2 relative flex items-center gap-5 p-6 rounded-[2rem] border-2 border-slate-100 bg-slate-50 hover:border-emerald-300 hover:bg-emerald-50 transition-all duration-300 text-left"
@@ -588,8 +588,8 @@
               <svg class="w-6 h-6 text-slate-500 group-hover:text-emerald-600 transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4"/></svg>
             </div>
             <div class="flex-grow">
-              <p class="text-xs font-black text-slate-700 uppercase tracking-widest group-hover:text-emerald-700">Manual Crawl <span class="text-slate-400 font-medium normal-case">(PHP)</span></p>
-              <p class="text-[10px] text-slate-400 font-medium mt-1 leading-relaxed">Real browser headers via PHP/Guzzle. Works on bot-resistant sites. Extracts full SEO data synchronously.</p>
+              <p class="text-xs font-black text-slate-700 uppercase tracking-widest group-hover:text-emerald-700">Manual Crawl</p>
+              <p class="text-[10px] text-slate-400 font-medium mt-1 leading-relaxed">Real browser headers. Works on bot-resistant sites. Extracts full SEO data synchronously.</p>
             </div>
             <span class="text-[9px] bg-emerald-50 text-emerald-600 font-black uppercase tracking-widest px-2.5 py-1 rounded-full group-hover:bg-emerald-100 group-hover:text-emerald-700 transition-colors flex-shrink-0">Live</span>
           </button>
@@ -604,7 +604,7 @@
             </div>
           </div>
           <div class="text-center">
-            <p class="font-black text-slate-900 text-sm">PHP Crawler Running...</p>
+            <p class="font-black text-slate-900 text-sm">Manual Crawler Running...</p>
             <p class="text-[10px] text-slate-400 font-medium mt-1 tracking-widest uppercase">Fetching · Parsing · Auditing</p>
           </div>
           <div class="flex gap-1.5">
@@ -815,6 +815,25 @@
         </button>
       </div>
     </div>
+    <!-- Error Toast -->
+    <div v-show="showErrorToast" class="fixed bottom-10 right-10 z-[200] animate-slide-up">
+      <div class="bg-red-600 text-white p-6 rounded-[2rem] shadow-2xl border border-white/10 flex items-center gap-6">
+        <div class="w-12 h-12 bg-white/20 rounded-2xl flex items-center justify-center text-white">
+          <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+          </svg>
+        </div>
+        <div>
+          <h4 class="text-sm font-black tracking-tight">Analysis Failed</h4>
+          <p class="text-[10px] text-red-100 font-medium whitespace-nowrap">{{ errorToastMessage }}</p>
+        </div>
+        <button @click="showErrorToast = false" class="text-red-200 hover:text-white transition-colors p-2">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+          </svg>
+        </button>
+      </div>
+    </div>
 
     <!-- Real-time Link Discovery Toast -->
     <Transition name="fade">
@@ -862,6 +881,8 @@ const showRecrawlModal = ref(false)
 const showCrawlModeModal = ref(false)
 const manualCrawling = ref(false)
 const showCompletionToast = ref(false)
+const showErrorToast = ref(false)
+const errorToastMessage = ref('')
 const showLinkToast = ref(false)
 const lastDiscoveredUrl = ref('')
 const discoveredTimeout = ref(null)
@@ -1218,8 +1239,9 @@ const manualCrawl = async (link) => {
     showCrawlModeModal.value = false
     showAnalysisModal.value = true
   } catch (err) {
-    const msg = err.response?.data?.message || 'Manual analysis failed. The site may be blocking all requests.'
-    alert(msg)
+    errorToastMessage.value = err.response?.data?.message || 'Manual analysis failed. The site may be blocking all requests.'
+    showErrorToast.value = true
+    setTimeout(() => { showErrorToast.value = false }, 5000)
   } finally {
     manualCrawling.value = false
   }

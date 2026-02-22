@@ -682,30 +682,72 @@ class SitemapController extends Controller
         $url = $link->url;
         $startTime = microtime(true);
 
+        $userAgents = [
+            'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36',
+            'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+            'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36',
+            'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:122.0) Gecko/20100101 Firefox/122.0',
+            'Mozilla/5.0 (iPhone; CPU iPhone OS 17_2_1 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.2 Mobile/15E148 Safari/604.1',
+        ];
+
+        $attempt = 1;
+        $maxAttempts = 2;
+        $response = null;
+        $html = '';
+
+        while ($attempt <= $maxAttempts) {
+            try {
+                $userAgent = $userAgents[array_rand($userAgents)];
+                
+                $client = new \GuzzleHttp\Client([
+                    'timeout'         => 30,
+                    'connect_timeout' => 15,
+                    'verify'          => false,
+                    'cookies'         => true, // Enable cookie jar
+                    'allow_redirects' => ['max' => 5, 'track_redirects' => true],
+                    'headers'         => [
+                        'User-Agent'      => $userAgent,
+                        'Accept'          => 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7',
+                        'Accept-Language' => 'en-US,en;q=0.9',
+                        'Accept-Encoding' => 'gzip, deflate, br',
+                        'DNT'             => '1',
+                        'Connection'      => 'keep-alive',
+                        'Upgrade-Insecure-Requests' => '1',
+                        'Sec-Ch-Ua'       => '"Not A(Bit:Brand";v="99", "Google Chrome";v="121", "Chromium";v="121"',
+                        'Sec-Ch-Ua-Mobile'=> str_contains($userAgent, 'Mobile') ? '?1' : '?0',
+                        'Sec-Ch-Ua-Platform' => str_contains($userAgent, 'Windows') ? '"Windows"' : (str_contains($userAgent, 'Macintosh') ? '"macOS"' : '"Linux"'),
+                        'Sec-Fetch-Site'  => 'none',
+                        'Sec-Fetch-Mode'  => 'navigate',
+                        'Sec-Fetch-User'  => '?1',
+                        'Sec-Fetch-Dest'  => 'document',
+                        'Referer'         => $attempt === 1 ? 'https://www.google.com/' : $url,
+                        'Cache-Control'   => 'max-age=0',
+                    ],
+                ]);
+
+                $response = $client->get($url);
+                $html = (string) $response->getBody();
+                
+                if ($response->getStatusCode() === 200) {
+                    break; // Success
+                }
+            } catch (\GuzzleHttp\Exception\RequestException $e) {
+                if ($e->hasResponse() && $e->getResponse()->getStatusCode() === 403 && $attempt < $maxAttempts) {
+                    Log::warning("Manual analyze: 403 detected for {$url}. Retrying with different UA (Attempt {$attempt})...");
+                    usleep(500000); // Wait 0.5s before retry
+                    $attempt++;
+                    continue;
+                }
+                throw $e; // Rethrow if not 403 or last attempt
+            }
+            $attempt++;
+        }
+
+        $loadTime = round(microtime(true) - $startTime, 3);
+        $httpStatus = $response->getStatusCode();
+        $effectiveUrl = $url;
+
         try {
-            $client = new \GuzzleHttp\Client([
-                'timeout'         => 25,
-                'connect_timeout' => 10,
-                'verify'          => false,
-                'allow_redirects' => ['max' => 5, 'track_redirects' => true],
-                'headers'         => [
-                    'User-Agent'      => 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36',
-                    'Accept'          => 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8',
-                    'Accept-Language' => 'en-US,en;q=0.9',
-                    'Accept-Encoding' => 'gzip, deflate, br',
-                    'DNT'             => '1',
-                    'Connection'      => 'keep-alive',
-                    'Upgrade-Insecure-Requests' => '1',
-                    'Cache-Control'   => 'max-age=0',
-                ],
-            ]);
-
-            $response  = $client->get($url);
-            $loadTime  = round(microtime(true) - $startTime, 3);
-            $html      = (string) $response->getBody();
-            $httpStatus = $response->getStatusCode();
-            $effectiveUrl = $url;
-
             // --- Parse HTML with DOMDocument ---
             $dom = new \DOMDocument();
             @$dom->loadHTML(mb_convert_encoding($html, 'HTML-ENTITIES', 'UTF-8'), LIBXML_NOERROR);
@@ -889,6 +931,7 @@ class SitemapController extends Controller
                 'http_status' => $httpStatus,
                 'load_time'   => $loadTime,
                 'score'       => $seoAudit['score'],
+                'attempts'    => $attempt,
             ]);
 
             return response()->json([
@@ -903,7 +946,13 @@ class SitemapController extends Controller
         } catch (\GuzzleHttp\Exception\RequestException $e) {
             $code = $e->hasResponse() ? $e->getResponse()->getStatusCode() : 0;
             Log::warning("Manual analyze: request error ({$code}) for {$url}");
-            return response()->json(['success' => false, 'message' => "Request failed with HTTP {$code}. The site may be blocking automated access."], 422);
+            
+            $msg = "Request failed with HTTP {$code}.";
+            if ($code === 403) {
+                $msg = "Access Denied (403). The site is heavily protected against automated access.";
+            }
+
+            return response()->json(['success' => false, 'message' => $msg], 422);
         } catch (\Exception $e) {
             Log::error("Manual analyze: unexpected error for {$url}: " . $e->getMessage());
             return response()->json(['success' => false, 'message' => 'An unexpected error occurred: ' . $e->getMessage()], 500);
