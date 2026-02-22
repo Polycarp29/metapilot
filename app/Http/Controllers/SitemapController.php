@@ -675,6 +675,241 @@ class SitemapController extends Controller
         return back()->with('error', 'Failed to dispatch recrawl.');
     }
 
+    public function manualAnalyzeLink(SitemapLink $link)
+    {
+        $this->authorizeLinkForOrganization($link);
+
+        $url = $link->url;
+        $startTime = microtime(true);
+
+        try {
+            $client = new \GuzzleHttp\Client([
+                'timeout'         => 25,
+                'connect_timeout' => 10,
+                'verify'          => false,
+                'allow_redirects' => ['max' => 5, 'track_redirects' => true],
+                'headers'         => [
+                    'User-Agent'      => 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36',
+                    'Accept'          => 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8',
+                    'Accept-Language' => 'en-US,en;q=0.9',
+                    'Accept-Encoding' => 'gzip, deflate, br',
+                    'DNT'             => '1',
+                    'Connection'      => 'keep-alive',
+                    'Upgrade-Insecure-Requests' => '1',
+                    'Cache-Control'   => 'max-age=0',
+                ],
+            ]);
+
+            $response  = $client->get($url);
+            $loadTime  = round(microtime(true) - $startTime, 3);
+            $html      = (string) $response->getBody();
+            $httpStatus = $response->getStatusCode();
+            $effectiveUrl = $url;
+
+            // --- Parse HTML with DOMDocument ---
+            $dom = new \DOMDocument();
+            @$dom->loadHTML(mb_convert_encoding($html, 'HTML-ENTITIES', 'UTF-8'), LIBXML_NOERROR);
+            $xpath = new \DOMXPath($dom);
+
+            // Title
+            $titleNodes = $xpath->query('//title');
+            $title = $titleNodes->length > 0 ? trim($titleNodes->item(0)->textContent) : null;
+
+            // Meta Description
+            $descNodes = $xpath->query('//meta[@name="description"]/@content');
+            $description = $descNodes->length > 0 ? trim($descNodes->item(0)->textContent) : null;
+
+            // H1
+            $h1Nodes = $dom->getElementsByTagName('h1');
+            $h1 = $h1Nodes->length > 0 ? trim($h1Nodes->item(0)->textContent) : null;
+
+            // Canonical
+            $canonicalNodes = $xpath->query('//link[@rel="canonical"]/@href');
+            $canonicalUrl = $canonicalNodes->length > 0 ? trim($canonicalNodes->item(0)->textContent) : null;
+
+            // Keywords
+            $kwNodes = $xpath->query('//meta[@name="keywords"]/@content');
+            $keywords = $kwNodes->length > 0 ? array_map('trim', explode(',', $kwNodes->item(0)->textContent)) : [];
+
+            // JSON-LD Extraction
+            $extractedJsonLd = [];
+            $ldScripts = $xpath->query('//script[@type="application/ld+json"]');
+            foreach ($ldScripts as $script) {
+                try {
+                    $parsed = json_decode(trim($script->textContent), true);
+                    if ($parsed) {
+                        $extractedJsonLd[] = $parsed;
+                    }
+                } catch (\Exception $e) {}
+            }
+
+            // --- Canonical check ---
+            $normalize = fn($u) => strtolower(rtrim(trim($u), '/'));
+            $isCanonical = true;
+            if ($httpStatus >= 300) {
+                $isCanonical = false;
+            } elseif ($canonicalUrl) {
+                $isCanonical = $normalize($url) === $normalize($canonicalUrl);
+            }
+
+            // --- SEO Audit ---
+            $seoAudit = ['errors' => [], 'warnings' => [], 'score' => 100];
+
+            if (!$title) {
+                $seoAudit['errors'][] = 'Missing <title> tag';
+                $seoAudit['score'] -= 30;
+            } elseif (mb_strlen($title) > 60) {
+                $seoAudit['warnings'][] = 'Title is too long (> 60 chars)';
+                $seoAudit['score'] -= 5;
+            } elseif (mb_strlen($title) < 20) {
+                $seoAudit['warnings'][] = 'Title is too short (< 20 chars)';
+                $seoAudit['score'] -= 3;
+            }
+
+            if (!$h1) {
+                $seoAudit['errors'][] = 'Missing <h1> tag';
+                $seoAudit['score'] -= 20;
+            } else {
+                $h1Count = $dom->getElementsByTagName('h1')->length;
+                if ($h1Count > 1) {
+                    $seoAudit['warnings'][] = "Multiple H1 tags found ({$h1Count})";
+                    $seoAudit['score'] -= 5;
+                }
+            }
+
+            if (!$description) {
+                $seoAudit['warnings'][] = 'Missing meta description';
+                $seoAudit['score'] -= 10;
+            } elseif (mb_strlen($description) > 160) {
+                $seoAudit['warnings'][] = 'Meta description too long (> 160 chars)';
+                $seoAudit['score'] -= 3;
+            }
+
+            // Image alt coverage
+            $allImgs   = $dom->getElementsByTagName('img');
+            $missingAlt = 0;
+            foreach ($allImgs as $img) {
+                if (!$img->hasAttribute('alt') || trim($img->getAttribute('alt')) === '') {
+                    $missingAlt++;
+                }
+            }
+            if ($allImgs->length > 0 && $missingAlt > 0) {
+                $ratio = $missingAlt / $allImgs->length;
+                if ($ratio > 0.5) {
+                    $seoAudit['errors'][] = "{$missingAlt}/{$allImgs->length} images missing alt text";
+                    $seoAudit['score'] -= 15;
+                } else {
+                    $seoAudit['warnings'][] = "{$missingAlt}/{$allImgs->length} images missing alt text";
+                    $seoAudit['score'] -= 5;
+                }
+            }
+
+            // Internal link count
+            $allAnchors   = $dom->getElementsByTagName('a');
+            $internalCount = 0;
+            $parsedBase    = parse_url($url);
+            $baseDomain    = ($parsedBase['scheme'] ?? 'https') . '://' . ($parsedBase['host'] ?? '');
+            foreach ($allAnchors as $a) {
+                $href = $a->getAttribute('href');
+                if ($href && (str_starts_with($href, '/') || str_starts_with($href, $baseDomain))) {
+                    $internalCount++;
+                }
+            }
+
+            $seoAudit['score'] = max(0, $seoAudit['score']);
+
+            // --- SSL Info ---
+            $sslInfo = [
+                'is_secure'   => str_starts_with($url, 'https'),
+                'certificate' => str_starts_with($url, 'https') ? 'Active (HTTPS)' : 'Not Secure (HTTP)',
+            ];
+
+            // --- Request Analysis ---
+            $responseHeaders = [];
+            foreach ($response->getHeaders() as $name => $values) {
+                $responseHeaders[$name] = implode(', ', $values);
+            }
+            $requestAnalysis = [
+                'status'       => $httpStatus,
+                'effective_url'=> $effectiveUrl,
+                'headers'      => $responseHeaders,
+                'size_kb'      => round(strlen($html) / 1024, 2),
+            ];
+
+            // --- Schema Suggestions (heuristic) ---
+            $bodyText = strtolower(strip_tags($html));
+            $schemaSuggestions = [];
+            if (preg_match('/\$\d+|€\d+|£\d+|add to cart|buy now|price/i', $html)) {
+                $schemaSuggestions[] = 'Product';
+            }
+            if (preg_match('/frequently asked|faq/i', $html) || substr_count($bodyText, '?') > 5) {
+                $schemaSuggestions[] = 'FAQPage';
+            }
+            if (str_contains(strtolower($title ?? ''), 'how to') || str_contains(strtolower($h1 ?? ''), 'how to')) {
+                $schemaSuggestions[] = 'HowTo';
+            }
+            if (str_word_count($bodyText) > 400) {
+                $schemaSuggestions[] = 'Article';
+            }
+            if (empty($schemaSuggestions)) {
+                $schemaSuggestions[] = 'WebPage';
+            }
+
+            // --- Bottleneck analysis from SitemapService ---
+            $sitemapService = app(SitemapService::class);
+            $bottlenecks  = $sitemapService->analyzeUrlStructure($url);
+            $slugQuality  = $sitemapService->assessSlugQuality($url);
+
+            // --- Persist to database ---
+            $link->update([
+                'title'            => $title,
+                'description'      => $description,
+                'h1'               => $h1,
+                'canonical'        => $canonicalUrl,
+                'canonical_url'    => $canonicalUrl,
+                'is_canonical'     => $isCanonical,
+                'http_status'      => $httpStatus,
+                'effective_url'    => $effectiveUrl,
+                'load_time'        => $loadTime,
+                'keywords'         => $keywords,
+                'schema_suggestions' => $schemaSuggestions,
+                'seo_audit'        => $seoAudit,
+                'ssl_info'         => $sslInfo,
+                'request_analysis' => $requestAnalysis,
+                'extracted_json_ld'=> $extractedJsonLd,
+                'internal_links_out' => $internalCount,
+                'seo_bottlenecks'  => $bottlenecks,
+                'url_slug_quality' => $slugQuality,
+                'status'           => 'completed',
+            ]);
+
+            $link->refresh();
+
+            Log::info("Manual PHP analysis completed for link #{$link->id}: {$url}", [
+                'http_status' => $httpStatus,
+                'load_time'   => $loadTime,
+                'score'       => $seoAudit['score'],
+            ]);
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Manual analysis complete!',
+                'link'    => $link,
+            ]);
+
+        } catch (\GuzzleHttp\Exception\ConnectException $e) {
+            Log::warning("Manual analyze: connection failure for {$url}: " . $e->getMessage());
+            return response()->json(['success' => false, 'message' => 'Could not connect to the URL. The site may be offline or blocking all requests.'], 422);
+        } catch (\GuzzleHttp\Exception\RequestException $e) {
+            $code = $e->hasResponse() ? $e->getResponse()->getStatusCode() : 0;
+            Log::warning("Manual analyze: request error ({$code}) for {$url}");
+            return response()->json(['success' => false, 'message' => "Request failed with HTTP {$code}. The site may be blocking automated access."], 422);
+        } catch (\Exception $e) {
+            Log::error("Manual analyze: unexpected error for {$url}: " . $e->getMessage());
+            return response()->json(['success' => false, 'message' => 'An unexpected error occurred: ' . $e->getMessage()], 500);
+        }
+    }
+
     public function recrawlAll(Sitemap $sitemap)
     {
         $this->authorizeForOrganization($sitemap);

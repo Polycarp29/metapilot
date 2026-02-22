@@ -78,6 +78,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::post('/sitemaps/links/{link}/ai-analyze', [SitemapController::class, 'aiAnalyze'])->name('sitemaps.links.ai-analyze');
     Route::post('/sitemaps/links/{link}/generate-json-ld', [SitemapController::class, 'generateJsonLd'])->name('sitemaps.links.generate-json-ld');
     Route::post('/sitemaps/links/{link}/recrawl', [SitemapController::class, 'recrawlLink'])->name('sitemaps.links.recrawl');
+    Route::post('/sitemaps/links/{link}/manual-analyze', [SitemapController::class, 'manualAnalyzeLink'])->name('sitemaps.links.manual-analyze');
     Route::post('/sitemaps/{sitemap}/links', [SitemapController::class, 'addLink'])->name('sitemaps.links.store');
     Route::put('/sitemaps/links/{link}', [SitemapController::class, 'updateLink'])->name('sitemaps.links.update');
     Route::delete('/sitemaps/links/{link}', [SitemapController::class, 'destroyLink'])->name('sitemaps.links.destroy');

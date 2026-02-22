@@ -527,6 +527,95 @@
         </div>
       </div>
     </div>
+    <!-- Crawl Mode Chooser Modal -->
+    <div v-if="showCrawlModeModal" class="fixed inset-0 z-[130] flex items-center justify-center p-6 bg-slate-900/60 backdrop-blur-md">
+      <div class="bg-white w-full max-w-lg rounded-[3rem] shadow-[0_32px_80px_-16px_rgba(0,0,0,0.15)] p-10 relative scale-in-center overflow-hidden border border-slate-100">
+        <!-- top gradient bar -->
+        <div class="absolute top-0 left-0 w-full h-1.5 bg-gradient-to-r from-indigo-500 via-blue-500 to-emerald-400 rounded-t-[3rem]"></div>
+
+        <button @click="showCrawlModeModal = false; manualCrawling = false" class="absolute top-8 right-8 w-9 h-9 flex items-center justify-center bg-slate-50 text-slate-400 hover:text-slate-900 hover:bg-slate-100 rounded-full transition-colors">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+        </button>
+
+        <!-- Header -->
+        <div class="mb-8 text-center pt-4">
+          <div class="w-14 h-14 bg-gradient-to-br from-indigo-100 to-blue-100 rounded-2xl flex items-center justify-center mx-auto mb-5 shadow-lg shadow-indigo-100">
+            <svg class="w-7 h-7 text-indigo-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/></svg>
+          </div>
+          <h2 class="text-2xl font-black text-slate-900 tracking-tight">Choose Analysis Mode</h2>
+          <p class="text-slate-500 text-sm font-medium mt-2 px-4 truncate">{{ selectedLink?.url }}</p>
+        </div>
+
+        <!-- Mode Cards -->
+        <div v-if="!manualCrawling" class="grid grid-cols-2 gap-4">
+
+          <!-- Option A: View Existing (instant) -->
+          <button
+            @click="openIntelligenceReport"
+            class="group relative flex flex-col items-start gap-3 p-6 rounded-[2rem] border-2 border-slate-100 bg-slate-50 hover:border-blue-300 hover:bg-blue-50 transition-all duration-300 text-left"
+          >
+            <div class="w-10 h-10 bg-white rounded-xl flex items-center justify-center shadow-sm group-hover:shadow-blue-100 group-hover:bg-blue-100 transition-all">
+              <svg class="w-5 h-5 text-slate-500 group-hover:text-blue-600 transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/></svg>
+            </div>
+            <div>
+              <p class="text-xs font-black text-slate-700 uppercase tracking-widest group-hover:text-blue-700">View Report</p>
+              <p class="text-[10px] text-slate-400 font-medium mt-1 leading-relaxed">See last crawled data instantly</p>
+            </div>
+            <span class="text-[9px] bg-slate-100 text-slate-500 font-black uppercase tracking-widest px-2.5 py-1 rounded-full group-hover:bg-blue-100 group-hover:text-blue-600 transition-colors">Instant</span>
+          </button>
+
+          <!-- Option B: Auto Crawl (Python) -->
+          <button
+            @click="selectAutoCrawl(selectedLink)"
+            class="group relative flex flex-col items-start gap-3 p-6 rounded-[2rem] border-2 border-slate-100 bg-slate-50 hover:border-indigo-300 hover:bg-indigo-50 transition-all duration-300 text-left"
+          >
+            <div class="w-10 h-10 bg-white rounded-xl flex items-center justify-center shadow-sm group-hover:shadow-indigo-100 group-hover:bg-indigo-100 transition-all">
+              <svg class="w-5 h-5 text-slate-500 group-hover:text-indigo-600 transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17H3a2 2 0 01-2-2V5a2 2 0 012-2h16a2 2 0 012 2v10a2 2 0 01-2 2h-2M12 3v1"/></svg>
+            </div>
+            <div>
+              <p class="text-xs font-black text-slate-700 uppercase tracking-widest group-hover:text-indigo-700">Auto Crawl</p>
+              <p class="text-[10px] text-slate-400 font-medium mt-1 leading-relaxed">Python + Playwright full render</p>
+            </div>
+            <span class="text-[9px] bg-indigo-50 text-indigo-500 font-black uppercase tracking-widest px-2.5 py-1 rounded-full group-hover:bg-indigo-100 group-hover:text-indigo-700 transition-colors">Async</span>
+          </button>
+
+          <!-- Option C: Manual Crawl (PHP) -->
+          <button
+            @click="manualCrawl(selectedLink)"
+            class="group col-span-2 relative flex items-center gap-5 p-6 rounded-[2rem] border-2 border-slate-100 bg-slate-50 hover:border-emerald-300 hover:bg-emerald-50 transition-all duration-300 text-left"
+          >
+            <div class="w-12 h-12 bg-white rounded-2xl flex items-center justify-center shadow-sm group-hover:shadow-emerald-100 group-hover:bg-emerald-100 transition-all flex-shrink-0">
+              <svg class="w-6 h-6 text-slate-500 group-hover:text-emerald-600 transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4"/></svg>
+            </div>
+            <div class="flex-grow">
+              <p class="text-xs font-black text-slate-700 uppercase tracking-widest group-hover:text-emerald-700">Manual Crawl <span class="text-slate-400 font-medium normal-case">(PHP)</span></p>
+              <p class="text-[10px] text-slate-400 font-medium mt-1 leading-relaxed">Real browser headers via PHP/Guzzle. Works on bot-resistant sites. Extracts full SEO data synchronously.</p>
+            </div>
+            <span class="text-[9px] bg-emerald-50 text-emerald-600 font-black uppercase tracking-widest px-2.5 py-1 rounded-full group-hover:bg-emerald-100 group-hover:text-emerald-700 transition-colors flex-shrink-0">Live</span>
+          </button>
+        </div>
+
+        <!-- Manual Crawl Loading State -->
+        <div v-else class="py-10 flex flex-col items-center gap-5">
+          <div class="relative w-16 h-16">
+            <div class="w-16 h-16 rounded-full border-4 border-emerald-100 border-t-emerald-500 animate-spin"></div>
+            <div class="absolute inset-0 flex items-center justify-center">
+              <svg class="w-6 h-6 text-emerald-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4"/></svg>
+            </div>
+          </div>
+          <div class="text-center">
+            <p class="font-black text-slate-900 text-sm">PHP Crawler Running...</p>
+            <p class="text-[10px] text-slate-400 font-medium mt-1 tracking-widest uppercase">Fetching · Parsing · Auditing</p>
+          </div>
+          <div class="flex gap-1.5">
+            <span class="w-1.5 h-1.5 bg-emerald-400 rounded-full animate-bounce" style="animation-delay:0ms"></span>
+            <span class="w-1.5 h-1.5 bg-emerald-400 rounded-full animate-bounce" style="animation-delay:150ms"></span>
+            <span class="w-1.5 h-1.5 bg-emerald-400 rounded-full animate-bounce" style="animation-delay:300ms"></span>
+          </div>
+        </div>
+      </div>
+    </div>
+
     <!-- Link Analysis (Intelligence) Modal -->
     <div v-if="showAnalysisModal" class="fixed inset-0 z-[120] flex items-center justify-center p-6 bg-slate-900/40 backdrop-blur-sm">
       <div class="bg-white w-full max-w-5xl rounded-[3.5rem] shadow-[0_32px_64px_-16px_rgba(0,0,0,0.1)] p-12 relative scale-in-center overflow-y-auto max-h-[90vh] border border-slate-100">
@@ -770,6 +859,8 @@ const showDeleteContainerModal = ref(false)
 const showAnalysisModal = ref(false)
 const showProgressModal = ref(false)
 const showRecrawlModal = ref(false)
+const showCrawlModeModal = ref(false)
+const manualCrawling = ref(false)
 const showCompletionToast = ref(false)
 const showLinkToast = ref(false)
 const lastDiscoveredUrl = ref('')
@@ -1095,7 +1186,43 @@ const cancelCrawl = () => {
 
 const analyzeLink = (link) => {
   selectedLink.value = link
+  showCrawlModeModal.value = true
+}
+
+const openIntelligenceReport = () => {
+  showCrawlModeModal.value = false
   showAnalysisModal.value = true
+}
+
+const selectAutoCrawl = (link) => {
+  showCrawlModeModal.value = false
+  // Dispatch python recrawl (depth 0, single page), then open report with existing data
+  router.post(route('sitemaps.links.recrawl', link.id), {}, {
+    onSuccess: () => {
+      // The page will reload via Inertia; open modal with refreshed link data
+      showAnalysisModal.value = true
+    }
+  })
+}
+
+const manualCrawl = async (link) => {
+  manualCrawling.value = true
+  try {
+    const response = await axios.post(route('sitemaps.links.manual-analyze', link.id), {}, {
+      headers: { 'Accept': 'application/json' }
+    })
+    if (response.data?.success && response.data?.link) {
+      // Merge fresh data into selectedLink so the modal shows updated fields
+      selectedLink.value = { ...selectedLink.value, ...response.data.link }
+    }
+    showCrawlModeModal.value = false
+    showAnalysisModal.value = true
+  } catch (err) {
+    const msg = err.response?.data?.message || 'Manual analysis failed. The site may be blocking all requests.'
+    alert(msg)
+  } finally {
+    manualCrawling.value = false
+  }
 }
 
 const autoGenerateAiSchema = () => {
