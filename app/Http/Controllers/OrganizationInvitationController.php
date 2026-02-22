@@ -54,7 +54,7 @@ class OrganizationInvitationController extends Controller
             'expires_at' => now()->addDays(7),
         ]);
 
-        Mail::to($validated['email'])->send(new InvitationMailable($invitation));
+        Mail::to($validated['email'])->queue(new InvitationMailable($invitation));
 
         return back()->with('message', 'Invitation sent successfully.');
     }
