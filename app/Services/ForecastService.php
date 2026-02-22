@@ -23,8 +23,8 @@ class ForecastService
         $startDate = now()->subDays($lookbackDays)->format('Y-m-d');
 
         // Fetch historical data
-        $history = MetricSnapshot::where('analytics_property_id', $propertyId)
-            ->whereBetween('snapshot_date', [$startDate, $endDate])
+        $history = MetricSnapshot::where('metric_snapshots.analytics_property_id', $propertyId)
+            ->whereBetween('metric_snapshots.snapshot_date', [$startDate, $endDate])
             ->leftJoin('search_console_metrics', function ($join) {
                 $join->on('metric_snapshots.analytics_property_id', '=', 'search_console_metrics.analytics_property_id')
                     ->on('metric_snapshots.snapshot_date', '=', 'search_console_metrics.snapshot_date');
