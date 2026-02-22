@@ -8,6 +8,7 @@ use App\Http\Controllers\SitemapController;
 use App\Http\Controllers\CrawlScheduleController;
 use App\Http\Controllers\WelcomeController;
 use Illuminate\Support\Facades\Route;
+use Inertia\Inertia;
 
 // Public Legal Routes
 Route::get('privacy', [\App\Http\Controllers\LegalController::class, 'privacy'])->name('privacy');
@@ -36,7 +37,7 @@ Route::get('auth/google', [\App\Http\Controllers\GoogleAuthController::class, 'r
 Route::get('auth/google/callback', [\App\Http\Controllers\GoogleAuthController::class, 'handleGoogleCallback'])->name('auth.google.callback');
 
 // Authenticated routes
-Route::middleware('auth')->group(function () {
+Route::middleware(['auth', 'verified'])->group(function () {
     // Logout
     Route::post('logout', [LoginController::class, 'destroy'])->name('logout');
 
@@ -151,4 +152,25 @@ Route::middleware('auth')->group(function () {
     // Organization Selection
     Route::get('organizations/select', [\App\Http\Controllers\OrganizationController::class, 'select'])->name('organizations.select');
     Route::post('organizations/select', [\App\Http\Controllers\OrganizationController::class, 'store'])->name('organizations.select.store');
+});
+
+// Invitation Acceptance (Public/Guest or Auth)
+Route::get('invitations/{token}', [\App\Http\Controllers\Auth\InvitationAcceptanceController::class, 'show'])->name('invitations.accept');
+Route::post('invitations/{token}', [\App\Http\Controllers\Auth\InvitationAcceptanceController::class, 'store']);
+
+// Email Verification Routes
+Route::middleware('auth')->group(function () {
+    Route::get('email/verify', function () {
+        return Inertia::render('Auth/VerifyEmail');
+    })->name('verification.notice');
+
+    Route::get('email/verify/{id}/{hash}', function (\Illuminate\Foundation\Auth\EmailVerificationRequest $request) {
+        $request->fulfill();
+        return redirect('/dashboard');
+    })->middleware('signed')->name('verification.verify');
+
+    Route::post('email/verification-notification', function (\Illuminate\Http\Request $request) {
+        $request->user()->sendEmailVerificationNotification();
+        return back()->with('status', 'verification-link-sent');
+    })->middleware('throttle:6,1')->name('verification.send');
 });

@@ -8,6 +8,7 @@ class OrganizationInvitation extends Model
 {
     protected $fillable = [
         'organization_id',
+        'project_id',
         'invited_by',
         'email',
         'token',
@@ -27,6 +28,14 @@ class OrganizationInvitation extends Model
     public function organization()
     {
         return $this->belongsTo(Organization::class);
+    }
+
+    /**
+     * Get the project (SEO Campaign) targeted by this invitation.
+     */
+    public function project()
+    {
+        return $this->belongsTo(SeoCampaign::class, 'project_id');
     }
 
     /**

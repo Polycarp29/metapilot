@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Http\Requests\RegisterRequest;
 use App\Models\Organization;
 use App\Models\User;
+use Illuminate\Auth\Events\Registered;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
@@ -41,6 +42,9 @@ class RegisterController extends Controller
 
             // Log user in
             Auth::login($user);
+
+            // Fire registered event for email verification
+            event(new Registered($user));
 
             // Set organization context
             session(['current_organization_id' => $organization->id]);

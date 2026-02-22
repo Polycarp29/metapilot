@@ -4,6 +4,8 @@ namespace App\Http\Controllers;
 
 use Illuminate\Http\Request;
 
+use Illuminate\Support\Facades\Mail;
+use App\Mail\InvitationMailable;
 use App\Models\Organization;
 use App\Models\OrganizationInvitation;
 use App\Models\User;
@@ -40,18 +42,19 @@ class OrganizationInvitationController extends Controller
                 },
             ],
             'role' => 'required|in:admin,member',
+            'project_id' => 'nullable|exists:seo_campaigns,id',
         ]);
 
         $invitation = $organization->invitations()->create([
             'invited_by' => auth()->id(),
             'email' => $validated['email'],
             'role' => $validated['role'],
+            'project_id' => $validated['project_id'] ?? null,
             'token' => Str::random(32),
             'expires_at' => now()->addDays(7),
         ]);
 
-        // TODO: Send email
-        // Mail::to($validated['email'])->send(new OrganizationInvitation($invitation));
+        Mail::to($validated['email'])->send(new InvitationMailable($invitation));
 
         return back()->with('message', 'Invitation sent successfully.');
     }

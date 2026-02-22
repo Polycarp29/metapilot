@@ -13,7 +13,19 @@ class AnalyticsPropertyPolicy
      */
     public function view(User $user, AnalyticsProperty $analyticsProperty): bool
     {
-        return $user->organizations->contains($analyticsProperty->organization_id);
+        $organization = $user->organizations()->where('organizations.id', $analyticsProperty->organization_id)->first();
+        
+        if (!$organization) {
+            return false;
+        }
+
+        // If user is restricted to a project, they can only see properties linked to that project
+        if ($organization->pivot->project_id) {
+            $campaign = \App\Models\SeoCampaign::find($organization->pivot->project_id);
+            return $campaign && $campaign->analytics_property_id === $analyticsProperty->id;
+        }
+
+        return true;
     }
 
     /**
@@ -21,7 +33,18 @@ class AnalyticsPropertyPolicy
      */
     public function create(User $user): bool
     {
-        return true;
+        $organization = $user->currentOrganization();
+        if (!$organization) return false;
+
+        $role = $user->getRoleIn($organization);
+        $pivot = $user->organizations()->where('organization_id', $organization->id)->first();
+
+        // Restricted users cannot create new properties
+        if ($pivot && $pivot->pivot->project_id) {
+            return false;
+        }
+
+        return in_array($role, ['owner', 'admin']);
     }
 
     /**
@@ -29,7 +52,15 @@ class AnalyticsPropertyPolicy
      */
     public function update(User $user, AnalyticsProperty $analyticsProperty): bool
     {
-        return $user->organizations->contains($analyticsProperty->organization_id);
+        $organization = $user->organizations()->where('organizations.id', $analyticsProperty->organization_id)->first();
+        
+        if (!$organization) return false;
+
+        if ($organization->pivot->project_id) {
+            return false; // Restricted users cannot update properties
+        }
+
+        return in_array($organization->pivot->role, ['owner', 'admin']);
     }
 
     /**
@@ -37,6 +68,14 @@ class AnalyticsPropertyPolicy
      */
     public function delete(User $user, AnalyticsProperty $analyticsProperty): bool
     {
-        return $user->organizations->contains($analyticsProperty->organization_id);
+        $organization = $user->organizations()->where('organizations.id', $analyticsProperty->organization_id)->first();
+        
+        if (!$organization) return false;
+
+        if ($organization->pivot->project_id) {
+            return false; // Restricted users cannot delete properties
+        }
+
+        return $organization->pivot->role === 'owner';
     }
 }
