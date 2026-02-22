@@ -1,5 +1,6 @@
 <template>
   <div class="min-h-screen bg-slate-50 flex flex-col relative overflow-hidden font-sans">
+    <Toaster />
     <!-- Background Accents -->
     <div class="absolute top-0 -left-4 w-72 h-72 bg-primary/10 rounded-full mix-blend-multiply filter blur-3xl opacity-70 animate-blob"></div>
     <div class="absolute top-0 -right-4 w-72 h-72 bg-blue-400/10 rounded-full mix-blend-multiply filter blur-3xl opacity-70 animate-blob animation-delay-2000"></div>
@@ -76,15 +77,25 @@
 <script setup>
 import { computed } from 'vue';
 import { useForm, router } from '@inertiajs/vue3';
+import { useToastStore } from '@/stores/useToastStore';
+import Toaster from '@/Components/Toaster.vue';
 
 const props = defineProps({
   status: String,
 });
 
+const toast = useToastStore();
 const form = useForm({});
 
 const submit = () => {
-  form.post(route('verification.send'));
+  form.post(route('verification.send'), {
+    onSuccess: () => {
+      toast.success('Verification link sent successfully!');
+    },
+    onError: () => {
+      toast.error('Failed to send verification link. Please try again.');
+    }
+  });
 };
 
 const logout = () => {
