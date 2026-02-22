@@ -17,6 +17,13 @@ class SyncPropertyDataJob implements ShouldQueue
     use Dispatchable, InteractsWithQueue, Queueable, SerializesModels;
 
     /**
+     * The queue name for the job.
+     *
+     * @var string
+     */
+    public $queue = 'gsc';
+
+    /**
      * The AnalyticsProperty instance.
      *
      * @var \App\Models\AnalyticsProperty
