@@ -445,7 +445,7 @@ class SitemapController extends Controller
 
         $pdf = Pdf::loadView('reports.crawler_pdf', [
             'sitemap' => $sitemap,
-            'links' => $links
+            'links' => collect($links)
         ])->setPaper('a4', 'landscape');
 
         $filename = "crawler-report-" . Str::slug($sitemap->name) . "-" . now()->format('Y-m-d') . ".pdf";
