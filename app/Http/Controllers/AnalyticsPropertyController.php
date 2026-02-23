@@ -38,7 +38,13 @@ class AnalyticsPropertyController extends Controller
         );
 
         // Dispatch background sync immediately
+        $property->update(['sync_status' => 'syncing']);
         \App\Jobs\SyncPropertyDataJob::dispatch($property);
+
+        auth()->user()->logActivity('property_create', "Connected analytics property: {$property->name}", [
+            'property_id' => $property->id,
+            'ga4_id' => $property->property_id
+        ], $property->organization_id);
 
         // Clear session after use
         session()->forget(['google_access_token', 'google_refresh_token', 'google_token_expires_at']);
@@ -78,6 +84,7 @@ class AnalyticsPropertyController extends Controller
         $property->update($updateData);
 
         // Dispatch background sync
+        $property->update(['sync_status' => 'syncing']);
         \App\Jobs\SyncPropertyDataJob::dispatch($property);
 
         return back()->with('message', 'Analytics property updated. Syncing data in background...');
@@ -93,7 +100,15 @@ class AnalyticsPropertyController extends Controller
             abort(403, 'Unauthorized');
         }
 
+        $propertyName = $property->name;
+        $propertyId = $property->id;
+        $orgId = $property->organization_id;
+
         $property->delete();
+
+        auth()->user()->logActivity('property_disconnect', "Disconnected analytics property: {$propertyName}", [
+            'property_id' => $propertyId
+        ], $orgId);
 
         return back()->with('message', 'Analytics property disconnected.');
     }

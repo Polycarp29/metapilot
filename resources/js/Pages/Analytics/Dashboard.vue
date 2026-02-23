@@ -55,6 +55,16 @@ const isAutoRefreshEnabled = ref(false)
 const autoRefreshInterval = ref(null)
 const lastRefetchTime = ref(null)
 const activeTab = ref('overview')
+const showSyncSuccessToast = ref(false)
+const syncPollingInterval = ref(null)
+
+const selectedProperty = computed(() => {
+  return props.properties.find(p => p.id === selectedPropertyId.value)
+})
+
+const isSyncing = computed(() => {
+  return selectedProperty.value?.sync_status === 'syncing'
+})
 
 const opportunityKeywords = computed(() => {
   if (!overview.value?.top_queries) return []
@@ -363,6 +373,43 @@ const toggleAutoRefresh = () => {
   }
 }
 
+const startSyncPolling = () => {
+  if (syncPollingInterval.value) return
+  
+  syncPollingInterval.value = setInterval(() => {
+    router.reload({ 
+      only: ['properties'], 
+      preserveScroll: true, 
+      preserveState: true,
+      onSuccess: () => {
+        if (selectedProperty.value?.sync_status === 'completed') {
+          stopSyncPolling()
+          showSyncSuccessToast.value = true
+          setTimeout(() => showSyncSuccessToast.value = false, 8000)
+          fetchData() // Refetch data to show fresh sync results
+        } else if (selectedProperty.value?.sync_status === 'failed') {
+          stopSyncPolling()
+        }
+      }
+    })
+  }, 5000)
+}
+
+const stopSyncPolling = () => {
+  if (syncPollingInterval.value) {
+    clearInterval(syncPollingInterval.value)
+    syncPollingInterval.value = null
+  }
+}
+
+watch(isSyncing, (syncing) => {
+  if (syncing) {
+    startSyncPolling()
+  } else {
+    stopSyncPolling()
+  }
+}, { immediate: true })
+
 const getSEOStatus = (rate, deviceType = 'desktop') => {
   const percentage = (rate || 0) * 100
   const isMobile = deviceType?.toLowerCase() === 'mobile' || deviceType?.toLowerCase() === 'tablet'
@@ -432,6 +479,7 @@ onUnmounted(() => {
   if (autoRefreshInterval.value) {
     clearInterval(autoRefreshInterval.value)
   }
+  stopSyncPolling()
 })
 
 </script>
@@ -498,6 +546,18 @@ onUnmounted(() => {
             <div class="w-2 h-2 rounded-full" :class="isAutoRefreshEnabled ? 'bg-emerald-500 animate-pulse' : 'bg-slate-300'"></div>
             <span class="text-xs font-bold transition-colors" :class="isAutoRefreshEnabled ? 'text-emerald-600' : 'text-slate-500'">Auto</span>
           </button>
+        </div>
+
+        <!-- Sync Progress Indicator -->
+        <div v-if="isSyncing" class="flex items-center gap-4 bg-blue-600 text-white px-6 py-3 rounded-2xl shadow-xl shadow-blue-200 animate-in slide-in-from-right-4 duration-500">
+          <div class="relative flex h-2.5 w-2.5">
+            <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-blue-100 opacity-75"></span>
+            <span class="relative inline-flex rounded-full h-2.5 w-2.5 bg-white"></span>
+          </div>
+          <div class="flex flex-col">
+            <span class="text-[10px] font-black uppercase tracking-widest text-blue-100 leading-none">Background Sync</span>
+            <span class="text-xs font-bold mt-0.5">Updating property data...</span>
+          </div>
         </div>
 
         <div v-if="isCustomRange" class="flex items-center gap-3 bg-white p-2 px-4 rounded-2xl shadow-premium border border-slate-100 animate-in fade-in slide-in-from-top-2 duration-300">
@@ -1488,6 +1548,35 @@ onUnmounted(() => {
          </Link>
       </div>
     </div>
+
+    <!-- Sync Success Toast -->
+    <Transition
+      enter-active-class="transform transition ease-out duration-300"
+      enter-from-class="translate-y-10 opacity-0"
+      enter-to-class="translate-y-0 opacity-100"
+      leave-active-class="transition ease-in duration-200"
+      leave-from-class="opacity-100"
+      leave-to-class="opacity-0"
+    >
+      <div v-if="showSyncSuccessToast" class="fixed bottom-10 right-10 z-[100]">
+        <div class="bg-emerald-600 text-white p-6 rounded-[2rem] shadow-2xl border border-emerald-400/30 flex items-center gap-6 backdrop-blur-md">
+          <div class="w-12 h-12 bg-white/20 rounded-2xl flex items-center justify-center text-white">
+            <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M5 13l4 4L19 7" />
+            </svg>
+          </div>
+          <div>
+            <h4 class="text-sm font-black tracking-tight uppercase tracking-widest text-emerald-50">Sync Complete</h4>
+            <p class="text-[10px] text-emerald-100 font-medium whitespace-nowrap">Property analytics have been synchronized.</p>
+          </div>
+          <button @click="showSyncSuccessToast = false" class="text-emerald-200 hover:text-white transition-colors p-2">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </button>
+        </div>
+      </div>
+    </Transition>
   </AppLayout>
 </template>
 

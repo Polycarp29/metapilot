@@ -118,7 +118,7 @@
         </div>
         <div class="summary-item">
             <label>Load Time Avg</label>
-            <span>{{ number_format($links->avg('load_time'), 2) }}s</span>
+            <span>{{ number_format($avg_load_time, 2) }}s</span>
         </div>
     </div>
 

@@ -17,10 +17,24 @@ class InvitationAcceptanceController extends Controller
      */
     public function show(string $token)
     {
-        $invitation = OrganizationInvitation::where('token', $token)
-            ->where('expires_at', '>', now())
-            ->whereNull('accepted_at')
-            ->firstOrFail();
+        \Illuminate\Support\Facades\Log::info("Invitation check: Token received: {$token}");
+
+        $invitation = OrganizationInvitation::where('token', $token)->first();
+
+        if (!$invitation) {
+            \Illuminate\Support\Facades\Log::warning("Invitation 404: Token '{$token}' not found in database.");
+            abort(404, 'Invitation not found.');
+        }
+
+        if ($invitation->isExpired()) {
+            \Illuminate\Support\Facades\Log::warning("Invitation 404: Token '{$token}' is expired. Email: {$invitation->email}, Expires at: {$invitation->expires_at}");
+            abort(404, 'Invitation has expired.');
+        }
+
+        if ($invitation->isAccepted()) {
+            \Illuminate\Support\Facades\Log::warning("Invitation 404: Token '{$token}' already accepted. Email: {$invitation->email}, Accepted at: {$invitation->accepted_at}");
+            abort(404, 'Invitation has already been accepted.');
+        }
 
         $user = User::where('email', $invitation->email)->first();
 
@@ -80,6 +94,11 @@ class InvitationAcceptanceController extends Controller
         ]);
 
         $invitation->accept();
+
+        $user->logActivity('invitation_accepted', "Accepted invitation to join {$organization->name}", [
+            'organization_id' => $organization->id,
+            'role' => $invitation->role
+        ], $organization->id);
 
         if (!Auth::check() || Auth::id() !== $user->id) {
             Auth::login($user);

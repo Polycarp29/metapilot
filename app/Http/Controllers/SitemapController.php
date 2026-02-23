@@ -97,6 +97,11 @@ class SitemapController extends Controller
             'user_id' => $owner->id
         ]));
 
+        auth()->user()->logActivity('sitemap_create', "Created sitemap: {$sitemap->name}", [
+            'sitemap_id' => $sitemap->id,
+            'filename' => $sitemap->filename
+        ], $organization->id);
+
         return redirect()->route('sitemaps.show', $sitemap)
             ->with('message', 'Sitemap container created!');
     }
@@ -132,8 +137,16 @@ class SitemapController extends Controller
     {
         $this->authorizeForOrganization($sitemap);
 
+        $sitemapName = $sitemap->name;
+        $sitemapId = $sitemap->id;
+        $orgId = $sitemap->organization_id;
+
         $sitemap->links()->delete();
         $sitemap->delete();
+
+        auth()->user()->logActivity('sitemap_delete', "Deleted sitemap: {$sitemapName}", [
+            'sitemap_id' => $sitemapId
+        ], $orgId);
 
         return redirect()->route('sitemaps.index')->with('message', 'Sitemap deleted!');
     }
@@ -443,9 +456,13 @@ class SitemapController extends Controller
                 }
             });
 
+        $linksCollection = collect($links);
+        $avgLoadTime = $linksCollection->avg('load_time') ?? 0;
+
         $pdf = Pdf::loadView('reports.crawler_pdf', [
             'sitemap' => $sitemap,
-            'links' => collect($links)
+            'links' => $linksCollection,
+            'avg_load_time' => $avgLoadTime
         ])->setPaper('a4', 'landscape');
 
         $filename = "crawler-report-" . Str::slug($sitemap->name) . "-" . now()->format('Y-m-d') . ".pdf";

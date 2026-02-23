@@ -20,6 +20,8 @@ class AnalyticsProperty extends Model
         'token_expires_at',
         'google_token_invalid',
         'gsc_permission_error',
+        'sync_status',
+        'last_sync_at',
     ];
 
     protected $casts = [
@@ -28,6 +30,7 @@ class AnalyticsProperty extends Model
         'token_expires_at' => 'datetime',
         'google_token_invalid' => 'boolean',
         'gsc_permission_error' => 'boolean',
+        'last_sync_at' => 'datetime',
     ];
 
     /**

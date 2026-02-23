@@ -14,6 +14,29 @@ class User extends Authenticatable implements MustVerifyEmail
     use HasFactory, Notifiable;
 
     /**
+     * Get the user's activities.
+     */
+    public function activities()
+    {
+        return $this->hasMany(UserActivity::class);
+    }
+
+    /**
+     * Log a new activity for the user.
+     */
+    public function logActivity(string $type, string $description, ?array $metadata = null, ?int $organizationId = null): UserActivity
+    {
+        return $this->activities()->create([
+            'organization_id' => $organizationId ?? session('current_organization_id'),
+            'activity_type' => $type,
+            'description' => $description,
+            'metadata' => $metadata,
+            'ip_address' => request()->ip(),
+            'user_agent' => request()->userAgent(),
+        ]);
+    }
+
+    /**
      * Send the email verification notification.
      *
      * @return void

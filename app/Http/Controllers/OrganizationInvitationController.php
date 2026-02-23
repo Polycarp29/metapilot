@@ -56,6 +56,12 @@ class OrganizationInvitationController extends Controller
 
         Mail::to($validated['email'])->queue(new InvitationMailable($invitation));
 
+        auth()->user()->logActivity('invitation_sent', "Sent invitation to {$validated['email']}", [
+            'email' => $validated['email'],
+            'role' => $validated['role'],
+            'project_id' => $validated['project_id'] ?? null
+        ], $organization->id);
+
         return back()->with('message', 'Invitation sent successfully.');
     }
 
@@ -74,7 +80,12 @@ class OrganizationInvitationController extends Controller
             abort(403, 'You do not have permission to manage invitations.');
         }
 
+        $email = $invitation->email;
         $invitation->delete();
+
+        auth()->user()->logActivity('invitation_revoked', "Revoked invitation for {$email}", [
+            'email' => $email
+        ], $organization->id);
 
         return back()->with('message', 'Invitation cancelled.');
     }

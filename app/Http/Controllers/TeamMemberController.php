@@ -65,6 +65,11 @@ class TeamMemberController extends Controller
 
         $organization->users()->updateExistingPivot($targetUser->id, ['role' => $validated['role']]);
 
+        auth()->user()->logActivity('member_role_update', "Updated role for {$targetUser->name} to {$validated['role']}", [
+            'target_user_id' => $targetUser->id,
+            'new_role' => $validated['role']
+        ], $organization->id);
+
         return back()->with('message', 'Member role updated.');
     }
 
@@ -94,6 +99,11 @@ class TeamMemberController extends Controller
         }
 
         $organization->users()->detach($id);
+
+        auth()->user()->logActivity('member_removal', "Removed member {$targetUser->name} from organization", [
+            'target_user_id' => $id,
+            'target_user_email' => $targetUser->email
+        ], $organization->id);
 
         return back()->with('message', 'Member removed from organization.');
     }

@@ -11,6 +11,10 @@ class OrganizationSettingsController extends Controller
     {
         $organization = auth()->user()->currentOrganization();
         
+        if (auth()->user()->getRoleIn($organization) === 'member') {
+            abort(403, 'Members do not have access to organization settings.');
+        }
+        
         return Inertia::render('Settings/Index', [
             'organization' => $organization,
             'members' => $organization->users()->withPivot('role')->get()->map(function ($user) {
@@ -69,6 +73,11 @@ class OrganizationSettingsController extends Controller
             'keyword_discovery_frequency' => $validated['keyword_discovery_frequency'] ?? 24,
             'settings' => $mergedSettings,
         ]);
+
+        auth()->user()->logActivity('settings_update', "Updated organization settings for {$organization->name}", [
+            'organization_id' => $organization->id,
+            'changes' => array_keys($newSettings)
+        ], $organization->id);
 
         return back()->with('message', 'Organization settings updated.');
     }
