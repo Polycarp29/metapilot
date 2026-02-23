@@ -60,6 +60,7 @@
             width: 100%;
             border-collapse: collapse;
             margin-top: 20px;
+            table-layout: fixed;
         }
         th {
             background-color: #f1f5f9;
@@ -90,7 +91,15 @@
         .status-discovered { background-color: #fef9c3; color: #854d0e; }
         .status-error { background-color: #fee2e2; color: #991b1b; }
         
-        .url { font-weight: 700; color: #4f46e5; word-break: break-all; }
+        .url { 
+            font-weight: 700; 
+            color: #4f46e5; 
+            word-wrap: break-word; 
+            word-break: break-all;
+            overflow-wrap: break-word;
+            font-size: 9px;
+            line-height: 1.2;
+        }
         .title { color: #1e293b; margin-top: 4px; display: block; }
         .footer {
             padding: 30px;
@@ -135,9 +144,9 @@
             <thead>
                 <tr>
                     <th width="35%">Page Details</th>
-                    <th width="10%">Status</th>
-                    <th width="10%">Load Time</th>
-                    <th width="45%">Intelligence & Audit Findings</th>
+                    <th width="8%">Status</th>
+                    <th width="7%">Load Time</th>
+                    <th width="50%">Intelligence & Audit Findings</th>
                 </tr>
             </thead>
             <tbody>
