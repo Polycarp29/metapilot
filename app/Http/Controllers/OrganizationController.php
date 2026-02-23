@@ -37,6 +37,10 @@ class OrganizationController extends Controller
 
         session(['current_organization_id' => $request->organization_id]);
 
+        auth()->user()->logActivity('organization_select', "Selected organization: " . (\App\Models\Organization::find($request->organization_id)->name ?? 'Unknown'), [
+            'organization_id' => $request->organization_id
+        ], $request->organization_id);
+
         return redirect()->route('dashboard');
     }
 }

@@ -401,6 +401,9 @@ class SitemapController extends Controller
             // CSV Headers
             fputcsv($file, [
                 'URL',
+                'SEO Score',
+                'Slug Quality',
+                'SEO Bottlenecks',
                 'Title',
                 'Description',
                 'H1',
@@ -411,14 +414,22 @@ class SitemapController extends Controller
                 'Depth',
                 'Load Time (s)',
                 'Internal Links In',
-                'Internal Links Out',
-                'Priority',
-                'ChangeFreq'
+                'Internal Links Out'
             ]);
 
+            $sitemapService = app(\App\Services\SitemapService::class);
+
             foreach ($links as $link) {
+                $seoScore = $sitemapService->calculateSeoScore($link);
+                $bottlenecks = collect(is_array($link->seo_bottlenecks) ? $link->seo_bottlenecks : [])
+                    ->pluck('message')
+                    ->implode('; ');
+
                 fputcsv($file, [
                     $link->url,
+                    $seoScore,
+                    ucfirst($link->url_slug_quality ?? 'unknown'),
+                    $bottlenecks ?: 'None',
                     $link->title ?? 'N/A',
                     $link->description ?? 'N/A',
                     $link->h1 ?? 'N/A',
@@ -429,9 +440,7 @@ class SitemapController extends Controller
                     $link->depth_from_root,
                     number_format($link->load_time, 2),
                     $link->internal_links_in,
-                    $link->internal_links_out,
-                    $link->priority,
-                    $link->changefreq
+                    $link->internal_links_out
                 ]);
             }
 
@@ -466,11 +475,16 @@ class SitemapController extends Controller
         $linksCollection = collect($links);
         $avgLoadTime = $linksCollection->avg('load_time') ?? 0;
         
+        $sitemapService = app(\App\Services\SitemapService::class);
         $totalBottlenecks = 0;
         $canonicalCount = 0;
         $redirectsCount = 0;
+        $totalSeoScore = 0;
 
         foreach ($linksCollection as $link) {
+            $link->seo_score = $sitemapService->calculateSeoScore($link);
+            $totalSeoScore += $link->seo_score;
+
             if (!empty($link->seo_bottlenecks)) {
                 $totalBottlenecks += count($link->seo_bottlenecks);
             }
@@ -482,6 +496,8 @@ class SitemapController extends Controller
             }
         }
 
+        $avgSeoScore = $linksCollection->count() > 0 ? $totalSeoScore / $linksCollection->count() : 0;
+
         $pdf = Pdf::loadView('reports.crawler_pdf', [
             'sitemap' => $sitemap,
             'links' => $linksCollection,
@@ -491,7 +507,8 @@ class SitemapController extends Controller
                 'total_bottlenecks' => $totalBottlenecks,
                 'canonical_count' => $canonicalCount,
                 'redirects_count' => $redirectsCount,
-                'avg_load_time' => $avgLoadTime
+                'avg_load_time' => $avgLoadTime,
+                'avg_seo_score' => $avgSeoScore
             ]
         ])->setPaper('a4', 'landscape');
 
@@ -545,6 +562,13 @@ class SitemapController extends Controller
             'url' => $startUrl,
             'depth' => $validated['max_depth'] ?? 3
         ]);
+
+        auth()->user()->logActivity('sitemap_crawl_trigger', "Manually triggered crawl for: {$sitemap->name}", [
+            'sitemap_id' => $sitemap->id,
+            'start_url' => $startUrl,
+            'max_depth' => $validated['max_depth'] ?? 3,
+            'job_id' => $actualJobId
+        ], $sitemap->organization_id);
 
         if ($request->wantsJson() || $request->ajax()) {
             return response()->json([
@@ -727,6 +751,13 @@ class SitemapController extends Controller
 
         if ($result) {
             $link->update(['status' => 'crawling']);
+
+            auth()->user()->logActivity('sitemap_link_recrawl', "Manually triggered recrawl for link: {$link->url}", [
+                'link_id' => $link->id,
+                'sitemap_id' => $sitemap->id,
+                'job_id' => $jobId
+            ], $sitemap->organization_id);
+
             return back()->with('message', 'Recrawl dispatched for this link!');
         }
 
@@ -992,6 +1023,12 @@ class SitemapController extends Controller
                 'attempts'    => $attempt,
             ]);
 
+            auth()->user()->logActivity('sitemap_link_analyze', "Manually triggered SEO analysis for link: {$link->url}", [
+                'link_id' => $link->id,
+                'sitemap_id' => $link->sitemap_id,
+                'seo_score' => $seoAudit['score']
+            ], $link->sitemap->organization_id);
+
             return response()->json([
                 'success' => true,
                 'message' => 'Manual analysis complete!',
@@ -1025,6 +1062,10 @@ class SitemapController extends Controller
         $sitemap->links()->update(['status' => 'pending']);
 
         // Restart main crawl
+        auth()->user()->logActivity('sitemap_recrawl_all', "Manually triggered full recrawl for sitemap: {$sitemap->name}", [
+            'sitemap_id' => $sitemap->id
+        ], $sitemap->organization_id);
+
         return $this->crawl(request(), $sitemap);
     }
 

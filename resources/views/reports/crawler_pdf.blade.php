@@ -38,7 +38,7 @@
         .summary-item {
             display: table-cell;
             text-align: center;
-            width: 20%;
+            width: 16.6%;
         }
         .summary-item label {
             display: block;
@@ -115,8 +115,13 @@
         <h1>Sitemap Intelligence Report</h1>
         <p>{{ $sitemap->name }} ({{ $sitemap->filename }})</p>
     </div>
-
     <div class="summary">
+        <div class="summary-item">
+            <label>SEO Score</label>
+            <span style="color: {{ $summary['avg_seo_score'] >= 80 ? '#166534' : ($summary['avg_seo_score'] >= 50 ? '#854d0e' : '#991b1b') }};">
+                {{ number_format($summary['avg_seo_score'], 0) }}/100
+            </span>
+        </div>
         <div class="summary-item">
             <label>Total Links</label>
             <span>{{ $summary['total_links'] }}</span>
@@ -167,6 +172,9 @@
                     <td>{{ number_format($link->load_time, 2) }}s</td>
                     <td style="background-color: #f8fafc;">
                         <div style="margin-bottom: 6px;">
+                            <span class="status-badge" style="background-color: {{ $link->seo_score >= 80 ? '#dcfce7' : ($link->seo_score >= 50 ? '#fef9c3' : '#fee2e2') }}; color: {{ $link->seo_score >= 80 ? '#166534' : ($link->seo_score >= 50 ? '#854d0e' : '#991b1b') }};">
+                                SCORE: {{ $link->seo_score }}/100
+                            </span>
                             <span class="status-badge" style="background-color: {{ $link->url_slug_quality === 'good' ? '#dcfce7' : ($link->url_slug_quality === 'warning' ? '#fef9c3' : '#fee2e2') }}; color: {{ $link->url_slug_quality === 'good' ? '#166534' : ($link->url_slug_quality === 'warning' ? '#854d0e' : '#991b1b') }};">
                                 Slug: {{ ucfirst($link->url_slug_quality ?? 'Unknown') }}
                             </span>

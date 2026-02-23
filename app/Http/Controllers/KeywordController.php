@@ -43,6 +43,13 @@ class KeywordController extends Controller
                 $gl,
                 $hl
             );
+
+            auth()->user()->logActivity('keyword_research', "Performed keyword research for: {$query}", [
+                'query' => $query,
+                'location' => $gl,
+                'language' => $hl,
+                'cached' => $data['cached'] ?? false
+            ], auth()->user()->currentOrganization()->id);
         }
 
         return Inertia::render('Keywords/Research', [

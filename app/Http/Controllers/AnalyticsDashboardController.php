@@ -186,6 +186,13 @@ class AnalyticsDashboardController extends Controller
             Log::info("Serving cached AI insight for property {$property->id} (Created at: {$insight->insight_at}).");
         }
 
+        auth()->user()->logActivity('analytics_insight_view', "Viewed AI insights for property: {$property->name}", [
+            'property_id' => $property->id,
+            'start_date' => $startDate,
+            'end_date' => $endDate,
+            'generated_new' => (!$insight || $request->has('refresh'))
+        ], $property->organization_id);
+
         return response()->json($insight);
     }
 
@@ -246,6 +253,12 @@ class AnalyticsDashboardController extends Controller
 
         try {
             $insight = $this->insightService->generateAdPerformanceInsight($property, $adData);
+
+            auth()->user()->logActivity('ad_insight_generate', "Generated ad performance insights for property: {$property->name}", [
+                'property_id' => $property->id,
+                'industry' => $industry
+            ], $property->organization_id);
+
             return response()->json($insight);
         } catch (\Exception $e) {
             Log::error("Ad Insight Generation Error: " . $e->getMessage());

@@ -68,6 +68,12 @@ class CrawlScheduleController extends Controller
 
         $schedule->update(['next_run_at' => $schedule->computeNextRunAt()]);
 
+        auth()->user()->logActivity('schedule_create', "Created crawl schedule for: {$sitemap->name}", [
+            'schedule_id' => $schedule->id,
+            'sitemap_id' => $sitemap->id,
+            'frequency' => $validated['frequency']
+        ], $organization->id);
+
         return back()->with('message', 'Crawl schedule created!');
     }
 
@@ -93,6 +99,11 @@ class CrawlScheduleController extends Controller
             $schedule->update(['next_run_at' => $schedule->computeNextRunAt()]);
         }
 
+        auth()->user()->logActivity('schedule_update', "Updated crawl schedule for: {$schedule->sitemap?->name}", [
+            'schedule_id' => $schedule->id,
+            'changes' => array_keys($validated)
+        ], $organization->id);
+
         return back()->with('message', 'Schedule updated!');
     }
 
@@ -103,7 +114,19 @@ class CrawlScheduleController extends Controller
             abort(403);
         }
 
+        if (!auth()->user()->canManage($organization)) {
+            abort(403, 'Only organization owners and admins can delete crawl schedules.');
+        }
+
+        $sitemapName = $schedule->sitemap?->name;
+        $scheduleId = $schedule->id;
+        $orgId = $schedule->organization_id;
+
         $schedule->delete();
+
+        auth()->user()->logActivity('schedule_delete', "Deleted crawl schedule for: {$sitemapName}", [
+            'schedule_id' => $scheduleId
+        ], $orgId);
 
         return back()->with('message', 'Schedule deleted!');
     }

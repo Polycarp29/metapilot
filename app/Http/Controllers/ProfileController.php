@@ -57,6 +57,11 @@ class ProfileController extends Controller
 
         $user->save();
 
+        auth()->user()->logActivity('profile_update', "Updated personal profile information", [
+            'changed_email' => $user->wasChanged('email'),
+            'changed_password' => !empty($validated['password'])
+        ]);
+
         return back()->with('message', 'Profile updated successfully.');
     }
 }

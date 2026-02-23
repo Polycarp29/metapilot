@@ -182,4 +182,55 @@ class SitemapService
         if ($warnings >= 1) return 'warning';
         return 'good';
     }
+    /**
+     * Calculate an SEO score (0-100) for a sitemap link.
+     */
+    public function calculateSeoScore($link): int
+    {
+        $score = 100;
+
+        // 1. Bottlenecks
+        $bottlenecks = is_array($link->seo_bottlenecks) ? $link->seo_bottlenecks : [];
+        foreach ($bottlenecks as $bottleneck) {
+            $severity = $bottleneck['severity'] ?? 'info';
+            if ($severity === 'warning') {
+                $score -= 10;
+            } else {
+                $score -= 5;
+            }
+        }
+
+        // 2. Canonical
+        if (!$link->is_canonical) {
+            $score -= 15;
+        }
+
+        // 3. HTTP Status
+        $status = $link->http_status ?? 200;
+        if ($status >= 400) {
+            $score -= 40;
+        } elseif ($status >= 300) {
+            $score -= 10;
+        }
+
+        // 4. Content Basics
+        if (empty($link->title)) {
+            $score -= 15;
+        }
+        if (empty($link->h1)) {
+            $score -= 10;
+        }
+        if (empty($link->description)) {
+            $score -= 10;
+        }
+
+        // 5. Performance
+        if ($link->load_time > 2.0) {
+            $score -= 10;
+        } elseif ($link->load_time > 1.0) {
+            $score -= 5;
+        }
+
+        return (int) max(0, $score);
+    }
 }
