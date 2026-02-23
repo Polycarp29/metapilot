@@ -174,7 +174,12 @@
         </div>
 
         <!-- Links Table -->
-        <div class="lg:col-span-3 space-y-6">
+        <div 
+          :class="[
+            'lg:col-span-3 space-y-6 transition-all duration-500',
+            isFullScreen ? 'fixed inset-0 z-[100] bg-slate-50 p-8 overflow-y-auto' : ''
+          ]"
+        >
            <!-- Table Search & Filter Bar -->
            <div class="flex flex-col md:flex-row items-center gap-6 bg-white p-6 rounded-[2.5rem] border border-slate-100 shadow-sm">
              <div class="relative flex-grow w-full">
@@ -205,6 +210,22 @@
                     {{ filter }}
                   </button>
                 </div>
+
+                <button 
+                  @click="isFullScreen = !isFullScreen"
+                  :class="[
+                    'w-12 h-12 rounded-2xl flex items-center justify-center transition-standard active:scale-95 border',
+                    isFullScreen ? 'bg-slate-900 text-white border-slate-900' : 'bg-white text-slate-400 border-slate-200 hover:border-slate-900 hover:text-slate-900'
+                  ]"
+                  :title="isFullScreen ? 'Exit Full Screen' : 'Expand to Full Screen'"
+                >
+                  <svg v-if="!isFullScreen" class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4" />
+                  </svg>
+                  <svg v-else class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
              </div>
            </div>
 
@@ -851,7 +872,7 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, watch } from 'vue'
 import { Link, useForm, router } from '@inertiajs/vue3'
 import AppLayout from '../../Layouts/AppLayout.vue'
 import axios from 'axios'
@@ -886,7 +907,16 @@ const errorToastMessage = ref('')
 const showLinkToast = ref(false)
 const lastDiscoveredUrl = ref('')
 const discoveredTimeout = ref(null)
+const isFullScreen = ref(false)
 const lastHandledDiscoveredCount = ref(0)
+
+watch(isFullScreen, (val) => {
+  if (val) {
+    document.body.style.overflow = 'hidden'
+  } else {
+    document.body.style.overflow = ''
+  }
+})
 
 const handleNewDiscovery = (url) => {
   lastDiscoveredUrl.value = url

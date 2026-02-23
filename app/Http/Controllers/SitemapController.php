@@ -428,9 +428,20 @@ class SitemapController extends Controller
     {
         $this->authorizeForOrganization($sitemap);
 
-        $links = $sitemap->links()
+        // Increase limits for large exports
+        ini_set('memory_limit', '512M');
+        set_time_limit(300);
+
+        // Fetch links in chunks to manage memory overhead, though DomPDF still needs the full set
+        $links = [];
+        $sitemap->links()
+            ->select(['url', 'title', 'status', 'load_time', 'is_canonical', 'http_status'])
             ->orderBy('url')
-            ->get();
+            ->chunk(200, function ($chunk) use (&$links) {
+                foreach ($chunk as $link) {
+                    $links[] = $link;
+                }
+            });
 
         $pdf = Pdf::loadView('reports.crawler_pdf', [
             'sitemap' => $sitemap,
