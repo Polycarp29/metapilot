@@ -38,6 +38,10 @@ class SitemapController extends Controller
         if (!$organization || $sitemap->organization_id !== $organization->id) {
             abort(403, 'You do not have access to this sitemap.');
         }
+
+        if (!auth()->user()->canManage($organization)) {
+            abort(403, 'Only organization owners and admins can delete sitemaps.');
+        }
     }
 
     /**
@@ -448,7 +452,10 @@ class SitemapController extends Controller
         // Fetch links in chunks to manage memory overhead, though DomPDF still needs the full set
         $links = [];
         $sitemap->links()
-            ->select(['url', 'title', 'status', 'load_time', 'is_canonical', 'http_status'])
+            ->select([
+                'url', 'title', 'status', 'load_time', 'is_canonical', 'http_status',
+                'seo_bottlenecks', 'url_slug_quality', 'h1', 'description'
+            ])
             ->orderBy('url')
             ->chunk(200, function ($chunk) use (&$links) {
                 foreach ($chunk as $link) {
@@ -458,11 +465,34 @@ class SitemapController extends Controller
 
         $linksCollection = collect($links);
         $avgLoadTime = $linksCollection->avg('load_time') ?? 0;
+        
+        $totalBottlenecks = 0;
+        $canonicalCount = 0;
+        $redirectsCount = 0;
+
+        foreach ($linksCollection as $link) {
+            if (!empty($link->seo_bottlenecks)) {
+                $totalBottlenecks += count($link->seo_bottlenecks);
+            }
+            if ($link->is_canonical) {
+                $canonicalCount++;
+            }
+            if ($link->http_status >= 300 && $link->http_status < 400) {
+                $redirectsCount++;
+            }
+        }
 
         $pdf = Pdf::loadView('reports.crawler_pdf', [
             'sitemap' => $sitemap,
             'links' => $linksCollection,
-            'avg_load_time' => $avgLoadTime
+            'avg_load_time' => $avgLoadTime,
+            'summary' => [
+                'total_links' => $linksCollection->count(),
+                'total_bottlenecks' => $totalBottlenecks,
+                'canonical_count' => $canonicalCount,
+                'redirects_count' => $redirectsCount,
+                'avg_load_time' => $avgLoadTime
+            ]
         ])->setPaper('a4', 'landscape');
 
         $filename = "crawler-report-" . Str::slug($sitemap->name) . "-" . now()->format('Y-m-d') . ".pdf";

@@ -92,6 +92,11 @@ class CampaignKeywordController extends Controller
                 'keyword_count' => count($request->input('keyword_ids'))
             ]);
 
+            auth()->user()->logActivity('campaign_keywords_attach', "Attached " . count($request->input('keyword_ids')) . " keywords to campaign: {$campaign->name}", [
+                'campaign_id' => $campaign->id,
+                'keyword_ids' => $request->input('keyword_ids')
+            ], auth()->user()->currentOrganization()->id);
+
             return response()->json([
                 'message' => 'Keywords attached successfully',
                 'campaign' => $campaign->load('trendingKeywords'),
@@ -132,6 +137,10 @@ class CampaignKeywordController extends Controller
 
         try {
             $keywords = $this->service->discoverTrendingKeywords($organization);
+
+            auth()->user()->logActivity('keyword_discovery_trigger', "Manually triggered keyword discovery", [
+                'keywords_discovered' => count($keywords)
+            ], $organization->id);
 
             return response()->json([
                 'message' => 'Keyword discovery completed',

@@ -38,7 +38,7 @@
         .summary-item {
             display: table-cell;
             text-align: center;
-            width: 33%;
+            width: 20%;
         }
         .summary-item label {
             display: block;
@@ -110,15 +110,23 @@
     <div class="summary">
         <div class="summary-item">
             <label>Total Links</label>
-            <span>{{ count($links) }}</span>
+            <span>{{ $summary['total_links'] }}</span>
         </div>
         <div class="summary-item">
-            <label>Report Date</label>
-            <span>{{ now()->format('M d, Y') }}</span>
+            <label>SEO Bottlenecks</label>
+            <span style="color: {{ $summary['total_bottlenecks'] > 0 ? '#991b1b' : '#166534' }};">{{ $summary['total_bottlenecks'] }}</span>
         </div>
         <div class="summary-item">
-            <label>Load Time Avg</label>
-            <span>{{ number_format($avg_load_time, 2) }}s</span>
+            <label>Canonical Coverage</label>
+            <span>{{ $summary['total_links'] > 0 ? number_format(($summary['canonical_count'] / $summary['total_links']) * 100, 1) : 0 }}%</span>
+        </div>
+        <div class="summary-item">
+            <label>Avg Load Time</label>
+            <span>{{ number_format($summary['avg_load_time'], 2) }}s</span>
+        </div>
+        <div class="summary-item">
+            <label>Redirects</label>
+            <span>{{ $summary['redirects_count'] }}</span>
         </div>
     </div>
 
@@ -126,10 +134,10 @@
         <table>
             <thead>
                 <tr>
-                    <th width="45%">Page Details</th>
-                    <th width="15%">Status</th>
-                    <th width="15%">Load Time</th>
-                    <th width="25%">SEO Context</th>
+                    <th width="35%">Page Details</th>
+                    <th width="10%">Status</th>
+                    <th width="10%">Load Time</th>
+                    <th width="45%">Intelligence & Audit Findings</th>
                 </tr>
             </thead>
             <tbody>
@@ -137,7 +145,10 @@
                 <tr>
                     <td>
                         <div class="url">{{ $link->url }}</div>
-                        <span class="title">{{ $link->title ?? 'No title detected' }}</span>
+                        <span class="title" style="font-size: 10px; color: #64748b;">Title: {{ $link->title ?? 'N/A' }}</span>
+                        @if($link->h1)
+                            <div style="font-size: 9px; color: #94a3b8; margin-top: 2px;">H1: {{ Str::limit($link->h1, 80) }}</div>
+                        @endif
                     </td>
                     <td>
                         <span class="status-badge status-{{ $link->status }}">
@@ -145,15 +156,26 @@
                         </span>
                     </td>
                     <td>{{ number_format($link->load_time, 2) }}s</td>
-                    <td>
-                        @if($link->is_canonical)
-                            <div style="color: #166534; font-weight: 700;">✓ Canonical</div>
-                        @else
-                            <div style="color: #991b1b; font-weight: 700;">⚠ Non-Canonical</div>
-                        @endif
-                        <div style="margin-top: 4px; color: #64748b;">
-                            HTTP: <strong>{{ $link->http_status ?? 200 }}</strong>
+                    <td style="background-color: #f8fafc;">
+                        <div style="margin-bottom: 6px;">
+                            <span class="status-badge" style="background-color: {{ $link->url_slug_quality === 'good' ? '#dcfce7' : ($link->url_slug_quality === 'warning' ? '#fef9c3' : '#fee2e2') }}; color: {{ $link->url_slug_quality === 'good' ? '#166534' : ($link->url_slug_quality === 'warning' ? '#854d0e' : '#991b1b') }};">
+                                Slug: {{ ucfirst($link->url_slug_quality ?? 'Unknown') }}
+                            </span>
+                            <span style="font-size: 9px; margin-left: 10px; color: #64748b;">HTTP {{ $link->http_status ?? 200 }} | {{ $link->is_canonical ? 'Canonical ✓' : 'Non-Canonical ⚠' }}</span>
                         </div>
+
+                        @if(!empty($link->seo_bottlenecks))
+                            <div style="font-size: 9px; line-height: 1.3;">
+                                <strong style="color: #475569; display: block; margin-bottom: 2px; text-transform: uppercase; font-size: 8px;">SEO Bottlenecks:</strong>
+                                <ul style="margin: 0; padding-left: 14px; color: #991b1b;">
+                                    @foreach($link->seo_bottlenecks as $bottleneck)
+                                        <li style="margin-bottom: 1px;">{{ $bottleneck['message'] ?? $bottleneck }}</li>
+                                    @endforeach
+                                </ul>
+                            </div>
+                        @else
+                            <div style="font-size: 9px; color: #166534;">✓ No critical URL structure bottlenecks identified.</div>
+                        @endif
                     </td>
                 </tr>
                 @endforeach

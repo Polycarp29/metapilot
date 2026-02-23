@@ -131,6 +131,11 @@ class SchemaController extends Controller
             }
         }
 
+        auth()->user()->logActivity('schema_create', "Created schema: {$schema->name}", [
+            'schema_id' => $schema->id,
+            'schema_type' => $schema->schemaType?->name
+        ], $organization->id);
+
         return redirect()->route('schemas.edit', $schema)
             ->with('message', 'Schema created successfully with default SEO fields!');
     }
@@ -206,12 +211,29 @@ class SchemaController extends Controller
     {
         $schema->update($request->validated());
 
+        auth()->user()->logActivity('schema_update', "Updated schema: {$schema->name}", [
+            'schema_id' => $schema->id
+        ], $schema->organization_id);
+
         return back()->with('message', 'Schema updated successfully!');
     }
 
     public function destroy(Schema $schema)
     {
-        $schema->delete();
+        $schemaName = $schema->name;
+        $schemaId = $schema->id;
+        $orgId = $schema->organization_id;
+    $organization = auth()->user()->organizations()->where('organization_id', $orgId)->first();
+    
+    if (!$organization || !auth()->user()->canManage($organization)) {
+        abort(403, 'Only organization owners and admins can delete schemas.');
+    }
+
+    $schema->delete();
+
+        auth()->user()->logActivity('schema_delete', "Deleted schema: {$schemaName}", [
+            'schema_id' => $schemaId
+        ], $orgId);
 
         return redirect()->route('schemas.index')
             ->with('message', 'Schema deleted successfully!');
@@ -603,6 +625,11 @@ class SchemaController extends Controller
                 
                 $this->lastGeneratedSchema = $schema;
             });
+
+            auth()->user()->logActivity('schema_automated_generate', "Generated automated schema: {$this->lastGeneratedSchema->name}", [
+                'schema_id' => $this->lastGeneratedSchema->id,
+                'page_link' => $validated['page_link']
+            ], auth()->user()->currentOrganization()->id);
 
             return redirect()->route('schemas.edit', $this->lastGeneratedSchema)
                 ->with('message', 'Modular automated schema generated successfully!');

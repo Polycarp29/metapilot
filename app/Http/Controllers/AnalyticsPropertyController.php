@@ -95,9 +95,14 @@ class AnalyticsPropertyController extends Controller
      */
     public function destroy(AnalyticsProperty $property)
     {
-        // Ensure user belongs to the same organization as the property
-        if (!request()->user()->organizations->contains($property->organization_id)) {
+        // Ensure user belongs to the same organization as the property and has management rights
+        $organization = auth()->user()->organizations()->where('organization_id', $property->organization_id)->first();
+        if (!$organization) {
             abort(403, 'Unauthorized');
+        }
+
+        if (!auth()->user()->canManage($organization)) {
+            abort(403, 'Only organization owners and admins can disconnect analytics properties.');
         }
 
         $propertyName = $property->name;
