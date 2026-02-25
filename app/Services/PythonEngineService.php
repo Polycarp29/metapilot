@@ -75,7 +75,14 @@ class PythonEngineService
         }
 
         try {
-            Log::info("Sending data to Python Engine API for property {$property->id}");
+            Log::info("Sending data to Python Engine API for property {$property->id}", [
+                'endpoint' => '/predict/full',
+                'payload_size' => strlen(json_encode($payload))
+            ]);
+            
+            // Log full payload in debug mode or for troubleshooting
+            Log::debug("Python Engine Payload for property {$property->id}:", $payload);
+
             $response = Http::timeout(60)->post("{$this->baseUrl}/predict/full", $payload);
 
             if ($response->successful()) {
@@ -84,9 +91,15 @@ class PythonEngineService
                 return true;
             }
 
-            Log::error("Python Engine API returned error for property {$property->id}: " . $response->body());
+            Log::error("Python Engine API returned error for property {$property->id}", [
+                'status' => $response->status(),
+                'body' => $response->body(),
+                'headers' => $response->headers()
+            ]);
         } catch (\Exception $e) {
-            Log::error("Failed to communicate with Python Engine API: " . $e->getMessage());
+            Log::error("Failed to communicate with Python Engine API: " . $e->getMessage(), [
+                'trace' => $e->getTraceAsString()
+            ]);
         }
 
         return false;
@@ -147,6 +160,9 @@ class PythonEngineService
         }
 
         try {
+            Log::info("Sending Ad Performance data to Python Engine for property {$property->id}");
+            Log::debug("Ad Performance Payload:", $payload);
+
             $response = Http::timeout(60)->post("{$this->baseUrl}/predict/ad-performance", $payload);
 
             if ($response->successful()) {
@@ -164,9 +180,16 @@ class PythonEngineService
                     ]
                 );
                 return true;
+            } else {
+                Log::error("Ad Performance prediction API failed for property {$property->id}", [
+                    'status' => $response->status(),
+                    'body' => $response->body()
+                ]);
             }
         } catch (\Exception $e) {
-            Log::error("Ad Performance prediction failed: " . $e->getMessage());
+            Log::error("Ad Performance prediction failed: " . $e->getMessage(), [
+                'trace' => $e->getTraceAsString()
+            ]);
         }
 
         return false;
