@@ -291,6 +291,8 @@ class AnalyticsDashboardController extends Controller
             'performance_rankings' => $forecasts->get('performance_rankings', []),
             'ad_performance'       => $forecasts->get('ad_performance', []),
             'strategic_strategy'   => $forecasts->get('strategic_strategy', []),
+            'sessions'             => $forecasts->get('sessions', []),
+            'conversions'          => $forecasts->get('conversions', []),
         ]);
     }
 
@@ -322,6 +324,8 @@ class AnalyticsDashboardController extends Controller
             'performance_rankings' => $forecasts->get('performance_rankings', []),
             'ad_performance'       => $forecasts->get('ad_performance', []),
             'strategic_strategy'   => $forecasts->get('strategic_strategy', []),
+            'sessions'             => $forecasts->get('sessions', []),
+            'conversions'          => $forecasts->get('conversions', []),
         ]);
     }
 

@@ -41,6 +41,8 @@ const forecasts = ref({
   source_fatigue: {},
   performance_rankings: [],
   ad_performance: [],
+  sessions: {},
+  conversions: {},
   strategic_strategy: {
     summary: '',
     recommendations: [],
@@ -66,7 +68,9 @@ const fetchForecasts = async () => {
       source_fatigue: data.source_fatigue || {},
       performance_rankings: data.performance_rankings || [],
       ad_performance: data.ad_performance || [],
-      strategic_strategy: data.strategic_strategy || { summary: '', recommendations: [], diagnostics: {} }
+      strategic_strategy: data.strategic_strategy || { summary: '', recommendations: [], diagnostics: {} },
+      sessions: data.sessions || {},
+      conversions: data.conversions || {}
     }
 
     simpleForecast.value = simpleRes.data
@@ -101,7 +105,9 @@ const runPredictions = async () => {
       source_fatigue: data.source_fatigue || {},
       performance_rankings: data.performance_rankings || [],
       ad_performance: data.ad_performance || [],
-      strategic_strategy: data.strategic_strategy || { summary: '', recommendations: [], diagnostics: {} }
+      strategic_strategy: data.strategic_strategy || { summary: '', recommendations: [], diagnostics: {} },
+      sessions: data.sessions || {},
+      conversions: data.conversions || {}
     }
 
     state.value = 'ready'
@@ -113,8 +119,30 @@ const runPredictions = async () => {
 
 onMounted(fetchForecasts)
 
-// ─── Chart: Lead Propensity Radar ─────────────────────────────────────────────
+// ─── Chart Data Computeds ─────────────────────────────────────────────────────
 const hasRadarData = computed(() => Object.keys(forecasts.value.propensity_scores).length > 0)
+
+const propensityChartData = computed(() => {
+  if (!hasRadarData.value) return { labels: [], datasets: [] }
+  const labels = Object.keys(forecasts.value.propensity_scores)
+  const data = Object.values(forecasts.value.propensity_scores)
+  return {
+    labels,
+    datasets: [{
+      label: 'Conversion Probability',
+      data,
+      backgroundColor: 'rgba(59, 130, 246, 0.15)',
+      borderColor: '#3b82f6',
+      pointBackgroundColor: '#3b82f6',
+      pointBorderColor: '#fff',
+      pointHoverBackgroundColor: '#fff',
+      pointHoverBorderColor: '#3b82f6',
+      borderWidth: 2,
+      pointBorderWidth: 2,
+      pointRadius: 4
+    }]
+  }
+})
 
 const radarOptions = {
   responsive: true,
@@ -140,15 +168,14 @@ const radarOptions = {
   }
 }
 
-// ─── Chart: Strategic 90d Projections ─────────────────────────────────────────
 const strategicSessions = computed(() => (forecasts.value.sessions || {}))
 const hasStrategicForecast = computed(() => Object.keys(strategicSessions.value).length > 0)
 
 const strategicChartData = computed(() => {
-  const data = forecasts.value.sessions || {}
+  const data = strategicSessions.value
   const labels = ['Now', '30 Days', '90 Days', '180 Days']
   const values = [
-    simpleForecast.value?.users?.[0]?.value || 0, // Fallback to start of trend
+    simpleForecast.value?.users?.[0]?.value || 0, 
     data['30d']?.predicted || 0,
     data['90d']?.predicted || 0,
     data['180d']?.predicted || 0
@@ -323,7 +350,7 @@ const getImpactIcon = (type) => {
             <h5 class="text-xl font-black text-slate-900 leading-snug mb-3">{{ rec.title }}</h5>
             <p class="text-slate-500 text-sm font-medium leading-relaxed mb-8">{{ rec.rationale }}</p>
 
-            <div class="p-6 bg-slate-50 rounded-2xl mb-8 border border-slate-100">
+            <div v-if="rec.expected_impact" class="p-6 bg-slate-50 rounded-2xl mb-8 border border-slate-100">
                <p class="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-4">Impact Forecast</p>
                <div class="flex flex-wrap gap-4">
                   <div v-for="(val, metric) in rec.expected_impact" :key="metric" class="flex items-center gap-2">
@@ -333,7 +360,7 @@ const getImpactIcon = (type) => {
                </div>
             </div>
 
-            <div class="space-y-4">
+            <div v-if="rec.actions && rec.actions.length" class="space-y-4">
                <p class="text-[10px] font-black text-slate-400 uppercase tracking-widest">Next Steps</p>
                <div v-for="(action, aidx) in rec.actions" :key="aidx" class="flex gap-4">
                   <div class="shrink-0 w-6 h-6 rounded-full bg-slate-100 flex items-center justify-center text-[10px] font-black">{{ aidx + 1 }}</div>
@@ -360,12 +387,12 @@ const getImpactIcon = (type) => {
             </div>
             <div class="h-64">
                <Line v-if="hasStrategicForecast" :data="strategicChartData" :options="lineOptions" />
-               <div v-else class="h-full flex items-center justify-center text-slate-300 font-black italic">Generating projection...</div>
+               <div v-else class="h-full flex items-center justify-center text-slate-300 font-black italic text-sm">Generating projection...</div>
             </div>
             <div class="grid grid-cols-3 gap-6 mt-10 pt-10 border-t border-slate-50 text-center">
                <div v-for="p in ['30d', '90d', '180d']" :key="p">
                   <p class="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">{{ p }} Prediction</p>
-                  <p class="text-xl font-black text-slate-900">{{ (forecasts.value.sessions || {})[p]?.predicted || '—' }}</p>
+                  <p class="text-xl font-black text-slate-900">{{ strategicSessions[p]?.predicted || '—' }}</p>
                </div>
             </div>
          </div>
@@ -376,20 +403,21 @@ const getImpactIcon = (type) => {
             <p class="text-xs text-slate-400 font-medium mb-10">Channel conversion probability for fresh leads</p>
             <div class="h-80 flex items-center justify-center">
               <Radar v-if="hasRadarData" :data="propensityChartData" :options="radarOptions" />
-              <p v-else class="text-slate-300 font-black">Waiting for ML data...</p>
+              <p v-else class="text-slate-300 font-black text-sm">Waiting for ML data...</p>
             </div>
          </div>
 
       </div>
 
       <!-- Efficiency Ranking Section -->
-      <div class="bg-white p-10 rounded-[3rem] border border-slate-100 shadow-premium overflow-hidden relative">
+      <div v-if="forecasts.performance_rankings && forecasts.performance_rankings.length" 
+        class="bg-white p-10 rounded-[3rem] border border-slate-100 shadow-premium overflow-hidden relative">
          <div class="flex items-center justify-between mb-8">
             <h3 class="text-xl font-black text-slate-900">Global Channel Efficiency</h3>
             <span class="text-xs font-bold text-slate-400">Total reach: 100% normalized</span>
          </div>
          
-         <div v-if="forecasts.performance_rankings.length" class="space-y-8">
+         <div class="space-y-8">
             <div v-for="rank in forecasts.performance_rankings" :key="rank.channel" class="group">
                <div class="flex items-center justify-between mb-3 px-2">
                   <span class="text-sm font-black text-slate-800">{{ rank.channel }}</span>
@@ -407,7 +435,9 @@ const getImpactIcon = (type) => {
                </div>
             </div>
          </div>
-         <p v-else class="text-center py-20 text-slate-300 font-black italic">Awaiting multi-channel analysis...</p>
+      </div>
+      <div v-else class="bg-white p-10 rounded-[3rem] border border-slate-100 shadow-premium text-center">
+         <p class="py-20 text-slate-300 font-black italic text-sm">Awaiting multi-channel analysis...</p>
       </div>
 
     </div>
