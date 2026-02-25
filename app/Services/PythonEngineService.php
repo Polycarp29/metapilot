@@ -128,7 +128,7 @@ class PythonEngineService
                 
                 $campaignData[] = [
                     'date' => $snapshot->snapshot_date->format('Y-m-d'),
-                    'campaign_name' => $campaignName,
+                    'campaign_name' => (string) $campaignName,
                     'clicks' => (int) ($data['ad_clicks'] ?? 0),
                     'conversions' => (int) ($data['conversions'] ?? 0),
                     'cost' => (float) ($data['ad_cost'] ?? 0),
