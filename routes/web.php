@@ -116,6 +116,8 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::get('/analytics/acquisition/{property}', [\App\Http\Controllers\AnalyticsDashboardController::class, 'getAcquisition'])->name('api.analytics.acquisition');
     Route::get('/analytics/forecast/{property}', [\App\Http\Controllers\AnalyticsDashboardController::class, 'getForecast'])->name('api.analytics.forecast');
     Route::get('/analytics/forecasts/{property}', [\App\Http\Controllers\AnalyticsDashboardController::class, 'getForecasts'])->name('analytics.forecasts');
+    Route::post('/analytics/refresh-predictions/{property}', [\App\Http\Controllers\AnalyticsDashboardController::class, 'refreshPredictions'])->name('analytics.refresh-predictions');
+
     Route::get('/analytics/seo-intelligence/{property}', [\App\Http\Controllers\AnalyticsDashboardController::class, 'getSEOIntelligence'])->name('api.analytics.seo-intelligence');
     Route::post('/analytics/ad-insights/{property}', [\App\Http\Controllers\AnalyticsDashboardController::class, 'getAdInsights'])->name('api.analytics.ad-insights');
     Route::post('api/analytics/properties', [\App\Http\Controllers\AnalyticsPropertyController::class, 'store'])->name('analytics.properties.store');

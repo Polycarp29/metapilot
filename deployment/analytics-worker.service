@@ -7,6 +7,7 @@ User=www-data
 Group=www-data
 WorkingDirectory=/var/www/analytics-engine
 Environment="PATH=/var/www/analytics-engine/venv/bin"
+Environment="MPLCONFIGDIR=/tmp/matplotlib-cache"
 ExecStart=/var/www/analytics-engine/venv/bin/python worker.py
 Restart=always
 

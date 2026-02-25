@@ -294,6 +294,37 @@ class AnalyticsDashboardController extends Controller
     }
 
     /**
+     * Trigger a fresh prediction run for the given property and return the results.
+     */
+    public function refreshPredictions(AnalyticsProperty $property)
+    {
+        $engine = app(\App\Services\PythonEngineService::class);
+
+        // Force sync so results are available immediately for the response
+        $mainSuccess = $engine->processProperty($property, 30, true);
+        $adSuccess   = $engine->processAdPerformance($property, true);
+
+        if (!$mainSuccess && !$adSuccess) {
+            return response()->json([
+                'error' => 'Prediction engine returned no results. Check that the Python service is running and you have sufficient data (at least 7 days of snapshots).',
+            ], 422);
+        }
+
+        // Return the freshly-saved forecasts
+        $forecasts = \App\Models\AnalyticalForecast::where('analytics_property_id', $property->id)
+            ->get()
+            ->pluck('forecast_data', 'forecast_type');
+
+        return response()->json([
+            'propensity_scores'    => $forecasts->get('propensity_scores', []),
+            'source_fatigue'       => $forecasts->get('source_fatigue', []),
+            'performance_rankings' => $forecasts->get('performance_rankings', []),
+            'ad_performance'       => $forecasts->get('ad_performance', []),
+        ]);
+    }
+
+
+    /**
      * Get SEO intelligence alerts and technical health signals.
      */
     public function getSEOIntelligence(AnalyticsProperty $property, Request $request)

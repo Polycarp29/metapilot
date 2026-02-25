@@ -7,6 +7,7 @@ User=www-data
 Group=www-data
 WorkingDirectory=/var/www/analytics-engine
 Environment="PATH=/var/www/analytics-engine/venv/bin"
+Environment="MPLCONFIGDIR=/tmp/matplotlib-cache"
 ExecStart=/var/www/analytics-engine/venv/bin/uvicorn main:app --host 127.0.0.1 --port 8001
 
 [Install]

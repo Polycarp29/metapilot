@@ -137,16 +137,17 @@ class Ga4Service
                     new Dimension(['name' => 'date']),
                 ],
                 'metrics' => [
-                    new Metric(['name' => 'activeUsers']),
-                    new Metric(['name' => 'totalUsers']),
-                    new Metric(['name' => 'newUsers']),
-                    new Metric(['name' => 'returningUsers']),
-                    new Metric(['name' => 'sessions']),
-                    new Metric(['name' => 'engagedSessions']),
-                    new Metric(['name' => 'engagementRate']),
-                    new Metric(['name' => 'averageSessionDuration']),
-                    new Metric(['name' => 'conversions']),
-                    new Metric(['name' => 'bounceRate']),
+                    new Metric(['name' => 'activeUsers']),        // [0]
+                    new Metric(['name' => 'totalUsers']),         // [1]
+                    new Metric(['name' => 'newUsers']),           // [2]
+                    // NOTE: 'returningUsers' is NOT a valid GA4 Data API metric.
+                    // We derive it from totalUsers - newUsers in parseReportResponse().
+                    new Metric(['name' => 'sessions']),           // [3]
+                    new Metric(['name' => 'engagedSessions']),    // [4]
+                    new Metric(['name' => 'engagementRate']),     // [5]
+                    new Metric(['name' => 'averageSessionDuration']), // [6]
+                    new Metric(['name' => 'conversions']),        // [7]
+                    new Metric(['name' => 'bounceRate']),         // [8]
                 ],
             ]);
 
@@ -277,7 +278,12 @@ class Ga4Service
         }
 
         try {
-            // 1. Fetch Session Data (Traffic)
+            // 1. Fetch Session / Traffic Data.
+            // IMPORTANT: 'sessionGoogleAdsCampaignName' is a Google Ads-scoped dimension.
+            // It only returns data for GA4 properties linked to a Google Ads account.
+            // Using it as a dimension on unlinked properties causes the entire request
+            // to return 0 rows (silent failure). We use standard session dimensions instead
+            // and match ad data via the event-scoped 'googleAdsCampaignName' separately.
             $trafficRequest = new RunReportRequest([
                 'property' => 'properties/' . $property->property_id,
                 'date_ranges' => [
@@ -286,7 +292,6 @@ class Ga4Service
                 'dimensions' => [
                     new Dimension(['name' => 'sessionSourceMedium']),
                     new Dimension(['name' => 'sessionCampaignName']),
-                    new Dimension(['name' => 'sessionGoogleAdsCampaignName']), // Keep for identification if possible, or remove if causing issues. The error said REMOVE IT.
                 ],
                 'metrics' => [
                     new Metric(['name' => 'sessions']),
@@ -305,12 +310,6 @@ class Ga4Service
                 ],
             ]);
 
-            // Fix: remove forbidden dimension from Traffic Request too if it was the culprit? 
-            // The error "Please remove sessionGoogleAdsCampaignName" implies it was incompatible with the AD METRICS I added.
-            // With just traffic metrics, it SHOULD be fine. But let's be safe and remove it if not strictly needed OR assume it works with session metrics.
-            // Actually, sessionGoogleAdsCampaignName IS compatible with session metrics. It was checking against ad_cost etc. 
-            // So I will KEEP it here for context, but if it fails again I'll remove it.
-            
             Log::debug("GA4 Request (Campaign Traffic) for Property ID: {$property->property_id}");
             $trafficResponse = $this->client->runReport($trafficRequest);
             Log::debug("GA4 Response (Campaign Traffic) for Property ID: {$property->property_id}", [
@@ -325,21 +324,24 @@ class Ga4Service
                 $metricValues = $row->getMetricValues();
                 
                 $campaignName = $dimValues[1]->getValue();
+                // Skip GA noise rows
+                if (in_array($campaignName, ['(not set)', '(direct)', '(none)'])) {
+                    $campaignName = $dimValues[0]->getValue() ?: '(direct)'; // Fall back to source/medium as key
+                }
                 $campaignNames[] = $campaignName;
 
                 $campaigns[$campaignName] = [
                     'source_medium' => $dimValues[0]->getValue(),
-                    'campaign' => $campaignName,
-                    'google_ads_campaign' => $dimValues[2]->getValue(),
-                    'sessions' => (int) $metricValues[0]->getValue(),
-                    'users' => (int) $metricValues[1]->getValue(),
-                    'conversions' => (int) $metricValues[2]->getValue(),
+                    'campaign'      => $campaignName,
+                    'sessions'      => (int) $metricValues[0]->getValue(),
+                    'users'         => (int) $metricValues[1]->getValue(),
+                    'conversions'   => (int) $metricValues[2]->getValue(),
                     'engagement_rate' => (float) $metricValues[3]->getValue(),
-                    // Defaults
-                    'ad_clicks' => 0,
-                    'ad_cost' => 0,
+                    // Ad metrics default to 0; populated in step 2 if Google Ads is linked
+                    'ad_clicks'      => 0,
+                    'ad_cost'        => 0,
                     'ad_impressions' => 0,
-                    'roas' => 0,
+                    'roas'           => 0,
                 ];
             }
 
@@ -542,19 +544,23 @@ class Ga4Service
         foreach ($response->getRows() as $row) {
             $dimensionValues = $row->getDimensionValues();
             $metricValues = $row->getMetricValues();
-            
+
+            $totalUsers = (int) $metricValues[1]->getValue();
+            $newUsers   = (int) $metricValues[2]->getValue();
+
             $data[] = [
-                'date' => \Carbon\Carbon::createFromFormat('Ymd', $dimensionValues[0]->getValue())->format('Y-m-d'),
-                'users' => (int) $metricValues[0]->getValue(),
-                'total_users' => (int) $metricValues[1]->getValue(),
-                'new_users' => (int) $metricValues[2]->getValue(),
-                'returning_users' => (int) $metricValues[3]->getValue(),
-                'sessions' => (int) $metricValues[4]->getValue(),
-                'engaged_sessions' => (int) $metricValues[5]->getValue(),
-                'engagement_rate' => (float) $metricValues[6]->getValue(),
-                'avg_session_duration' => (float) $metricValues[7]->getValue(),
-                'conversions' => (int) $metricValues[8]->getValue(),
-                'bounce_rate' => (float) ($metricValues[9]?->getValue() ?? 0),
+                'date'                => \Carbon\Carbon::createFromFormat('Ymd', $dimensionValues[0]->getValue())->format('Y-m-d'),
+                'users'               => (int) $metricValues[0]->getValue(),   // activeUsers
+                'total_users'         => $totalUsers,
+                'new_users'           => $newUsers,
+                // returningUsers is not a GA4 Data API metric; derive it
+                'returning_users'     => max(0, $totalUsers - $newUsers),
+                'sessions'            => (int) $metricValues[3]->getValue(),
+                'engaged_sessions'    => (int) $metricValues[4]->getValue(),
+                'engagement_rate'     => (float) $metricValues[5]->getValue(),
+                'avg_session_duration'=> (float) $metricValues[6]->getValue(),
+                'conversions'         => (int) $metricValues[7]->getValue(),
+                'bounce_rate'         => (float) ($metricValues[8]?->getValue() ?? 0),
             ];
         }
 

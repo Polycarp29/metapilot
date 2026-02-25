@@ -12,12 +12,10 @@ use Illuminate\Support\Facades\Redis;
 class PythonEngineService
 {
     protected string $baseUrl;
-    protected string $redisPrefix;
 
     public function __construct()
     {
         $this->baseUrl = config('services.python_engine.url', 'http://localhost:8001');
-        $this->redisPrefix = config('database.redis.options.prefix', 'metapilot-database-');
     }
 
     /**
@@ -166,13 +164,9 @@ class PythonEngineService
             $payload['type'] = $type;
             $queueName = "analytics:jobs";
             
-            // We use the full prefixed key for LPUSH because the Python worker 
-            // listens to the literal key name from its environment.
-            $fullKey = "{$this->redisPrefix}{$queueName}";
+            Log::info("Dispatching analytics job to Redis: $queueName", ['type' => $type]);
             
-            Log::info("Dispatching analytics job to Redis: $fullKey", ['type' => $type]);
-            
-            Redis::connection()->lpush($fullKey, json_encode($payload));
+            Redis::lpush($queueName, json_encode($payload));
             return true;
         } catch (\Exception $e) {
             Log::error("Failed to dispatch analytics job to Redis: " . $e->getMessage());
