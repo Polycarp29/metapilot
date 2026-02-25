@@ -28,15 +28,31 @@ class PythonEngineService
             ->orderBy('snapshot_date', 'asc')
             ->get();
 
+        // Fetch GSC snapshots for the same period
+        $gscSnapshots = \App\Models\SearchConsoleMetric::where('analytics_property_id', $property->id)
+            ->where('snapshot_date', '>=', now()->subDays($lookbackDays))
+            ->get()
+            ->keyBy(fn($item) => $item->snapshot_date->format('Y-m-d'));
+
         if ($snapshots->count() < 7) {
             Log::warning("Insufficient data to process property {$property->id}. Found {$snapshots->count()} snapshots.");
             return false;
         }
 
+        // Get aggregate info for recommendations
+        $aggregator = resolve(AnalyticsAggregatorService::class);
+        $overview = $aggregator->getOverview($property->id, now()->subDays(30)->format('Y-m-d'), now()->yesterday()->format('Y-m-d'));
+
         $payload = [
             'property_id' => (string) $property->id,
-            'historical_data' => $snapshots->map(function ($snapshot) {
-                // Transform channel group array to dictionary: { "Organic Search": { "users": 10, "conversions": 2 }, ... }
+            'property_name' => $property->name,
+            'period_start' => now()->subDays($lookbackDays)->format('Y-m-d'),
+            'period_end' => now()->yesterday()->format('Y-m-d'),
+            'historical_data' => $snapshots->map(function ($snapshot) use ($gscSnapshots) {
+                $dateKey = $snapshot->snapshot_date->format('Y-m-d');
+                $gsc = $gscSnapshots->get($dateKey);
+
+                // Transform channel group array to dictionary
                 $channels = [];
                 foreach (($snapshot->first_user_channel_group ?: []) as $channel) {
                     $name = $channel['name'] ?? 'Unknown';
@@ -46,7 +62,7 @@ class PythonEngineService
                     ];
                 }
 
-                // Transform sources array to simple dictionary: { "google": 100, "(direct)": 50, ... }
+                // Transform sources array to simple dictionary
                 $sources = [];
                 foreach (($snapshot->manual_source_sessions ?: []) as $source) {
                     $name = $source['name'] ?? 'Unknown';
@@ -54,17 +70,30 @@ class PythonEngineService
                 }
 
                 return [
-                    'date' => $snapshot->snapshot_date->format('Y-m-d'),
+                    'date' => $dateKey,
+                    'users' => (int) $snapshot->users,
+                    'new_users' => (int) $snapshot->new_users,
                     'returning_users' => (int) $snapshot->returning_users,
                     'sessions' => (int) $snapshot->sessions,
                     'conversions' => (int) $snapshot->conversions,
+                    'bounce_rate' => (float) $snapshot->bounce_rate,
+                    'avg_session_duration' => (float) $snapshot->avg_session_duration,
                     'channels' => (object) $channels,
                     'sources'  => (object) $sources,
+                    'gsc_metrics' => [
+                        'clicks' => (int) ($gsc->clicks ?? 0),
+                        'impressions' => (int) ($gsc->impressions ?? 0),
+                        'position' => (float) ($gsc->position ?? 0),
+                    ]
                 ];
             })->toArray(),
-            'google_ads_data' => [], // Placeholder for future GAds integration
+            'by_country' => $overview['by_country'] ?? [],
+            'by_city' => $overview['by_city'] ?? [],
+            'top_queries' => $overview['top_queries'] ?? [],
+            'top_pages' => $overview['top_pages_gsc'] ?? [],
+            'google_ads_data' => $this->getAdPerformanceData($property, $lookbackDays),
             'config' => [
-                'forecast_days' => 14,
+                'forecast_days' => 90, // Extended forecast
                 'propensity_threshold' => 0.75
             ]
         ];
@@ -215,13 +244,67 @@ class PythonEngineService
     }
 
     /**
+     * Get structured ad performance data.
+     */
+    protected function getAdPerformanceData(AnalyticsProperty $property, int $days = 30): array
+    {
+        $snapshots = MetricSnapshot::where('analytics_property_id', $property->id)
+            ->where('snapshot_date', '>=', now()->subDays($days))
+            ->orderBy('snapshot_date', 'asc')
+            ->get();
+
+        $campaigns = [];
+        foreach ($snapshots as $snapshot) {
+            $byCampaign = $snapshot->by_campaign ?: [];
+            foreach ($byCampaign as $campaign) {
+                // Expected format from Ga4Service: ['campaign' => '...', 'source_medium' => '...', 'ad_cost' => ...]
+                $name = $campaign['campaign'] ?? 'Unknown';
+                $source = $campaign['source_medium'] ?? 'unknown';
+                
+                // Format: "Campaign / Source"
+                $key = "{$name} / {$source}";
+
+                if (!isset($campaigns[$key])) {
+                    $campaigns[$key] = [
+                        'name' => $key,
+                        'total_cost' => 0,
+                        'total_clicks' => 0,
+                        'total_impressions' => 0,
+                        'total_conversions' => 0,
+                        'keywords' => [],
+                    ];
+                }
+
+                $campaigns[$key]['total_cost'] += (float) ($campaign['ad_cost'] ?? 0);
+                $campaigns[$key]['total_clicks'] += (int) ($campaign['ad_clicks'] ?? 0);
+                $campaigns[$key]['total_impressions'] += (int) ($campaign['ad_impressions'] ?? 0);
+                $campaigns[$key]['total_conversions'] += (int) ($campaign['conversions'] ?? 0);
+                
+                // Merge keywords (up to top 10 unique)
+                if (isset($campaign['keywords'])) {
+                    foreach ($campaign['keywords'] as $kw) {
+                        $kwName = $kw['keyword'] ?? null;
+                        if ($kwName && !in_array($kwName, $campaigns[$key]['keywords'])) {
+                            $campaigns[$key]['keywords'][] = $kwName;
+                        }
+                    }
+                }
+            }
+        }
+
+        // Filter out zero-cost campaigns if they have no conversions either
+        return array_values(array_filter($campaigns, fn($c) => $c['total_cost'] > 0 || $c['total_conversions'] > 0));
+    }
+
+    /**
      * Save forecasts into the database.
      */
     protected function saveForecasts(AnalyticsProperty $property, array $data): void
     {
-        $predictions = $data['predictions'] ?? [];
+        $predictions = $data['predictions'] ?? $data['forecast'] ?? [];
         $validUntil = $data['valid_until'] ?? now()->addDay();
 
+        // 1. Save standard forecasting metrics
         foreach ($predictions as $type => $forecastData) {
             AnalyticalForecast::updateOrCreate(
                 [
@@ -232,6 +315,25 @@ class PythonEngineService
                     'forecast_data' => $forecastData,
                     'confidence_score' => 0.85,
                     'valid_until' => $validUntil,
+                ]
+            );
+        }
+
+        // 2. Save Strategic Insights/Recommendations if present
+        if (isset($data['recommendations']) || isset($data['summary'])) {
+            AnalyticalForecast::updateOrCreate(
+                [
+                    'analytics_property_id' => $property->id,
+                    'forecast_type' => 'strategic_strategy',
+                ],
+                [
+                    'forecast_data' => [
+                        'summary' => $data['summary'] ?? '',
+                        'recommendations' => $data['recommendations'] ?? [],
+                        'diagnostics' => $data['diagnostics'] ?? [],
+                    ],
+                    'confidence_score' => 0.90,
+                    'valid_until' => now()->addDays(2),
                 ]
             );
         }

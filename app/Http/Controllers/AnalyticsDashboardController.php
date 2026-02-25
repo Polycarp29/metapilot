@@ -289,7 +289,8 @@ class AnalyticsDashboardController extends Controller
             'propensity_scores' => $forecasts->get('propensity_scores', []),
             'source_fatigue' => $forecasts->get('source_fatigue', []),
             'performance_rankings' => $forecasts->get('performance_rankings', []),
-            'ad_performance' => $forecasts->get('ad_performance', []),
+            'ad_performance'       => $forecasts->get('ad_performance', []),
+            'strategic_strategy'   => $forecasts->get('strategic_strategy', []),
         ]);
     }
 
@@ -320,6 +321,7 @@ class AnalyticsDashboardController extends Controller
             'source_fatigue'       => $forecasts->get('source_fatigue', []),
             'performance_rankings' => $forecasts->get('performance_rankings', []),
             'ad_performance'       => $forecasts->get('ad_performance', []),
+            'strategic_strategy'   => $forecasts->get('strategic_strategy', []),
         ]);
     }
 
