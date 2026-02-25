@@ -4,6 +4,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 
 Route::post('crawler/callback', [\App\Http\Controllers\Api\CrawlerWebhookController::class, 'handle'])->name('api.crawler.callback');
+Route::post('analytics/webhook', [\App\Http\Controllers\Api\AnalyticsWebhookController::class, 'handle'])->name('api.analytics.webhook');
 
 Route::prefix('v1')->name('api.v1.')->group(function () {
     // Schema Types

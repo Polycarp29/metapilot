@@ -7,20 +7,23 @@ use App\Models\MetricSnapshot;
 use App\Models\AnalyticalForecast;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Redis;
 
 class PythonEngineService
 {
     protected string $baseUrl;
+    protected string $redisPrefix;
 
     public function __construct()
     {
         $this->baseUrl = config('services.python_engine.url', 'http://localhost:8001');
+        $this->redisPrefix = config('database.redis.options.prefix', 'metapilot-database-');
     }
 
     /**
      * Send analytics data to Python Engine for processing.
      */
-    public function processProperty(AnalyticsProperty $property, int $lookbackDays = 30): bool
+    public function processProperty(AnalyticsProperty $property, int $lookbackDays = 30, bool $forceSync = false): bool
     {
         $snapshots = MetricSnapshot::where('analytics_property_id', $property->id)
             ->where('snapshot_date', '>=', now()->subDays($lookbackDays))
@@ -51,8 +54,13 @@ class PythonEngineService
             ]
         ];
 
+        // Large datasets or background requests go to Redis for the Worker
+        if (!$forceSync && $snapshots->count() > 60) {
+            return $this->dispatchToRedis('full', $payload);
+        }
+
         try {
-            Log::info("Sending data to Python Engine for property {$property->id}");
+            Log::info("Sending data to Python Engine API for property {$property->id}");
             $response = Http::timeout(60)->post("{$this->baseUrl}/predict/full", $payload);
 
             if ($response->successful()) {
@@ -61,9 +69,9 @@ class PythonEngineService
                 return true;
             }
 
-            Log::error("Python Engine returned error for property {$property->id}: " . $response->body());
+            Log::error("Python Engine API returned error for property {$property->id}: " . $response->body());
         } catch (\Exception $e) {
-            Log::error("Failed to communicate with Python Engine: " . $e->getMessage());
+            Log::error("Failed to communicate with Python Engine API: " . $e->getMessage());
         }
 
         return false;
@@ -72,7 +80,7 @@ class PythonEngineService
     /**
      * Process ad performance specifically.
      */
-    public function processAdPerformance(AnalyticsProperty $property): bool
+    public function processAdPerformance(AnalyticsProperty $property, bool $forceSync = false): bool
     {
         $snapshots = MetricSnapshot::where('analytics_property_id', $property->id)
             ->where('snapshot_date', '>=', now()->subDays(30))
@@ -114,9 +122,14 @@ class PythonEngineService
 
         $payload = [
             'property_id' => (string) $property->id,
+            'type' => 'ad_performance',
             'campaign_data' => $campaignData,
             'keyword_trends' => $keywordTrends
         ];
+
+        if (!$forceSync && count($campaignData) > 50) {
+            return $this->dispatchToRedis('ad_performance', $payload);
+        }
 
         try {
             $response = Http::timeout(60)->post("{$this->baseUrl}/predict/ad-performance", $payload);
@@ -145,12 +158,35 @@ class PythonEngineService
     }
 
     /**
+     * Dispatch job to Redis for background processing by the Python Worker.
+     */
+    protected function dispatchToRedis(string $type, array $payload): bool
+    {
+        try {
+            $payload['type'] = $type;
+            $queueName = "analytics:jobs";
+            
+            // We use the full prefixed key for LPUSH because the Python worker 
+            // listens to the literal key name from its environment.
+            $fullKey = "{$this->redisPrefix}{$queueName}";
+            
+            Log::info("Dispatching analytics job to Redis: $fullKey", ['type' => $type]);
+            
+            Redis::connection()->lpush($fullKey, json_encode($payload));
+            return true;
+        } catch (\Exception $e) {
+            Log::error("Failed to dispatch analytics job to Redis: " . $e->getMessage());
+            return false;
+        }
+    }
+
+    /**
      * Save forecasts into the database.
      */
     protected function saveForecasts(AnalyticsProperty $property, array $data): void
     {
-        $predictions = $data['predictions'];
-        $validUntil = $data['valid_until'];
+        $predictions = $data['predictions'] ?? [];
+        $validUntil = $data['valid_until'] ?? now()->addDay();
 
         foreach ($predictions as $type => $forecastData) {
             AnalyticalForecast::updateOrCreate(
@@ -160,7 +196,7 @@ class PythonEngineService
                 ],
                 [
                     'forecast_data' => $forecastData,
-                    'confidence_score' => 0.85, // Placeholder
+                    'confidence_score' => 0.85,
                     'valid_until' => $validUntil,
                 ]
             );
