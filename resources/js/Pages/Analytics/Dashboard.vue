@@ -31,6 +31,8 @@ ChartJS.register(
   BarElement
 )
 
+import PredictionsTab from './Partials/PredictionsTab.vue'
+
 const props = defineProps({
   properties: Array,
   organization: Object
@@ -56,6 +58,7 @@ const autoRefreshInterval = ref(null)
 const lastRefetchTime = ref(null)
 const activeTab = ref('overview')
 const showSyncSuccessToast = ref(false)
+const isReconnecting = ref(false)
 const syncPollingInterval = ref(null)
 
 const selectedProperty = computed(() => {
@@ -261,6 +264,16 @@ const fetchData = async (forceRefresh = false) => {
   } finally {
     isLoading.value = false
   }
+}
+
+const handleForceReconnect = () => {
+    isReconnecting.value = true
+    // Get current URL but ensure we include the active tab/params
+    const currentUrl = window.location.href
+    window.location.href = route('auth.google', { 
+        intent: 'connect',
+        redirect_to: currentUrl 
+    })
 }
 
 const fetchInsights = async (params) => {
@@ -590,6 +603,14 @@ onUnmounted(() => {
         >
           <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path></svg>
           Search Console
+        </button>
+        <button 
+          @click="activeTab = 'predictions'" 
+          :class="activeTab === 'predictions' ? 'text-blue-600 border-blue-600 bg-blue-50/50' : 'text-slate-400 border-transparent hover:text-slate-600 hover:bg-slate-50'"
+          class="flex items-center gap-2 px-8 py-4 border-b-2 font-black uppercase tracking-widest text-xs transition-all rounded-t-2xl"
+        >
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M13 10V3L4 14h7v7l9-11h-7z"></path></svg>
+          Predictions & Insights
         </button>
       </div>
 
@@ -1281,6 +1302,22 @@ onUnmounted(() => {
     </div> <!-- End Overview Tab -->
 
       <div v-if="activeTab === 'gsc'" class="space-y-10 animate-in fade-in duration-500">
+        <!-- Flash Messages -->
+        <div v-if="$page.props.flash.success || $page.props.flash.error" class="max-w-4xl mx-auto mb-6">
+           <div v-if="$page.props.flash.success" class="p-4 bg-emerald-500/10 border border-emerald-500/20 rounded-2xl text-emerald-700 font-bold text-sm flex items-center gap-3 shadow-sm">
+               <div class="w-8 h-8 rounded-lg bg-emerald-500/20 flex items-center justify-center text-emerald-600">
+                 <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" /></svg>
+               </div>
+               {{ $page.props.flash.success }}
+           </div>
+           <div v-if="$page.props.flash.error" class="p-4 bg-rose-500/10 border border-rose-500/20 rounded-2xl text-rose-700 font-bold text-sm flex items-center gap-3 shadow-sm">
+               <div class="w-8 h-8 rounded-lg bg-rose-500/20 flex items-center justify-center text-rose-600">
+                 <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+               </div>
+               {{ $page.props.flash.error }}
+           </div>
+        </div>
+
         <!-- Permission Required State -->
         <div v-if="overview?.gsc_permission_error" class="bg-gradient-to-br from-slate-900 to-slate-800 p-12 rounded-[3rem] shadow-2xl relative overflow-hidden group">
           <!-- Decorative background elements -->
@@ -1318,10 +1355,25 @@ onUnmounted(() => {
               </div>
             </div>
 
-            <Link :href="route('organization.settings', { tab: 'analytics' })" 
-              class="inline-flex items-center gap-3 bg-emerald-600 hover:bg-emerald-500 text-white px-10 py-4 rounded-2xl font-black transition-all shadow-xl shadow-emerald-900/40 active:scale-95">
-              Reconnect Search Console
-            </Link>
+            <div class="flex flex-col md:flex-row gap-4 w-full md:w-auto">
+               <button 
+                 @click="handleForceReconnect"
+                 :disabled="isReconnecting"
+                 class="inline-flex items-center justify-center gap-3 bg-emerald-600 hover:bg-emerald-500 text-white px-10 py-4 rounded-2xl font-black transition-all shadow-xl shadow-emerald-900/40 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed min-w-[280px]">
+                 <template v-if="isReconnecting">
+                   <svg class="animate-spin h-5 w-5 text-white" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
+                   Establishing Connection...
+                 </template>
+                 <template v-else>
+                   Force Reconnect Search Console
+                 </template>
+               </button>
+               
+               <Link :href="route('organization.settings', { tab: 'analytics' })" 
+                 class="inline-flex items-center justify-center gap-3 bg-white/10 hover:bg-white/20 text-white px-10 py-4 rounded-2xl font-black transition-all border border-white/10">
+                 Settings flow
+               </Link>
+            </div>
           </div>
         </div>
 
@@ -1537,6 +1589,11 @@ onUnmounted(() => {
           </div>
         </template>
       </div> <!-- End GSC Tab -->
+
+      <!-- Predictions Tab -->
+      <div v-if="activeTab === 'predictions'">
+        <PredictionsTab :propertyId="selectedPropertyId" :organization="organization" />
+      </div>
 
 
       <div v-if="!properties.length" class="text-center py-20 bg-slate-50 rounded-[3rem] border-2 border-dashed border-slate-200">

@@ -45,6 +45,10 @@ return [
         ],
     ],
 
+    'python_engine' => [
+        'url' => env('PYTHON_ENGINE_URL', 'http://localhost:8001'),
+    ],
+
     'openai' => [
         'api_key' => env('OPENAI_API_KEY'),
         'model' => env('OPENAI_MODEL', 'gpt-4-turbo'),

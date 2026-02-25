@@ -298,6 +298,10 @@ class GscService
             $current->addDay();
         }
 
+        if ($property->gsc_permission_error) {
+            $property->update(['gsc_permission_error' => false]);
+        }
+
         return true;
     }
 

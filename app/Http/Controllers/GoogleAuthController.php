@@ -29,6 +29,10 @@ class GoogleAuthController extends Controller
             session(['is_connecting_google' => true]);
         }
 
+        if ($request->has('redirect_to')) {
+            session(['google_auth_redirect' => $request->get('redirect_to')]);
+        }
+
         return Socialite::driver('google')
             ->scopes([
                 'https://www.googleapis.com/auth/analytics.readonly',
@@ -104,13 +108,21 @@ class GoogleAuthController extends Controller
 
             // Redirect based on whether it was a connection or a login
             $isConnecting = session('is_connecting_google');
-            session()->forget('is_connecting_google');
+            $redirectTo = session('google_auth_redirect');
+            session()->forget(['is_connecting_google', 'google_auth_redirect']);
 
             if ($isConnecting) {
                 // Reset stale-token flag on all org properties — user just re-authorized
                 if ($organization) {
                     \App\Models\AnalyticsProperty::where('organization_id', $organization->id)
-                        ->update(['google_token_invalid' => false]);
+                        ->update([
+                            'google_token_invalid' => false,
+                            'gsc_permission_error' => false
+                        ]);
+                }
+
+                if ($redirectTo) {
+                    return redirect($redirectTo)->with('success', '✅ Google Search Console reconnected successfully!');
                 }
 
                 return redirect()->route('organization.settings', ['tab' => 'analytics'])

@@ -1,0 +1,169 @@
+<?php
+
+namespace App\Services;
+
+use App\Models\AnalyticsProperty;
+use App\Models\MetricSnapshot;
+use App\Models\AnalyticalForecast;
+use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Log;
+
+class PythonEngineService
+{
+    protected string $baseUrl;
+
+    public function __construct()
+    {
+        $this->baseUrl = config('services.python_engine.url', 'http://localhost:8001');
+    }
+
+    /**
+     * Send analytics data to Python Engine for processing.
+     */
+    public function processProperty(AnalyticsProperty $property, int $lookbackDays = 30): bool
+    {
+        $snapshots = MetricSnapshot::where('analytics_property_id', $property->id)
+            ->where('snapshot_date', '>=', now()->subDays($lookbackDays))
+            ->orderBy('snapshot_date', 'asc')
+            ->get();
+
+        if ($snapshots->count() < 7) {
+            Log::warning("Insufficient data to process property {$property->id}. Found {$snapshots->count()} snapshots.");
+            return false;
+        }
+
+        $payload = [
+            'property_id' => (string) $property->id,
+            'historical_data' => $snapshots->map(function ($snapshot) {
+                return [
+                    'date' => $snapshot->snapshot_date->format('Y-m-d'),
+                    'returning_users' => (int) $snapshot->returning_users,
+                    'sessions' => (int) $snapshot->sessions,
+                    'conversions' => (int) $snapshot->conversions,
+                    'channels' => $snapshot->first_user_channel_group ?? [],
+                    'sources' => $snapshot->manual_source_sessions ?? [],
+                ];
+            })->toArray(),
+            'google_ads_data' => [], // Placeholder for future GAds integration
+            'config' => [
+                'forecast_days' => 14,
+                'propensity_threshold' => 0.75
+            ]
+        ];
+
+        try {
+            Log::info("Sending data to Python Engine for property {$property->id}");
+            $response = Http::timeout(60)->post("{$this->baseUrl}/predict/full", $payload);
+
+            if ($response->successful()) {
+                $data = $response->json();
+                $this->saveForecasts($property, $data);
+                return true;
+            }
+
+            Log::error("Python Engine returned error for property {$property->id}: " . $response->body());
+        } catch (\Exception $e) {
+            Log::error("Failed to communicate with Python Engine: " . $e->getMessage());
+        }
+
+        return false;
+    }
+
+    /**
+     * Process ad performance specifically.
+     */
+    public function processAdPerformance(AnalyticsProperty $property): bool
+    {
+        $snapshots = MetricSnapshot::where('analytics_property_id', $property->id)
+            ->where('snapshot_date', '>=', now()->subDays(30))
+            ->orderBy('snapshot_date', 'asc')
+            ->get();
+
+        if ($snapshots->isEmpty()) {
+            return false;
+        }
+
+        // 1. Extract Campaign Data
+        $campaignData = [];
+        foreach ($snapshots as $snapshot) {
+            $byCampaign = $snapshot->by_campaign ?: [];
+            foreach ($byCampaign as $campaignName => $data) {
+                if (!isset($data['ad_cost']) || $data['ad_cost'] == 0) continue;
+                
+                $campaignData[] = [
+                    'date' => $snapshot->snapshot_date->format('Y-m-d'),
+                    'campaign_name' => $campaignName,
+                    'clicks' => (int) ($data['ad_clicks'] ?? 0),
+                    'conversions' => (int) ($data['conversions'] ?? 0),
+                    'cost' => (float) ($data['ad_cost'] ?? 0),
+                    'impressions' => (int) ($data['ad_impressions'] ?? 0),
+                ];
+            }
+        }
+
+        // 2. Extract Keyword Trends
+        $keywordTrends = \App\Models\TrendingKeyword::where('organization_id', $property->organization_id)
+            ->where('created_at', '>=', now()->subDays(7))
+            ->get()
+            ->map(function ($kw) {
+                return [
+                    'keyword' => $kw->keyword,
+                    'trend_score' => (float) $kw->growth_rate
+                ];
+            })->toArray();
+
+        $payload = [
+            'property_id' => (string) $property->id,
+            'campaign_data' => $campaignData,
+            'keyword_trends' => $keywordTrends
+        ];
+
+        try {
+            $response = Http::timeout(60)->post("{$this->baseUrl}/predict/ad-performance", $payload);
+
+            if ($response->successful()) {
+                $data = $response->json();
+                
+                AnalyticalForecast::updateOrCreate(
+                    [
+                        'analytics_property_id' => $property->id,
+                        'forecast_type' => 'ad_performance',
+                    ],
+                    [
+                        'forecast_data' => $data['recommendations'],
+                        'confidence_score' => 0.90,
+                        'valid_until' => now()->addDays(2),
+                    ]
+                );
+                return true;
+            }
+        } catch (\Exception $e) {
+            Log::error("Ad Performance prediction failed: " . $e->getMessage());
+        }
+
+        return false;
+    }
+
+    /**
+     * Save forecasts into the database.
+     */
+    protected function saveForecasts(AnalyticsProperty $property, array $data): void
+    {
+        $predictions = $data['predictions'];
+        $validUntil = $data['valid_until'];
+
+        foreach ($predictions as $type => $forecastData) {
+            AnalyticalForecast::updateOrCreate(
+                [
+                    'analytics_property_id' => $property->id,
+                    'forecast_type' => $type,
+                ],
+                [
+                    'forecast_data' => $forecastData,
+                    'confidence_score' => 0.85, // Placeholder
+                    'valid_until' => $validUntil,
+                ]
+            );
+        }
+    }
+}

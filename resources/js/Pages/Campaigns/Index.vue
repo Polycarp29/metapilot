@@ -14,6 +14,7 @@ import {
   ArcElement 
 } from 'chart.js'
 import { Bar, Doughnut } from 'vue-chartjs'
+import AdPredictionsCard from '../Analytics/Partials/AdPredictionsCard.vue'
 
 ChartJS.register(CategoryScale, LinearScale, BarElement, Title, Tooltip, Legend, ArcElement)
 
@@ -25,7 +26,9 @@ const props = defineProps({
 
 const selectedPropertyId = ref(null)
 const acquisitionData = ref([])
+const adPredictions = ref([])
 const isLoadingAcquisition = ref(false)
+const isLoadingPredictions = ref(false)
 const period = ref(30)
 const adInsight = ref(null)
 const loadingInsight = ref(false)
@@ -83,6 +86,7 @@ const fetchAdInsight = async (newIndustry = null) => {
 
 watch([selectedPropertyId, period], () => {
     fetchAcquisitionData()
+    fetchAdPredictions()
     adInsight.value = null
 }, { deep: true })
 
@@ -168,6 +172,20 @@ const fetchAcquisitionData = async () => {
   } finally {
     isLoadingAcquisition.value = false
   }
+}
+
+const fetchAdPredictions = async () => {
+    if (!selectedPropertyId.value) return
+    
+    isLoadingPredictions.value = true
+    try {
+        const { data } = await axios.get(route('analytics.forecasts', { property: selectedPropertyId.value }))
+        adPredictions.value = data.ad_performance || []
+    } catch (e) {
+        console.error("Failed to fetch ad predictions", e)
+    } finally {
+        isLoadingPredictions.value = false
+    }
 }
 
 
@@ -291,8 +309,16 @@ const getStatusColor = (status) => {
                     </div>
                 </div>
              </div>
+             
+             <!-- Probable Predictions Card -->
+             <div v-if="adPredictions.length > 0 || isLoadingPredictions" class="mt-8">
+                 <AdPredictionsCard 
+                    :recommendations="adPredictions" 
+                    :is-loading="isLoadingPredictions" 
+                 />
+             </div>
 
-             <div class="bg-white rounded-[2rem] border border-slate-100 shadow-sm overflow-hidden">
+             <div class="bg-white rounded-[2rem] border border-slate-100 shadow-sm overflow-hidden mt-8">
                  <div class="p-8 border-b border-slate-100 flex flex-col md:flex-row md:items-center justify-between gap-4">
                         <div>
                             <h3 class="text-lg font-bold text-slate-900">Campaign Performance</h3>

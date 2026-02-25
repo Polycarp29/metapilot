@@ -1,0 +1,14 @@
+[Unit]
+Description=Analytics Engine FastAPI Service
+After=network.target
+
+[Service]
+User=z3uxie
+Group=www-data
+WorkingDirectory=/home/z3uxie/Desktop/MyProjects/analytics-engine
+# We assume a venv exists at /home/z3uxie/Desktop/MyProjects/analytics-engine/venv
+Environment="PATH=/home/z3uxie/Desktop/MyProjects/analytics-engine/venv/bin"
+ExecStart=/home/z3uxie/Desktop/MyProjects/analytics-engine/venv/bin/uvicorn main:app --host 127.0.0.1 --port 8001
+
+[Install]
+WantedBy=multi-user.target

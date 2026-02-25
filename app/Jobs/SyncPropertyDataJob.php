@@ -59,6 +59,9 @@ class SyncPropertyDataJob implements ShouldQueue
                 'google_token_invalid' => false
             ]);
 
+            // Dispatch Predictive Analytics Processing
+            \App\Jobs\ProcessAnalyticsJob::dispatch($this->property);
+
             Log::info("Background sync completed for property: {$this->property->id}");
         } catch (\Exception $e) {
             $this->property->update(['sync_status' => 'failed']);

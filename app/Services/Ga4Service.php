@@ -140,6 +140,7 @@ class Ga4Service
                     new Metric(['name' => 'activeUsers']),
                     new Metric(['name' => 'totalUsers']),
                     new Metric(['name' => 'newUsers']),
+                    new Metric(['name' => 'returningUsers']),
                     new Metric(['name' => 'sessions']),
                     new Metric(['name' => 'engagedSessions']),
                     new Metric(['name' => 'engagementRate']),
@@ -243,19 +244,23 @@ class Ga4Service
             'by_source' => ['dim' => 'sessionSourceMedium', 'metrics' => ['activeUsers']],
             'by_first_source' => ['dim' => 'firstUserSource', 'metrics' => ['activeUsers']],
             'by_medium' => ['dim' => 'sessionMedium', 'metrics' => ['activeUsers']],
-            'by_campaign' => ['dim' => 'sessionCampaignName', 'metrics' => ['activeUsers']],
             'by_device' => ['dim' => 'deviceCategory', 'metrics' => ['activeUsers', 'bounceRate']],
             'by_country' => ['dim' => 'country', 'metrics' => ['activeUsers']],
             'by_city' => ['dim' => 'city', 'metrics' => ['activeUsers']],
             'by_screen' => ['dim' => 'unifiedPageScreen', 'metrics' => ['activeUsers', 'screenPageViews']],
             'by_event' => ['dim' => 'eventName', 'metrics' => ['activeUsers', 'eventCount', 'conversions']],
             'by_audience' => ['dim' => 'audienceName', 'metrics' => ['activeUsers']],
+            'first_user_channel_group' => ['dim' => 'firstUserDefaultChannelGroup', 'metrics' => ['activeUsers']],
+            'manual_source_sessions' => ['dim' => 'sessionSource', 'metrics' => ['sessions']],
         ];
 
         $breakdowns = [];
         foreach ($dimensions as $key => $config) {
             $breakdowns[$key] = $this->fetchDimensionBreakdown($property, $startDate, $endDate, $config['dim'], $config['metrics']);
         }
+
+        // Enriched Campaign Data (Includes Ads Metrics)
+        $breakdowns['by_campaign'] = $this->fetchCampaigns($property, $startDate, $endDate);
 
         return $breakdowns;
     }
@@ -543,12 +548,13 @@ class Ga4Service
                 'users' => (int) $metricValues[0]->getValue(),
                 'total_users' => (int) $metricValues[1]->getValue(),
                 'new_users' => (int) $metricValues[2]->getValue(),
-                'sessions' => (int) $metricValues[3]->getValue(),
-                'engaged_sessions' => (int) $metricValues[4]->getValue(),
-                'engagement_rate' => (float) $metricValues[5]->getValue(),
-                'avg_session_duration' => (float) $metricValues[6]->getValue(),
-                'conversions' => (int) $metricValues[7]->getValue(),
-                'bounce_rate' => (float) ($metricValues[8]?->getValue() ?? 0),
+                'returning_users' => (int) $metricValues[3]->getValue(),
+                'sessions' => (int) $metricValues[4]->getValue(),
+                'engaged_sessions' => (int) $metricValues[5]->getValue(),
+                'engagement_rate' => (float) $metricValues[6]->getValue(),
+                'avg_session_duration' => (float) $metricValues[7]->getValue(),
+                'conversions' => (int) $metricValues[8]->getValue(),
+                'bounce_rate' => (float) ($metricValues[9]?->getValue() ?? 0),
             ];
         }
 

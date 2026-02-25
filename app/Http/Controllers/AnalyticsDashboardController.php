@@ -279,10 +279,24 @@ class AnalyticsDashboardController extends Controller
         return response()->json($forecast);
     }
 
+    public function getForecasts(AnalyticsProperty $property)
+    {
+        $forecasts = \App\Models\AnalyticalForecast::where('analytics_property_id', $property->id)
+            ->get()
+            ->pluck('forecast_data', 'forecast_type');
+
+        return response()->json([
+            'propensity_scores' => $forecasts->get('propensity_scores', []),
+            'source_fatigue' => $forecasts->get('source_fatigue', []),
+            'performance_rankings' => $forecasts->get('performance_rankings', []),
+            'ad_performance' => $forecasts->get('ad_performance', []),
+        ]);
+    }
+
     /**
      * Get SEO intelligence alerts and technical health signals.
      */
-    public function getSEOIntelligence(AnalyticsProperty $property)
+    public function getSEOIntelligence(AnalyticsProperty $property, Request $request)
     {
         $alerts = $this->controlEngine->getActiveAlerts($property->organization);
         $niche = $this->controlEngine->getNicheIntelligence($property->organization);
