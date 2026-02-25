@@ -635,9 +635,14 @@ onUnmounted(() => {
             <p class="text-rose-700 font-medium">Your Google access token has expired or was revoked. Please reconnect to restore analytics.</p>
           </div>
         </div>
-        <Link :href="route('auth.google', { intent: 'connect' })" class="whitespace-nowrap px-6 py-3 bg-rose-600 hover:bg-rose-700 text-white rounded-xl font-bold transition-all shadow-lg shadow-rose-600/20">
-          Reconnect Google
-        </Link>
+        <button 
+          @click="handleForceReconnect" 
+          :disabled="isReconnecting"
+          class="whitespace-nowrap px-6 py-3 bg-rose-600 hover:bg-rose-700 text-white rounded-xl font-bold transition-all shadow-lg shadow-rose-600/20 disabled:opacity-50 flex items-center gap-2"
+        >
+          <svg v-if="isReconnecting" class="animate-spin h-4 w-4" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
+          {{ isReconnecting ? 'Connecting...' : 'Reconnect Google' }}
+        </button>
       </div>
 
       <!-- Search Console Permission Warning (Only if confirmed 403) -->
@@ -651,9 +656,14 @@ onUnmounted(() => {
             <p class="text-amber-700 font-medium">Google returned a permission error for this site. Click below to re-authorize with full Search Console access.</p>
           </div>
         </div>
-        <Link :href="route('auth.google', { intent: 'connect' })" class="whitespace-nowrap px-6 py-3 bg-amber-600 hover:bg-amber-700 text-white rounded-xl font-bold transition-all shadow-lg shadow-amber-600/20">
-          Re-authorize GSC
-        </Link>
+        <button 
+          @click="handleForceReconnect" 
+          :disabled="isReconnecting"
+          class="whitespace-nowrap px-6 py-3 bg-amber-600 hover:bg-amber-700 text-white rounded-xl font-bold transition-all shadow-lg shadow-amber-600/20 disabled:opacity-50 flex items-center gap-2"
+        >
+          <svg v-if="isReconnecting" class="animate-spin h-4 w-4" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
+          {{ isReconnecting ? 'Connecting...' : 'Re-authorize GSC' }}
+        </button>
       </div>
 
       <div v-if="overview && overview.total_users > 0" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">

@@ -41,8 +41,8 @@ class PythonEngineService
                     'returning_users' => (int) $snapshot->returning_users,
                     'sessions' => (int) $snapshot->sessions,
                     'conversions' => (int) $snapshot->conversions,
-                    'channels' => $snapshot->first_user_channel_group ?? [],
-                    'sources' => $snapshot->manual_source_sessions ?? [],
+                    'channels' => (object) ($snapshot->first_user_channel_group ?: []),
+                    'sources' => (object) ($snapshot->manual_source_sessions ?: []),
                 ];
             })->toArray(),
             'google_ads_data' => [], // Placeholder for future GAds integration
