@@ -3,11 +3,11 @@ Description=Analytics Engine Background Worker
 After=network.target redis.service
 
 [Service]
-User=z3uxie
+User=www-data
 Group=www-data
-WorkingDirectory=/home/z3uxie/Desktop/MyProjects/analytics-engine
-Environment="PATH=/home/z3uxie/Desktop/MyProjects/analytics-engine/venv/bin"
-ExecStart=/home/z3uxie/Desktop/MyProjects/analytics-engine/venv/bin/python worker.py
+WorkingDirectory=/var/www/analytics-engine
+Environment="PATH=/var/www/analytics-engine/venv/bin"
+ExecStart=/var/www/analytics-engine/venv/bin/python worker.py
 Restart=always
 
 [Install]
