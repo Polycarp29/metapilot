@@ -36,13 +36,30 @@ class PythonEngineService
         $payload = [
             'property_id' => (string) $property->id,
             'historical_data' => $snapshots->map(function ($snapshot) {
+                // Transform channel group array to dictionary: { "Organic Search": { "users": 10, "conversions": 2 }, ... }
+                $channels = [];
+                foreach (($snapshot->first_user_channel_group ?: []) as $channel) {
+                    $name = $channel['name'] ?? 'Unknown';
+                    $channels[$name] = [
+                        'users' => (int) ($channel['activeUsers'] ?? 0),
+                        'conversions' => (int) ($channel['conversions'] ?? 0)
+                    ];
+                }
+
+                // Transform sources array to simple dictionary: { "google": 100, "(direct)": 50, ... }
+                $sources = [];
+                foreach (($snapshot->manual_source_sessions ?: []) as $source) {
+                    $name = $source['name'] ?? 'Unknown';
+                    $sources[$name] = (int) ($source['sessions'] ?? 0);
+                }
+
                 return [
                     'date' => $snapshot->snapshot_date->format('Y-m-d'),
                     'returning_users' => (int) $snapshot->returning_users,
                     'sessions' => (int) $snapshot->sessions,
                     'conversions' => (int) $snapshot->conversions,
-                    'channels' => (object) ($snapshot->first_user_channel_group ?: []),
-                    'sources' => (object) ($snapshot->manual_source_sessions ?: []),
+                    'channels' => (object) $channels,
+                    'sources'  => (object) $sources,
                 ];
             })->toArray(),
             'google_ads_data' => [], // Placeholder for future GAds integration

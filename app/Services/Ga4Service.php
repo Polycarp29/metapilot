@@ -251,7 +251,7 @@ class Ga4Service
             'by_screen' => ['dim' => 'unifiedPageScreen', 'metrics' => ['activeUsers', 'screenPageViews']],
             'by_event' => ['dim' => 'eventName', 'metrics' => ['activeUsers', 'eventCount', 'conversions']],
             'by_audience' => ['dim' => 'audienceName', 'metrics' => ['activeUsers']],
-            'first_user_channel_group' => ['dim' => 'firstUserDefaultChannelGroup', 'metrics' => ['activeUsers']],
+            'first_user_channel_group' => ['dim' => 'firstUserDefaultChannelGroup', 'metrics' => ['activeUsers', 'conversions']],
             'manual_source_sessions' => ['dim' => 'sessionSource', 'metrics' => ['sessions']],
         ];
 
