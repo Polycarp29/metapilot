@@ -91,7 +91,7 @@ class PythonEngineService
             'by_city' => $overview['by_city'] ?? [],
             'top_queries' => $overview['top_queries'] ?? [],
             'top_pages' => $overview['top_pages_gsc'] ?? [],
-            'google_ads_data' => $this->getAdPerformanceData($property, $lookbackDays),
+            'google_ads_data' => $this->getDailyAdPerformanceData($property, $lookbackDays),
             'config' => [
                 'forecast_days' => 90, // Extended forecast
                 'propensity_threshold' => 0.75
@@ -244,7 +244,52 @@ class PythonEngineService
     }
 
     /**
-     * Get structured ad performance data.
+     * Get DAILY ad performance data from snapshots.
+     * This matches the Python API's expectation: List[GoogleAdsEntry]
+     */
+    protected function getDailyAdPerformanceData(AnalyticsProperty $property, int $days = 30): array
+    {
+        $snapshots = MetricSnapshot::where('analytics_property_id', $property->id)
+            ->where('snapshot_date', '>=', now()->subDays($days))
+            ->orderBy('snapshot_date', 'asc')
+            ->get();
+
+        $dailyAds = [];
+        foreach ($snapshots as $snapshot) {
+            $byCampaign = $snapshot->by_campaign ?: [];
+            $date = $snapshot->snapshot_date->format('Y-m-d');
+            
+            foreach ($byCampaign as $campaign) {
+                $name = $campaign['campaign'] ?? 'Unknown';
+                $source = $campaign['source_medium'] ?? 'unknown';
+                $fullName = "{$name} / {$source}";
+
+                $keywords = [];
+                if (isset($campaign['keywords'])) {
+                    foreach ($campaign['keywords'] as $kw) {
+                        if (isset($kw['keyword'])) {
+                            $keywords[] = $kw['keyword'];
+                        }
+                    }
+                }
+
+                $dailyAds[] = [
+                    'date' => $date,
+                    'campaign_name' => $fullName,
+                    'cost' => (float) ($campaign['ad_cost'] ?? 0),
+                    'clicks' => (int) ($campaign['ad_clicks'] ?? 0),
+                    'impressions' => (int) ($campaign['ad_impressions'] ?? 0),
+                    'conversions' => (int) ($campaign['conversions'] ?? 0),
+                    'keywords' => $keywords,
+                ];
+            }
+        }
+
+        return $dailyAds;
+    }
+
+    /**
+     * Get aggregated ad performance data (Legacy, kept for compatibility if needed).
      */
     protected function getAdPerformanceData(AnalyticsProperty $property, int $days = 30): array
     {
