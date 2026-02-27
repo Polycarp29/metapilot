@@ -68,12 +68,16 @@
                 <!-- Industry -->
                 <div class="space-y-2">
                   <label class="text-sm font-bold text-slate-700">Industry / Niche</label>
-                  <input 
+                  <select 
                     v-model="orgForm.settings.industry"
-                    type="text" 
-                    placeholder="e.g. E-commerce, Real Estate, SaaS"
-                    class="w-full px-4 py-3 rounded-xl border border-slate-200 focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10 transition-standard outline-none font-medium"
+                    class="w-full px-4 py-3 rounded-xl border border-slate-200 focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10 transition-standard outline-none font-medium appearance-none bg-white"
                   >
+                    <option value="">Select an Industry</option>
+                    <option v-for="industry in industries" :key="industry.slug" :value="industry.slug">
+                      {{ industry.name }}
+                    </option>
+                    <option value="other">Other / General</option>
+                  </select>
                 </div>
 
                 <!-- Target Audience -->
@@ -608,7 +612,8 @@ const props = defineProps({
   invitations: Array,
   currentUserRole: String,
   aiModels: Array,
-  analyticsProperties: Array
+  analyticsProperties: Array,
+  industries: Array
 })
 
 const page = usePage()

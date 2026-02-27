@@ -42,6 +42,7 @@ class OrganizationSettingsController extends Controller
                     'token_expires_at'     => $p->token_expires_at?->toIso8601String(),
                 ];
             }),
+            'industries' => \App\Models\Industry::orderBy('name')->get(['name', 'slug']),
         ]);
     }
 

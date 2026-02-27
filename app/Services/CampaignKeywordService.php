@@ -39,24 +39,7 @@ class CampaignKeywordService
         ]);
 
         // Get niche and top geolocations
-        $niche = $organization->nicheIntelligence;
-        if (!$niche) {
-            Log::info("Attempting fallback niche detection from settings", [
-                'organization_id' => $organization->id
-            ]);
-            
-            $industry = $organization->settings['industry'] ?? null;
-            if ($industry) {
-                $niche = \App\Models\NicheIntelligence::updateOrCreate(
-                    ['organization_id' => $organization->id],
-                    [
-                        'detected_niche' => strtolower($industry),
-                        'confidence' => 100,
-                        'last_updated_at' => now(),
-                    ]
-                );
-            }
-        }
+        $niche = $organization->nicheIntelligence ?? $this->nicheDetection->detectNiche($organization);
 
         if (!$niche) {
             Log::error("Cannot discover keywords without niche", [

@@ -7,23 +7,36 @@
           <div class="flex flex-col md:flex-row md:items-center justify-between gap-6">
             <div>
               <h1 class="text-3xl font-extrabold text-slate-900 tracking-tight">Keyword Research</h1>
-              <div class="flex items-center gap-3 mt-1 px-1 py-1 bg-slate-100 rounded-2xl border border-slate-200/50 self-start mt-4 mb-2">
+              <div class="flex items-center bg-slate-100 p-1 rounded-xl border border-slate-200/60 shadow-inner self-start mt-4 w-fit">
                 <Link 
                   :href="route('keywords.trending')"
-                  class="px-6 py-2.5 rounded-xl text-sm font-bold text-slate-500 hover:text-slate-700 transition-all duration-200"
+                  class="px-3 py-2 rounded-lg text-xs font-bold text-slate-500 hover:text-slate-700 hover:bg-slate-200/50 transition-all duration-300 flex items-center gap-1.5"
                 >
-                  🔥 Discovery
+                  <svg class="w-3.5 h-3.5 text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M10 19l-7-7m0 0l7-7m-7 7h18" /></svg>
+                  <span class="hidden sm:inline">Back</span>
+                </Link>
+
+                <div class="w-px h-4 bg-slate-200 mx-1"></div>
+
+                <Link 
+                  :href="route('keywords.trending')"
+                  class="px-4 py-2 rounded-lg text-xs font-bold text-slate-500 hover:text-slate-700 hover:bg-slate-200/50 transition-all duration-300 flex items-center gap-2"
+                >
+                  <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" /></svg>
+                  Trends
                 </Link>
                 <Link 
                   :href="route('keywords.intelligence')"
-                  class="px-6 py-2.5 rounded-xl text-sm font-bold text-slate-500 hover:text-slate-700 transition-all duration-200"
+                  class="px-4 py-2 rounded-lg text-xs font-bold text-slate-500 hover:text-slate-700 hover:bg-slate-200/50 transition-all duration-300 flex items-center gap-2"
                 >
-                  🧠 Intelligence
+                  <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" /></svg>
+                  Intelligence
                 </Link>
                 <button 
-                  class="px-6 py-2.5 rounded-xl text-sm font-bold bg-white text-blue-600 shadow-sm transition-all duration-200"
+                  class="px-4 py-2 rounded-lg text-xs font-bold bg-white text-blue-600 shadow-sm transition-all duration-300 flex items-center gap-2"
                 >
-                  🔍 Research
+                  <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>
+                  Research
                 </button>
               </div>
               <p class="text-slate-500">Discover search trends and analyze organic competition.</p>

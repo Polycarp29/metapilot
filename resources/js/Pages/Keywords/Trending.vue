@@ -7,34 +7,43 @@
           <h1 class="text-3xl font-extrabold text-slate-900 tracking-tight mb-2">Keyword Insights</h1>
           <p class="text-slate-500 font-medium">Discover trending topics in your niche and save them for your next campaign.</p>
         </div>
-        
+        <div class="flex items-center bg-slate-100 p-1 rounded-xl border border-slate-200/60 shadow-inner w-fit">
           <button 
             @click="activeTab = 'trends'"
-            class="px-6 py-2.5 rounded-xl text-sm font-bold transition-all duration-200"
-            :class="activeTab === 'trends' ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'"
+            class="px-4 py-2 rounded-lg text-xs font-bold transition-all duration-300 flex items-center gap-2"
+            :class="activeTab === 'trends' ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-500 hover:text-slate-700 hover:bg-slate-200/50'"
           >
-            🔥 Trends
+            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" /></svg>
+            Trends
           </button>
-          <Link 
-            :href="route('keywords.intelligence')"
-            class="px-6 py-2.5 rounded-xl text-sm font-bold text-slate-500 hover:text-slate-700 transition-all duration-200"
-          >
-            🧠 Intelligence
-          </Link>
+          
           <button 
             @click="activeTab = 'bookmarks'"
-            class="px-6 py-2.5 rounded-xl text-sm font-bold transition-all duration-200 flex items-center gap-2"
-            :class="activeTab === 'bookmarks' ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'"
+            class="px-4 py-2 rounded-lg text-xs font-bold transition-all duration-300 flex items-center gap-2"
+            :class="activeTab === 'bookmarks' ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-500 hover:text-slate-700 hover:bg-slate-200/50'"
           >
-            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 5a2 2 0 012-2h10a2 2 0 012 2v16l-7-3.5L5 21V5z" /></svg>
+            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 5a2 2 0 012-2h10a2 2 0 012 2v16l-7-3.5L5 21V5z" /></svg>
             Bookmarks
           </button>
+
+          <div class="w-px h-4 bg-slate-200 mx-1"></div>
+
+          <Link 
+            :href="route('keywords.intelligence')"
+            class="px-4 py-2 rounded-lg text-xs font-bold text-slate-500 hover:text-slate-700 hover:bg-slate-200/50 transition-all duration-300 flex items-center gap-2"
+          >
+            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" /></svg>
+            Intelligence
+          </Link>
+          
           <Link 
             :href="route('keywords.research')"
-            class="px-6 py-2.5 rounded-xl text-sm font-bold text-slate-500 hover:text-slate-700 transition-all duration-200"
+            class="px-4 py-2 rounded-lg text-xs font-bold text-slate-500 hover:text-slate-700 hover:bg-slate-200/50 transition-all duration-300 flex items-center gap-2"
           >
-            🔍 Research
+            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>
+            Research
           </Link>
+        </div>
       </div>
 
       <!-- Trends Tab -->

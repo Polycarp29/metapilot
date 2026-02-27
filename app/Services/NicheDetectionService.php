@@ -18,66 +18,80 @@ class NicheDetectionService
     }
 
     /**
-     * Detect organization's niche from analytics data.
+     * Detect organization's niche from user settings or analytics data.
      */
     public function detectNiche(Organization $organization): ?NicheIntelligence
     {
-        $properties = $organization->analyticsProperties;
+        // 1. Check for explicit User Definition in Brand & AI Context
+        $userDefinedNiche = $organization->settings['industry'] ?? null;
+        $businessProfile = $organization->settings['business_profile'] ?? [];
         
-        if ($properties->isEmpty()) {
-            Log::warning("No analytics properties found for organization", [
-                'organization_id' => $organization->id
+        if ($userDefinedNiche) {
+            $niche = strtolower(trim($userDefinedNiche));
+            $confidence = 100.0;
+            $evidence = [
+                'source' => 'user_defined',
+                'context' => $businessProfile,
+                'last_verified' => now()->toDateTimeString()
+            ];
+
+            Log::info('User defined niche is:', [
+                'niche' => $evidence,
+                'source' => 'Database extraction'
             ]);
-            return null;
-        }
-
-        // Collect data from all properties
-        $allTopics = [];
-        $allAudience = [];
-
-        foreach ($properties as $property) {
-            $topics = $this->extractKeyTopics($property);
-            $audience = $this->extractAudienceData($property);
+        } else {
+            // 2. Fallback to Auto-Detection via Analytics
+            $properties = $organization->analyticsProperties;
             
-            $allTopics = array_merge($allTopics, $topics);
-            $allAudience = array_merge($allAudience, $audience);
+            if ($properties->isEmpty()) {
+                Log::info("No analytics properties or user-defined industry found for organization", [
+                    'organization_id' => $organization->id
+                ]);
+                return null;
+            }
+
+            // Collect data from all properties
+            $allTopics = [];
+            $allAudience = [];
+
+            foreach ($properties as $property) {
+                $topics = $this->extractKeyTopics($property);
+                $audience = $this->extractAudienceData($property);
+                
+                $allTopics = array_merge($allTopics, $topics);
+                $allAudience = array_merge($allAudience, $audience);
+            }
+
+            if (empty($allTopics)) {
+                return null;
+            }
+
+            $niche = $this->matchIndustry($allTopics);
+            $confidence = $this->calculateNicheConfidence($allTopics, $niche);
+            $evidence = [
+                'source' => 'auto_detected',
+                'topics' => array_slice($allTopics, 0, 10),
+                'audience' => $allAudience,
+            ];
         }
 
-        if (empty($allTopics)) {
-            Log::info("No topics found for niche detection", [
-                'organization_id' => $organization->id
-            ]);
-            return null;
-        }
-
-        // Detect niche from topics
-        $niche = $this->matchIndustry($allTopics);
-        $confidence = $this->calculateNicheConfidence($allTopics, $niche);
-
-        // Get industry benchmarks
+        // 3. Common enrichment
         $benchmarks = $this->updateBenchmarks($niche);
-
-        // Get trending keywords in this niche
         $trendKeywords = $this->getTrendingKeywords($niche);
 
         // Create or update niche intelligence
-        $nicheIntelligence = NicheIntelligence::updateOrCreate(
+        return NicheIntelligence::updateOrCreate(
             ['organization_id' => $organization->id],
             [
                 'detected_niche' => $niche,
                 'confidence' => $confidence,
-                'evidence' => [
-                    'topics' => array_slice($allTopics, 0, 10),
-                    'audience' => $allAudience,
-                ],
+                'evidence' => $evidence,
                 'industry_benchmarks' => $benchmarks,
                 'trend_keywords' => $trendKeywords,
-                'seasonal_patterns' => null, // To be implemented
+                'seasonal_patterns' => null,
                 'last_updated_at' => now(),
             ]
         );
-
-        return $nicheIntelligence;
     }
 
     /**
@@ -117,22 +131,17 @@ class NicheDetectionService
      */
     public function matchIndustry(array $topics): string
     {
-        // Industry keyword mapping
-        $industries = [
-            'ecommerce' => ['shop', 'product', 'cart', 'checkout', 'store', 'buy', 'sale'],
-            'saas' => ['software', 'app', 'platform', 'dashboard', 'api', 'integration'],
-            'blog' => ['article', 'post', 'blog', 'news', 'story', 'guide'],
-            'education' => ['course', 'learn', 'tutorial', 'lesson', 'class', 'training'],
-            'real_estate' => ['property', 'house', 'apartment', 'rent', 'real estate', 'listing'],
-            'health' => ['health', 'medical', 'doctor', 'wellness', 'fitness', 'nutrition'],
-            'finance' => ['finance', 'investment', 'banking', 'loan', 'credit', 'insurance'],
-            'travel' => ['travel', 'hotel', 'flight', 'destination', 'tour', 'vacation'],
-            'food' => ['recipe', 'food', 'restaurant', 'cooking', 'meal', 'cuisine'],
-        ];
+        // Industry keyword mapping from Database
+        $industries = \App\Models\Industry::all();
+
+        Log::info('Discorvered Industries', [
+            'industries' => $industries,
+        ]);
 
         $scores = [];
-        foreach ($industries as $industry => $keywords) {
+        foreach ($industries as $industry) {
             $score = 0;
+            $keywords = $industry->keywords ?? [];
             foreach ($topics as $topic) {
                 foreach ($keywords as $keyword) {
                     if (stripos($topic, $keyword) !== false) {
@@ -140,13 +149,13 @@ class NicheDetectionService
                     }
                 }
             }
-            $scores[$industry] = $score;
+            $scores[$industry->slug] = $score;
         }
 
         arsort($scores);
         $topIndustry = array_key_first($scores);
 
-        return $scores[$topIndustry] > 0 ? $topIndustry : 'general';
+        return (!empty($scores) && $scores[$topIndustry] > 0) ? $topIndustry : 'general';
     }
 
     /**
@@ -154,31 +163,14 @@ class NicheDetectionService
      */
     public function updateBenchmarks(string $niche): array
     {
-        // Default industry benchmarks
-        // In production, these could come from a database or external API
-        $defaultBenchmarks = [
-            'ecommerce' => [
-                'avg_session_duration' => 180,
-                'bounce_rate' => 45,
-                'conversion_rate' => 2.5,
-                'avg_ctr' => 3.2,
-            ],
-            'saas' => [
-                'avg_session_duration' => 240,
-                'bounce_rate' => 35,
-                'conversion_rate' => 5.0,
-                'avg_ctr' => 4.5,
-            ],
-            'blog' => [
-                'avg_session_duration' => 120,
-                'bounce_rate' => 65,
-                'conversion_rate' => 1.0,
-                'avg_ctr' => 2.8,
-            ],
-            // Add more as needed
-        ];
+        $industry = \App\Models\Industry::where('slug', $niche)->first();
 
-        return $defaultBenchmarks[$niche] ?? [
+        if ($industry && !empty($industry->benchmarks)) {
+            return $industry->benchmarks;
+        }
+
+        // Default industry benchmarks
+        return [
             'avg_session_duration' => 150,
             'bounce_rate' => 50,
             'conversion_rate' => 2.0,

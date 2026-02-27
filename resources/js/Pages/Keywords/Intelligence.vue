@@ -8,23 +8,36 @@
           <p class="text-slate-500 font-medium">Canonical knowledge base of trending topics with decay & resurgence forecasting.</p>
         </div>
         
-        <div class="flex bg-slate-100 p-1 rounded-2xl border border-slate-200/50 self-start">
+        <div class="flex items-center bg-slate-100 p-1 rounded-xl border border-slate-200/60 shadow-inner w-fit">
           <Link 
             :href="route('keywords.trending')"
-            class="px-6 py-2.5 rounded-xl text-sm font-bold text-slate-500 hover:text-slate-700 transition-all duration-200"
+            class="px-3 py-2 rounded-lg text-xs font-bold text-slate-500 hover:text-slate-700 hover:bg-slate-200/50 transition-all duration-300 flex items-center gap-1.5"
           >
-            🔥 Discovery
+            <svg class="w-3.5 h-3.5 text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M10 19l-7-7m0 0l7-7m-7 7h18" /></svg>
+            <span class="hidden sm:inline">Back</span>
+          </Link>
+
+          <div class="w-px h-4 bg-slate-200 mx-1"></div>
+
+          <Link 
+            :href="route('keywords.trending')"
+            class="px-4 py-2 rounded-lg text-xs font-bold text-slate-500 hover:text-slate-700 hover:bg-slate-200/50 transition-all duration-300 flex items-center gap-2"
+          >
+            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" /></svg>
+            Trends
           </Link>
           <button 
-            class="px-6 py-2.5 rounded-xl text-sm font-bold bg-white text-blue-600 shadow-sm transition-all duration-200"
+            class="px-4 py-2 rounded-lg text-xs font-bold bg-white text-blue-600 shadow-sm transition-all duration-300 flex items-center gap-2"
           >
-            🧠 Intelligence
+            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" /></svg>
+            Intelligence
           </button>
           <Link 
             :href="route('keywords.research')"
-            class="px-6 py-2.5 rounded-xl text-sm font-bold text-slate-500 hover:text-slate-700 transition-all duration-200"
+            class="px-4 py-2 rounded-lg text-xs font-bold text-slate-500 hover:text-slate-700 hover:bg-slate-200/50 transition-all duration-300 flex items-center gap-2"
           >
-            🔍 Research
+            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>
+            Research
           </Link>
         </div>
       </div>
@@ -45,11 +58,9 @@
         <div class="flex items-center gap-3">
           <select v-model="filters.niche" @change="fetchKeywords" class="bg-slate-50 border-none rounded-2xl px-4 py-3 text-sm font-bold text-slate-600 focus:ring-2 focus:ring-blue-500/20">
             <option value="">All Niches</option>
-            <option value="ecommerce">Ecommerce</option>
-            <option value="saas">SaaS</option>
-            <option value="blog">Blog</option>
-            <option value="betting">Betting</option>
-            <option value="casino">Casino</option>
+            <option v-for="industry in industries" :key="industry.slug" :value="industry.slug">
+              {{ industry.name }}
+            </option>
           </select>
 
           <select v-model="filters.status" @change="fetchKeywords" class="bg-slate-50 border-none rounded-2xl px-4 py-3 text-sm font-bold text-slate-600 focus:ring-2 focus:ring-blue-500/20">
@@ -202,9 +213,12 @@
 
 <script setup>
 import { ref, onMounted, reactive, watch } from 'vue'
-import { Link, usePage } from '@inertiajs/vue3'
-import AppLayout from '../../Layouts/AppLayout.vue'
-import Sparkline from './Partials/Sparkline.vue'
+const props = defineProps({
+  organization: Object,
+  industries: Array
+})
+
+const page = usePage()
 import axios from 'axios'
 import _ from 'lodash'
 

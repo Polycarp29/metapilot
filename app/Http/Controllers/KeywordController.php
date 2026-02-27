@@ -74,7 +74,8 @@ class KeywordController extends Controller
     public function intelligence()
     {
         return Inertia::render('Keywords/Intelligence', [
-            'organization' => auth()->user()->currentOrganization()
+            'organization' => auth()->user()->currentOrganization(),
+            'industries' => \App\Models\Industry::orderBy('name')->get(['name', 'slug']),
         ]);
     }
 }
