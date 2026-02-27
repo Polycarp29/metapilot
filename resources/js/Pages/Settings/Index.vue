@@ -78,6 +78,7 @@
                     </option>
                     <option value="other">Other / General</option>
                   </select>
+                  <div v-if="orgForm.errors['settings.industry']" class="text-red-500 text-sm font-medium">{{ orgForm.errors['settings.industry'] }}</div>
                 </div>
 
                 <!-- Target Audience -->
@@ -89,6 +90,7 @@
                     placeholder="e.g. Small business owners in Florida"
                     class="w-full px-4 py-3 rounded-xl border border-slate-200 focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10 transition-standard outline-none font-medium"
                   >
+                  <div v-if="orgForm.errors['settings.business_profile.target_audience']" class="text-red-500 text-sm font-medium">{{ orgForm.errors['settings.business_profile.target_audience'] }}</div>
                 </div>
             </div>
 
@@ -101,17 +103,18 @@
                 placeholder="What makes your business different? e.g. Fastest delivery, eco-friendly materials, 24/7 support."
                 class="w-full px-4 py-3 rounded-xl border border-slate-200 focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10 transition-standard outline-none font-medium resize-none"
               ></textarea>
+              <div v-if="orgForm.errors['settings.business_profile.value_proposition']" class="text-red-500 text-sm font-medium">{{ orgForm.errors['settings.business_profile.value_proposition'] }}</div>
             </div>
 
             <!-- Competitors -->
             <div class="space-y-2">
-              <label class="text-sm font-bold text-slate-700">Key Competitors (Optional)</label>
               <textarea 
                 v-model="orgForm.settings.business_profile.competitors"
                 rows="2"
                 placeholder="List main competitors to help AI understand your market positioning."
                 class="w-full px-4 py-3 rounded-xl border border-slate-200 focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10 transition-standard outline-none font-medium resize-none"
               ></textarea>
+              <div v-if="orgForm.errors['settings.business_profile.competitors']" class="text-red-500 text-sm font-medium">{{ orgForm.errors['settings.business_profile.competitors'] }}</div>
             </div>
             
             <div class="flex justify-end pt-4 border-t border-slate-100">

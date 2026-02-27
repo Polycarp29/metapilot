@@ -213,14 +213,18 @@
 
 <script setup>
 import { ref, onMounted, reactive, watch } from 'vue'
+import { Link, usePage } from '@inertiajs/vue3'
+import axios from 'axios'
+import _ from 'lodash'
+import AppLayout from '../../Layouts/AppLayout.vue'
+import Sparkline from './Partials/Sparkline.vue'
+
 const props = defineProps({
   organization: Object,
   industries: Array
 })
 
 const page = usePage()
-import axios from 'axios'
-import _ from 'lodash'
 
 const keywords = ref([])
 const loading = ref(false)

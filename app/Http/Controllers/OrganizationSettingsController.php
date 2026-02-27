@@ -62,6 +62,11 @@ class OrganizationSettingsController extends Controller
             'settings.ai_insights_enabled' => 'nullable|boolean',
             'settings.analytics_period' => 'nullable|string',
             'settings.notifications_enabled' => 'boolean',
+            'settings.industry' => 'nullable|string',
+            'settings.business_profile' => 'nullable|array',
+            'settings.business_profile.target_audience' => 'nullable|string',
+            'settings.business_profile.value_proposition' => 'nullable|string',
+            'settings.business_profile.competitors' => 'nullable|string',
         ]);
 
         // Merge existing settings with new ones to prevent overwriting unsubmitted keys
