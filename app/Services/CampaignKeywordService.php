@@ -15,111 +15,108 @@ class CampaignKeywordService
     protected TrendsAnalysisService $trendsAnalysis;
     protected SerperService $serper;
     protected KeywordIntelligenceService $kiService;
+    protected PythonEngineService $pythonEngine;
 
     public function __construct(
         NicheDetectionService $nicheDetection,
         TrendsAnalysisService $trendsAnalysis,
         SerperService $serper,
-        KeywordIntelligenceService $kiService
+        KeywordIntelligenceService $kiService,
+        PythonEngineService $pythonEngine
     ) {
         $this->nicheDetection = $nicheDetection;
         $this->trendsAnalysis = $trendsAnalysis;
         $this->serper = $serper;
         $this->kiService = $kiService;
+        $this->pythonEngine = $pythonEngine;
     }
 
     /**
      * Discover and store trending keywords for an organization.
-     * Automatically uses top geographic locations from analytics.
      */
     public function discoverTrendingKeywords(Organization $organization): array
     {
-        Log::info("Discovering trending keywords", [
+        Log::info("Discovering trending keywords via Python Engine", [
             'organization_id' => $organization->id
         ]);
 
-        // Get niche and top geolocations
+        // 1. Get niche context
         $niche = $organization->nicheIntelligence ?? $this->nicheDetection->detectNiche($organization);
 
         if (!$niche) {
-            Log::error("Cannot discover keywords without niche", [
-                'organization_id' => $organization->id
-            ]);
+            Log::error("Cannot discover keywords without niche", ['organization_id' => $organization->id]);
             return [];
         }
 
+        // 2. Determine target geolocations
         $geoLocations = $this->nicheDetection->getTopGeoLocations($organization, 3);
-        
         if (empty($geoLocations)) {
-            Log::info("No geo data available, using default fallback (KE)", [
-                'organization_id' => $organization->id
-            ]);
-            $geoLocations = [
-                ['country' => 'KE', 'city' => null, 'users' => 0]
-            ];
+            $geoLocations = [['country' => 'KE']];
+        }
+
+        // 3. Prepare niches/seeds for discovery
+        $nichesToScan = [$niche->detected_niche];
+        if (!empty($niche->trend_keywords)) {
+            $nichesToScan = array_merge($nichesToScan, array_slice($niche->trend_keywords, 0, 3));
         }
 
         $discoveredKeywords = [];
 
-        // Get base keywords from niche
-        $baseKeywords = $niche->trend_keywords ?? $this->getDefaultKeywordsForNiche($niche->detected_niche);
-
         foreach ($geoLocations as $location) {
             $countryCode = $location['country'];
             
-            Log::info("Fetching trends for geo", [
-                'country' => $countryCode,
-                'users' => $location['users'] ?? 0
-            ]);
+            try {
+                Log::info("Calling Python Engine for smart discovery", [
+                    'geo' => $countryCode,
+                    'niches' => $nichesToScan
+                ]);
 
-            // Detect trending topics for this geo
-            $trending = $this->trendsAnalysis->detectTrendingByGeo(
-                $organization,
-                $countryCode,
-                $baseKeywords
-            );
-
-            foreach ($trending as $trendData) {
-                // Enrich with Serper data (Hybrid)
-                $serpResults = $this->serper->search($trendData['keyword'], $countryCode);
-                $intent = $serpResults ? $this->detectIntentFromSerp($serpResults['organic'] ?? []) : null;
-
-                // Store each trending keyword
-                $keyword = TrendingKeyword::updateOrCreate(
-                    [
-                        'organization_id' => $organization->id,
-                        'keyword' => $trendData['keyword'],
-                        'country_code' => $countryCode,
-                        'niche' => $niche->detected_niche,
-                    ],
-                    [
-                        'city' => $location['city'] ?? null,
-                        'growth_rate' => $trendData['growth_rate'],
-                        'current_interest' => $trendData['current_interest'],
-                        'related_queries' => $trendData['related_queries'] ?? null,
-                        'recommendation_type' => $this->classifyRecommendation($trendData),
-                        'trending_date' => now()->toDateString(),
-                        'intent' => $intent,
-                        'serp_data' => $serpResults,
-                    ]
-                );
-
-                // Push to canonical intelligence layer
-                try {
-                    $this->kiService->upsert($keyword);
-                } catch (\Exception $e) {
-                    Log::error("Failed to sync keyword to intelligence layer", [
-                        'keyword' => $keyword->keyword,
-                        'error' => $e->getMessage()
-                    ]);
+                $response = $this->pythonEngine->getGlobalTrends($countryCode, $nichesToScan);
+                
+                if (!$response || empty($response['trends'])) {
+                    continue;
                 }
 
-                $discoveredKeywords[] = $keyword;
+                foreach ($response['trends'] as $trendData) {
+                    // Map Python engine data to TrendingKeyword model
+                    $keyword = TrendingKeyword::updateOrCreate(
+                        [
+                            'organization_id' => $organization->id,
+                            'keyword' => strtolower(trim($trendData['keyword'])),
+                            'country_code' => $countryCode,
+                            'niche' => $niche->detected_niche,
+                        ],
+                        [
+                            'growth_rate' => $trendData['growth_rate'] ?? 50,
+                            'current_interest' => $trendData['current_interest'] ?? 50,
+                            'related_queries' => $trendData['related_queries'] ?? [],
+                            'recommendation_type' => $this->classifyRecommendation($trendData),
+                            'trending_date' => now()->toDateString(),
+                            'origin' => 'python_engine_smart',
+                        ]
+                    );
 
-                // Respect Serper rate limiting if doing bulk enrichment
-                if ($serpResults) {
-                    usleep(200000); // 0.2s delay
+                    // Sync to intelligence pool
+                    try {
+                        $this->kiService->upsertFromDiscovery([
+                            'keyword' => $keyword->keyword,
+                            'current_interest' => $keyword->current_interest,
+                            'growth_rate' => $keyword->growth_rate,
+                            'niche' => $keyword->niche,
+                            'country_code' => $keyword->country_code,
+                            'origin' => 'organization_smart_discovery'
+                        ]);
+                    } catch (\Exception $e) {
+                        Log::error("Intelligence sync failed", ['kw' => $keyword->keyword, 'err' => $e->getMessage()]);
+                    }
+
+                    $discoveredKeywords[] = $keyword;
                 }
+            } catch (\Exception $e) {
+                Log::error("Python smart discovery failed for geo", [
+                    'geo' => $countryCode,
+                    'error' => $e->getMessage()
+                ]);
             }
         }
 
@@ -204,8 +201,8 @@ class CampaignKeywordService
      */
     protected function classifyRecommendation(array $trendData): string
     {
-        $growth = $trendData['growth_rate'];
-        $interest = $trendData['current_interest'];
+        $growth = $trendData['growth_rate'] ?? 0;
+        $interest = $trendData['current_interest'] ?? 0;
 
         if ($growth > 50 && $interest > 70) {
             return 'high_potential';
