@@ -26,6 +26,7 @@ const renderChart = () => {
   if (!canvas.value) return
   if (chart) chart.destroy()
 
+  if (!props.data || !Array.isArray(props.data)) return []
   const labels = props.data.map((_, i) => i)
   const values = props.data.map(d => d.interest_value || d.value || 0)
 

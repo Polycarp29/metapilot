@@ -440,4 +440,30 @@ class PythonEngineService
 
         return null;
     }
+
+    /**
+     * Fetch global trends from the Python Engine.
+     */
+    public function getGlobalTrends(string $geo = 'KE', array $niches = []): ?array
+    {
+        try {
+            $response = Http::timeout(30)->post("{$this->baseUrl}/trends/global", [
+                'geo' => $geo,
+                'niches' => $niches
+            ]);
+
+            if ($response->successful()) {
+                return $response->json();
+            }
+
+            Log::error("Python Engine: Global trends fetch failed", [
+                'status' => $response->status(),
+                'body' => $response->body()
+            ]);
+        } catch (\Exception $e) {
+            Log::error("Python Engine: Connection error in global trends: " . $e->getMessage());
+        }
+
+        return null;
+    }
 }

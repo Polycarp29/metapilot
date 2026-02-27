@@ -1,5 +1,6 @@
 <template>
   <div id="app" class="min-h-screen bg-slate-50 font-sans selection:bg-blue-100 selection:text-blue-700">
+    <Head :title="title" />
     <WorkspaceLoader :show="isLoading" />
     <Toaster ref="toaster" />
     
@@ -123,10 +124,14 @@
 
 <script setup>
 import { ref, onMounted } from 'vue'
-import { Link, usePage } from '@inertiajs/vue3'
+import { Link, usePage, Head } from '@inertiajs/vue3'
 import Toaster from '../Components/Toaster.vue'
 import WorkspaceLoader from '../Components/WorkspaceLoader.vue'
 import UserDropdown from '../Components/UserDropdown.vue'
+
+const props = defineProps({
+  title: String,
+})
 
 const toaster = ref(null)
 const isLoading = ref(false)

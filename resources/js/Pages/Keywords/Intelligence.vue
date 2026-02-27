@@ -101,6 +101,21 @@
               </span>
               <span v-if="kw.category" class="text-[10px] font-bold text-slate-400 uppercase tracking-widest">{{ kw.category }}</span>
             </div>
+
+            <!-- Importance Badge -->
+            <div v-if="kw.relevance_score" class="mb-4">
+               <div :class="[
+                 'inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-wider shadow-sm border',
+                 kw.relevance_score >= 80 ? 'bg-purple-50 text-purple-700 border-purple-100' : 
+                 kw.relevance_score >= 50 ? 'bg-blue-50 text-blue-700 border-blue-100' :
+                 'bg-slate-50 text-slate-500 border-slate-100'
+               ]">
+                 <svg class="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
+                   <path fill-rule="evenodd" d="M11.3 1.046A1 1 0 0112 2v5h4a1 1 0 01.82 1.573l-7 10A1 1 0 018 18v-5H4a1 1 0 01-.82-1.573l7-10a1 1 0 011.12-.38z" clip-rule="evenodd" />
+                 </svg>
+                 {{ kw.relevance_score >= 80 ? 'Strategic priority' : kw.relevance_score >= 50 ? 'High Relevance' : 'Medium Relevance' }}
+               </div>
+            </div>
             
             <button 
               @click="toggleBookmark(kw)"
@@ -244,8 +259,20 @@ const fetchKeywords = async () => {
   loading.value = true
   try {
     const routeName = showBookmarksOnly.value ? 'api.ki.bookmarks' : 'api.ki.index'
-    const res = await axios.get(route(routeName), { params: filters })
-    keywords.value = showBookmarksOnly.value ? res.data : res.data.data
+    const res = await axios.get(route(routeName), { 
+      params: filters,
+      headers: { 'X-Organization-Id': props.organization.id }
+    })
+    
+    if (showBookmarksOnly.value) {
+      keywords.value = res.data.filter(b => b.intelligence).map(b => ({
+        ...b.intelligence,
+        is_bookmarked: true,
+        bookmark_id: b.id
+      }))
+    } else {
+      keywords.value = res.data.data
+    }
   } catch (err) {
     console.error(err)
   } finally {
@@ -294,7 +321,7 @@ const toggleBookmark = async (kw) => {
       kw.is_bookmarked = false
     } else {
       await axios.post(route('api.ki.bookmark', kw.id), {
-        organization_id: usePage().props.organization.id,
+        organization_id: props.organization.id,
         use_case: 'research'
       })
       kw.is_bookmarked = true

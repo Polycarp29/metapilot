@@ -30,7 +30,7 @@ class KeywordIntelligenceController extends Controller
     {
         $filters = $request->only(['niche', 'status', 'min_score', 'search', 'region', 'sort_by', 'sort_order']);
         
-        $query = $this->kiService->buildSearchQuery($filters);
+        $query = $this->kiService->buildSearchQuery($filters)->with('trendHistory');
         
         $keywords = $query->paginate(24);
 

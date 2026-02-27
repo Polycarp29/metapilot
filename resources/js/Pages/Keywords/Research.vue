@@ -124,7 +124,7 @@
                 Organic Search Results
               </h3>
               
-              <div v-for="(item, index) in results.organic" :key="index" 
+              <div v-if="results.organic && results.organic.length" v-for="(item, index) in results.organic" :key="index" 
                    class="bg-white p-6 rounded-3xl border border-slate-100 shadow-sm hover:shadow-premium hover:-translate-y-0.5 transition-all duration-300">
                 <div class="flex items-start gap-4">
                   <div class="w-8 h-8 bg-slate-50 rounded-lg flex items-center justify-center text-xs font-bold text-slate-400 shrink-0">
@@ -156,7 +156,7 @@
                   <svg class="w-5 h-5 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6"/></svg>
                   Related Searches
                 </h3>
-                <div class="space-y-3">
+                <div v-if="results.relatedSearches && results.relatedSearches.length" class="space-y-3">
                   <button v-for="rel in results.relatedSearches" 
                           @click="quickSearch(rel.query)"
                           class="w-full text-left p-4 bg-white/5 hover:bg-white/10 rounded-2xl border border-white/5 transition-colors group">
@@ -239,6 +239,7 @@ function quickSearch(query) {
 }
 
 function detectIntent(snippet) {
+  if (!snippet) return 'Informational';
   const s = snippet.toLowerCase();
   if (s.includes('buy') || s.includes('price') || s.includes('shop') || s.includes('discount')) return 'Commercial';
   if (s.includes('how to') || s.includes('what is') || s.includes('guide') || s.includes('tutorial')) return 'Informational';

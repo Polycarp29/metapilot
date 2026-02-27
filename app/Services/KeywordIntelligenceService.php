@@ -16,34 +16,53 @@ class KeywordIntelligenceService
      */
     public function upsert(TrendingKeyword $trendingKw): KeywordIntelligence
     {
-        return DB::transaction(function () use ($trendingKw) {
-            $keywordText = strtolower(trim($trendingKw->keyword));
+        return $this->upsertFromDiscovery([
+            'keyword' => $trendingKw->keyword,
+            'current_interest' => $trendingKw->current_interest,
+            'growth_rate' => $trendingKw->growth_rate,
+            'niche' => $trendingKw->niche,
+            'country_code' => $trendingKw->country_code,
+            'related_queries' => $trendingKw->related_queries,
+            'serp_data' => $trendingKw->serp_data,
+            'origin' => 'serper'
+        ]);
+    }
+
+    /**
+     * Generic upsert from discovery data.
+     */
+    public function upsertFromDiscovery(array $data): KeywordIntelligence
+    {
+        return DB::transaction(function () use ($data) {
+            $keywordText = strtolower(trim($data['keyword']));
+            $interest = $data['current_interest'] ?? 50;
+            $velocity = $data['growth_rate'] ?? 0;
             
             // 1. Find or create the canonical entry
             $ki = KeywordIntelligence::firstOrCreate(
                 ['keyword' => $keywordText],
                 [
-                    'language' => 'en', // default
-                    'origin' => 'serper',
-                    'category' => $trendingKw->niche,
+                    'language' => 'en',
+                    'origin' => $data['origin'] ?? 'system',
+                    'category' => $data['niche'] ?? 'Uncategorized',
                     'is_active' => true,
-                    'global_score' => $trendingKw->current_interest,
-                    'trend_velocity' => $trendingKw->growth_rate,
+                    'global_score' => $interest,
+                    'trend_velocity' => $velocity,
                     'last_seen_at' => now(),
-                    'related_queries' => $trendingKw->related_queries,
+                    'related_queries' => $data['related_queries'] ?? [],
                 ]
             );
 
             // 2. Update rolling metrics if it already existed
             if (!$ki->wasRecentlyCreated) {
-                $newScore = ($ki->global_score + $trendingKw->current_interest) / 2;
+                $newScore = ($ki->global_score + $interest) / 2;
                 $ki->update([
                     'global_score' => $newScore,
-                    'trend_velocity' => $trendingKw->growth_rate,
+                    'trend_velocity' => $velocity,
                     'last_seen_at' => now(),
                     'is_active' => true,
-                    'category' => $ki->category ?: $trendingKw->niche,
-                    'related_queries' => array_unique(array_merge($ki->related_queries ?? [], $trendingKw->related_queries ?? [])),
+                    'category' => $ki->category ?: ($data['niche'] ?? null),
+                    'related_queries' => array_unique(array_merge($ki->related_queries ?? [], $data['related_queries'] ?? [])),
                 ]);
             }
 
@@ -51,15 +70,14 @@ class KeywordIntelligenceService
             KeywordTrendHistory::updateOrCreate(
                 [
                     'keyword_intelligence_id' => $ki->id,
-                    'region' => $trendingKw->country_code ?: 'GLOBAL',
+                    'region' => $data['country_code'] ?: 'GLOBAL',
                     'date' => now()->toDateString(),
                 ],
                 [
-                    'interest_value' => $trendingKw->current_interest,
-                    'trend_velocity' => $trendingKw->growth_rate,
-                    // If we have more data in serp_data, we'd map it here
-                    'ads_cpc' => $trendingKw->serp_data['cpc'] ?? null,
-                    'competition_score' => $trendingKw->serp_data['competition'] ?? null,
+                    'interest_value' => $interest,
+                    'trend_velocity' => $velocity,
+                    'ads_cpc' => $data['serp_data']['cpc'] ?? null,
+                    'competition_score' => $data['serp_data']['competition'] ?? null,
                 ]
             );
 
