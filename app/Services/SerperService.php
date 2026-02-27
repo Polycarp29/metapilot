@@ -9,7 +9,6 @@ class SerperService
 {
     protected string $apiKey;
     protected string $searchUrl = 'https://google.serper.dev/search';
-    protected string $trendsUrl = 'https://google.serper.dev/trends';
 
     public function __construct()
     {
@@ -30,19 +29,6 @@ class SerperService
             'q' => $query,
             'gl' => $gl,
             'hl' => $hl,
-        ]);
-    }
-
-    /**
-     * Fetch Google Trends data using Serper.dev
-     */
-    public function googleTrends(string $query, string $gl = 'KE', string $type = 'TIMESERIES', string $date = 'today 12-m'): ?array
-    {
-        return $this->makeRequest($this->trendsUrl, [
-            'q' => $query,
-            'gl' => $gl,
-            'type' => $type,
-            'date' => $date,
         ]);
     }
 

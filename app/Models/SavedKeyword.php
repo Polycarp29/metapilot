@@ -11,6 +11,7 @@ class SavedKeyword extends Model
 
     protected $fillable = [
         'organization_id',
+        'keyword_intelligence_id',
         'keyword',
         'source',
         'metadata',
@@ -23,5 +24,10 @@ class SavedKeyword extends Model
     public function organization()
     {
         return $this->belongsTo(Organization::class);
+    }
+
+    public function intelligence()
+    {
+        return $this->belongsTo(KeywordIntelligence::class, 'keyword_intelligence_id');
     }
 }

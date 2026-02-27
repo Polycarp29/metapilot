@@ -15,7 +15,8 @@ class KeywordWalletController extends Controller
     {
         $organization = auth()->user()->currentOrganization();
         
-        $keywords = SavedKeyword::where('organization_id', $organization->id)
+        $keywords = \App\Models\SavedKeyword::with('intelligence.trendHistory')
+            ->where('organization_id', $organization->id)
             ->latest()
             ->paginate(20);
 
@@ -36,12 +37,23 @@ class KeywordWalletController extends Controller
         $organization = auth()->user()->currentOrganization();
 
         try {
-            $saved = SavedKeyword::updateOrCreate(
+            // Find or create global intelligence entry
+            $intelligence = \App\Models\KeywordIntelligence::firstOrCreate(
+                ['keyword' => strtolower(trim($request->keyword))],
+                [
+                    'origin' => 'manual',
+                    'is_active' => true,
+                    'last_seen_at' => now(),
+                ]
+            );
+
+            $saved = \App\Models\SavedKeyword::updateOrCreate(
                 [
                     'organization_id' => $organization->id,
                     'keyword' => $request->keyword,
                 ],
                 [
+                    'keyword_intelligence_id' => $intelligence->id,
                     'source' => $request->source,
                     'metadata' => $request->metadata,
                 ]
@@ -49,7 +61,7 @@ class KeywordWalletController extends Controller
 
             return response()->json([
                 'message' => 'Keyword saved to wallet',
-                'keyword' => $saved
+                'keyword' => $saved->load('intelligence')
             ]);
         } catch (\Exception $e) {
             Log::error("Failed to save keyword to wallet", [

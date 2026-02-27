@@ -7,8 +7,26 @@
           <div class="flex flex-col md:flex-row md:items-center justify-between gap-6">
             <div>
               <h1 class="text-3xl font-extrabold text-slate-900 tracking-tight">Keyword Research</h1>
-              <div class="flex items-center gap-3 mt-1">
-                <p class="text-slate-500">Discover search trends and analyze organic competition.</p>
+              <div class="flex items-center gap-3 mt-1 px-1 py-1 bg-slate-100 rounded-2xl border border-slate-200/50 self-start mt-4 mb-2">
+                <Link 
+                  :href="route('keywords.trending')"
+                  class="px-6 py-2.5 rounded-xl text-sm font-bold text-slate-500 hover:text-slate-700 transition-all duration-200"
+                >
+                  🔥 Discovery
+                </Link>
+                <Link 
+                  :href="route('keywords.intelligence')"
+                  class="px-6 py-2.5 rounded-xl text-sm font-bold text-slate-500 hover:text-slate-700 transition-all duration-200"
+                >
+                  🧠 Intelligence
+                </Link>
+                <button 
+                  class="px-6 py-2.5 rounded-xl text-sm font-bold bg-white text-blue-600 shadow-sm transition-all duration-200"
+                >
+                  🔍 Research
+                </button>
+              </div>
+              <p class="text-slate-500">Discover search trends and analyze organic competition.</p>
                 <div v-if="results" class="flex gap-2">
                   <span v-if="cached" class="px-2 py-0.5 bg-slate-100 text-slate-500 text-[10px] font-bold rounded uppercase tracking-wider">
                     Cached {{ last_searched }}
@@ -28,7 +46,6 @@
                   </span>
                 </div>
               </div>
-            </div>
             
             <!-- Search Bar -->
             <form @submit.prevent="handleSearch" class="flex-1 max-w-2xl">

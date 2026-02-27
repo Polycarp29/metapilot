@@ -14,15 +14,18 @@ class CampaignKeywordService
     protected NicheDetectionService $nicheDetection;
     protected TrendsAnalysisService $trendsAnalysis;
     protected SerperService $serper;
+    protected KeywordIntelligenceService $kiService;
 
     public function __construct(
         NicheDetectionService $nicheDetection,
         TrendsAnalysisService $trendsAnalysis,
-        SerperService $serper
+        SerperService $serper,
+        KeywordIntelligenceService $kiService
     ) {
         $this->nicheDetection = $nicheDetection;
         $this->trendsAnalysis = $trendsAnalysis;
         $this->serper = $serper;
+        $this->kiService = $kiService;
     }
 
     /**
@@ -117,6 +120,16 @@ class CampaignKeywordService
                         'serp_data' => $serpResults,
                     ]
                 );
+
+                // Push to canonical intelligence layer
+                try {
+                    $this->kiService->upsert($keyword);
+                } catch (\Exception $e) {
+                    Log::error("Failed to sync keyword to intelligence layer", [
+                        'keyword' => $keyword->keyword,
+                        'error' => $e->getMessage()
+                    ]);
+                }
 
                 $discoveredKeywords[] = $keyword;
 

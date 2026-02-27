@@ -67,4 +67,14 @@ class KeywordController extends Controller
             ]
         ]);
     }
+
+    /**
+     * Display the keyword intelligence hub.
+     */
+    public function intelligence()
+    {
+        return Inertia::render('Keywords/Intelligence', [
+            'organization' => auth()->user()->currentOrganization()
+        ]);
+    }
 }

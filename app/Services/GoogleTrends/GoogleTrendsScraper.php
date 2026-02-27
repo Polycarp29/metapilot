@@ -7,19 +7,32 @@ use Illuminate\Support\Facades\Log;
 
 class GoogleTrendsScraper
 {
+    protected array $userAgents = [
+        'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+        'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+        'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+        'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:109.0) Gecko/20100101 Firefox/121.0',
+        'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.2 Safari/605.1.15',
+    ];
+
     /**
      * Fetch interest over time from Google Trends (Unofficial/Scraper).
-     * 
-     * @param string $keyword
-     * @param string $geo
-     * @param string $timeframe
-     * @return array|null
      */
     public function fetchInterestOverTime(string $keyword, string $geo = 'US', string $timeframe = 'today 12-m'): ?array
     {
+        $headers = [
+            'User-Agent' => $this->userAgents[array_rand($this->userAgents)],
+            'Accept' => 'application/json, text/plain, */*',
+            'Accept-Language' => 'en-US,en;q=0.9',
+            'Referer' => 'https://trends.google.com/trends/explore',
+        ];
+
         try {
+            // Add a small jitter to avoid bot pattern
+            usleep(rand(100000, 300000));
+
             // 1. Get the token (cookie)
-            $response = Http::get('https://trends.google.com/trends/api/explore', [
+            $response = Http::withHeaders($headers)->get('https://trends.google.com/trends/api/explore', [
                 'hl' => 'en-US',
                 'tz' => '-180',
                 'req' => json_encode([
@@ -32,8 +45,7 @@ class GoogleTrendsScraper
                     ],
                     'category' => 0,
                     'property' => ''
-                ]),
-                'tz' => '-180'
+                ])
             ]);
 
             if (!$response->successful()) {
@@ -65,7 +77,7 @@ class GoogleTrendsScraper
             }
 
             // 2. Fetch the actual data
-            $dataResponse = Http::get('https://trends.google.com/trends/api/widgetdata/multiline', [
+            $dataResponse = Http::withHeaders($headers)->get('https://trends.google.com/trends/api/widgetdata/multiline', [
                 'req' => json_encode($request),
                 'token' => $token,
                 'tz' => '-180'

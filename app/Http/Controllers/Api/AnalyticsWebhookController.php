@@ -51,7 +51,8 @@ class AnalyticsWebhookController extends Controller
                     ]
                 );
             } else {
-                $predictions = $payload['predictions'] ?? [];
+                // Save session/conversion/metric forecasts
+                $predictions = $payload['forecast'] ?? $payload['predictions'] ?? [];
                 foreach ($predictions as $forecastType => $forecastData) {
                     AnalyticalForecast::updateOrCreate(
                         [
@@ -62,6 +63,55 @@ class AnalyticsWebhookController extends Controller
                             'forecast_data' => $forecastData,
                             'confidence_score' => 0.85,
                             'valid_until' => now()->addDays(1),
+                        ]
+                    );
+                }
+
+                // Save strategic summary + recommendations
+                if (!empty($payload['summary']) || !empty($payload['recommendations'])) {
+                    AnalyticalForecast::updateOrCreate(
+                        [
+                            'analytics_property_id' => $property->id,
+                            'forecast_type' => 'strategic_strategy',
+                        ],
+                        [
+                            'forecast_data' => [
+                                'summary' => $payload['summary'] ?? '',
+                                'recommendations' => $payload['recommendations'] ?? [],
+                                'diagnostics' => $payload['diagnostics'] ?? [],
+                            ],
+                            'confidence_score' => 0.90,
+                            'valid_until' => now()->addDays(2),
+                        ]
+                    );
+                }
+
+                // Save Intent Propensity scores (Radar chart)
+                if (!empty($payload['propensity_scores'])) {
+                    AnalyticalForecast::updateOrCreate(
+                        [
+                            'analytics_property_id' => $property->id,
+                            'forecast_type' => 'propensity_scores',
+                        ],
+                        [
+                            'forecast_data' => $payload['propensity_scores'],
+                            'confidence_score' => 0.80,
+                            'valid_until' => now()->addDays(2),
+                        ]
+                    );
+                }
+
+                // Save channel performance rankings (multi-channel efficiency table)
+                if (!empty($payload['performance_rankings'])) {
+                    AnalyticalForecast::updateOrCreate(
+                        [
+                            'analytics_property_id' => $property->id,
+                            'forecast_type' => 'performance_rankings',
+                        ],
+                        [
+                            'forecast_data' => $payload['performance_rankings'],
+                            'confidence_score' => 0.80,
+                            'valid_until' => now()->addDays(2),
                         ]
                     );
                 }

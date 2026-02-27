@@ -349,7 +349,7 @@ class PythonEngineService
         $predictions = $data['predictions'] ?? $data['forecast'] ?? [];
         $validUntil = $data['valid_until'] ?? now()->addDay();
 
-        // 1. Save standard forecasting metrics
+        // 1. Save standard forecasting metrics (sessions, conversions, etc.)
         foreach ($predictions as $type => $forecastData) {
             AnalyticalForecast::updateOrCreate(
                 [
@@ -382,5 +382,62 @@ class PythonEngineService
                 ]
             );
         }
+
+        // 3. Save per-channel Intent Propensity scores (powers the Radar chart)
+        if (!empty($data['propensity_scores'])) {
+            AnalyticalForecast::updateOrCreate(
+                [
+                    'analytics_property_id' => $property->id,
+                    'forecast_type' => 'propensity_scores',
+                ],
+                [
+                    'forecast_data' => $data['propensity_scores'],
+                    'confidence_score' => 0.80,
+                    'valid_until' => now()->addDays(2),
+                ]
+            );
+        }
+
+        // 4. Save channel efficiency/performance rankings (powers the multi-channel table)
+        if (!empty($data['performance_rankings'])) {
+            AnalyticalForecast::updateOrCreate(
+                [
+                    'analytics_property_id' => $property->id,
+                    'forecast_type' => 'performance_rankings',
+                ],
+                [
+                    'forecast_data' => $data['performance_rankings'],
+                    'confidence_score' => 0.80,
+                    'valid_until' => now()->addDays(2),
+                ]
+            );
+        }
+    }
+
+    /**
+     * Call the ML engine to predict keyword decay/resurgence.
+     */
+    public function predictKeywordDecay(int $keywordId, array $history): ?array
+    {
+        try {
+            $response = \Illuminate\Support\Facades\Http::timeout(10)
+                ->post($this->baseUrl . '/predict/keyword-decay', [
+                    'keyword_id' => $keywordId,
+                    'history' => $history
+                ]);
+
+            if ($response->successful()) {
+                return $response->json();
+            }
+
+            \Illuminate\Support\Facades\Log::error("Python Engine: Keyword decay prediction failed", [
+                'status' => $response->status(),
+                'body' => $response->body()
+            ]);
+        } catch (\Exception $e) {
+            \Illuminate\Support\Facades\Log::error("Python Engine: Connection error in decay prediction: " . $e->getMessage());
+        }
+
+        return null;
     }
 }

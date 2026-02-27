@@ -136,6 +136,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
     // Keywords Hub
     Route::get('keywords/trending', [\App\Http\Controllers\KeywordController::class, 'trending'])->name('keywords.trending');
     Route::get('keywords/research', [\App\Http\Controllers\KeywordController::class, 'research'])->name('keywords.research');
+    Route::get('keywords/intelligence', [\App\Http\Controllers\KeywordController::class, 'intelligence'])->name('keywords.intelligence');
 
     // Keyword Wallet API
     Route::prefix('api/keywords/wallet')->name('api.keywords.wallet.')->group(function () {
@@ -151,6 +152,16 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::post('/discover', [\App\Http\Controllers\CampaignKeywordController::class, 'discover'])->name('discover');
         Route::post('/campaigns/{campaign}/attach', [\App\Http\Controllers\CampaignKeywordController::class, 'attachKeywords'])->name('attach');
         Route::get('/campaigns/{campaign}/performance', [\App\Http\Controllers\CampaignKeywordController::class, 'performance'])->name('campaign-performance');
+    });
+
+    // Keyword Intelligence API
+    Route::prefix('api/keyword-intelligence')->name('api.ki.')->group(function () {
+        Route::get('/', [\App\Http\Controllers\Api\KeywordIntelligenceController::class, 'index'])->name('index');
+        Route::get('/bookmarks', [\App\Http\Controllers\Api\KeywordIntelligenceController::class, 'bookmarks'])->name('bookmarks');
+        Route::get('/{ki}/history', [\App\Http\Controllers\Api\KeywordIntelligenceController::class, 'history'])->name('history');
+        Route::post('/{ki}/bookmark', [\App\Http\Controllers\Api\KeywordIntelligenceController::class, 'bookmark'])->name('bookmark');
+        Route::delete('/{ki}/bookmark', [\App\Http\Controllers\Api\KeywordIntelligenceController::class, 'destroyBookmark'])->name('bookmark.destroy');
+        Route::post('/{ki}/predict-decay', [\App\Http\Controllers\Api\KeywordIntelligenceController::class, 'predictDecay'])->name('predict-decay');
     });
 
     // Organization Selection

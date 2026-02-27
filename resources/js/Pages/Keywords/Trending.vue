@@ -8,30 +8,33 @@
           <p class="text-slate-500 font-medium">Discover trending topics in your niche and save them for your next campaign.</p>
         </div>
         
-        <div class="flex bg-slate-100 p-1 rounded-2xl border border-slate-200/50 self-start">
           <button 
             @click="activeTab = 'trends'"
             class="px-6 py-2.5 rounded-xl text-sm font-bold transition-all duration-200"
             :class="activeTab === 'trends' ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'"
           >
-            🔥 Trending Topics
-          </button>
-          <button 
-            @click="activeTab = 'wallet'"
-            class="px-6 py-2.5 rounded-xl text-sm font-bold transition-all duration-200 flex items-center gap-2"
-            :class="activeTab === 'wallet' ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'"
-          >
-            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z" /></svg>
-            My Wallet
+            🔥 Trends
           </button>
           <Link 
-            href="/keywords/research"
-            class="px-6 py-2.5 rounded-xl text-sm font-bold text-slate-400 hover:text-slate-500 transition-all duration-200 flex items-center gap-2"
+            :href="route('keywords.intelligence')"
+            class="px-6 py-2.5 rounded-xl text-sm font-bold text-slate-500 hover:text-slate-700 transition-all duration-200"
           >
-            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>
-            Research <span class="text-[10px] bg-slate-200 px-1.5 py-0.5 rounded uppercase font-black">Soon</span>
+            🧠 Intelligence
           </Link>
-        </div>
+          <button 
+            @click="activeTab = 'bookmarks'"
+            class="px-6 py-2.5 rounded-xl text-sm font-bold transition-all duration-200 flex items-center gap-2"
+            :class="activeTab === 'bookmarks' ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'"
+          >
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 5a2 2 0 012-2h10a2 2 0 012 2v16l-7-3.5L5 21V5z" /></svg>
+            Bookmarks
+          </button>
+          <Link 
+            :href="route('keywords.research')"
+            class="px-6 py-2.5 rounded-xl text-sm font-bold text-slate-500 hover:text-slate-700 transition-all duration-200"
+          >
+            🔍 Research
+          </Link>
       </div>
 
       <!-- Trends Tab -->
@@ -88,7 +91,7 @@
               </div>
               
               <button 
-                @click="saveToWallet(kw)"
+                @click="saveToBookmark(kw)"
                 class="w-12 h-12 rounded-2xl flex items-center justify-center transition-all bg-slate-50 text-slate-400 hover:bg-blue-600 hover:text-white group/btn"
                 :disabled="savingId === kw.id"
               >
@@ -96,7 +99,7 @@
                   <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
                   <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
                 </svg>
-                <svg v-else class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" /></svg>
+                <svg v-else class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 5a2 2 0 012-2h10a2 2 0 012 2v16l-7-3.5L5 21V5z" /></svg>
               </button>
             </div>
           </div>
@@ -113,20 +116,21 @@
         </div>
       </div>
 
-      <!-- Wallet Tab -->
-      <div v-if="activeTab === 'wallet'">
-        <div v-if="walletItems.length > 0" class="bg-white rounded-[40px] border border-slate-100 shadow-sm overflow-hidden">
+      <!-- Bookmarks Tab -->
+      <div v-if="activeTab === 'bookmarks'">
+        <div v-if="bookmarkItems.length > 0" class="bg-white rounded-[40px] border border-slate-100 shadow-sm overflow-hidden">
           <table class="w-full text-left">
             <thead>
               <tr class="bg-slate-50 border-b border-slate-100">
                 <th class="px-8 py-5 text-[10px] font-black uppercase text-slate-400 tracking-widest">Keyword</th>
                 <th class="px-8 py-5 text-[10px] font-black uppercase text-slate-400 tracking-widest">Source</th>
-                <th class="px-8 py-5 text-[10px] font-black uppercase text-slate-400 tracking-widest">Saved At</th>
+                <th class="px-8 py-5 text-[10px] font-black uppercase text-slate-400 tracking-widest">Intelligence</th>
+                <th class="px-8 py-5 text-[10px] font-black uppercase text-slate-400 tracking-widest">Velocity</th>
                 <th class="px-8 py-5 text-[10px] font-black uppercase text-slate-400 tracking-widest text-right">Actions</th>
               </tr>
             </thead>
             <tbody class="divide-y divide-slate-50">
-              <tr v-for="item in walletItems" :key="item.id" class="hover:bg-slate-50/50 transition-colors group">
+              <tr v-for="item in bookmarkItems" :key="item.id" class="hover:bg-slate-50/50 transition-colors group">
                 <td class="px-8 py-6">
                   <span class="font-extrabold text-slate-900 text-lg">{{ item.keyword }}</span>
                 </td>
@@ -134,11 +138,36 @@
                   <span class="px-3 py-1 bg-slate-100 text-slate-600 rounded-lg text-xs font-bold uppercase">{{ item.source }}</span>
                 </td>
                 <td class="px-8 py-6">
-                  <span class="text-slate-500 text-sm">{{ new Date(item.created_at).toLocaleDateString() }}</span>
+                  <div v-if="item.intelligence" class="flex items-center gap-2">
+                    <span 
+                      class="w-2 h-2 rounded-full"
+                      :class="{
+                        'bg-emerald-500': item.intelligence.decay_status === 'rising',
+                        'bg-blue-500': item.intelligence.decay_status === 'stable',
+                        'bg-rose-500': item.intelligence.decay_status === 'decaying',
+                        'bg-slate-300': item.intelligence.decay_status === 'dormant',
+                        'bg-purple-500': item.intelligence.decay_status === 'resurgent'
+                      }"
+                    ></span>
+                    <span class="text-xs font-bold text-slate-700 capitalize">{{ item.intelligence.decay_status }}</span>
+                  </div>
+                  <span v-else class="text-xs text-slate-400 font-medium italic">Pending Analysis</span>
+                </td>
+                <td class="px-8 py-6">
+                  <div v-if="item.intelligence" class="flex items-center gap-2">
+                    <span :class="item.intelligence.trend_velocity >= 0 ? 'text-emerald-600' : 'text-rose-600'" class="text-xs font-black">
+                      {{ item.intelligence.trend_velocity >= 0 ? '+' : '' }}{{ Math.round(item.intelligence.trend_velocity) }}%
+                    </span>
+                    <svg class="w-3 h-3" :class="item.intelligence.trend_velocity >= 0 ? 'text-emerald-500' : 'text-rose-500'" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path v-if="item.intelligence.trend_velocity >= 0" stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" />
+                      <path v-else stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M13 17h8m0 0v-8m0 8l-8-8-4 4-6-6" />
+                    </svg>
+                  </div>
+                  <span v-else class="text-slate-300">-</span>
                 </td>
                 <td class="px-8 py-6 text-right">
                   <button 
-                    @click="removeFromWallet(item.id)"
+                    @click="removeFromBookmarks(item.id)"
                     class="text-rose-500 hover:text-rose-700 font-bold text-sm opacity-0 group-hover:opacity-100 transition-opacity"
                   >
                     Remove
@@ -151,9 +180,9 @@
 
         <div v-else class="text-center py-20 bg-slate-50 rounded-[40px] border-2 border-dashed border-slate-200">
           <div class="w-20 h-20 bg-white rounded-3xl flex items-center justify-center mx-auto mb-6 shadow-sm">
-            <svg class="w-10 h-10 text-slate-300" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z" /></svg>
+            <svg class="w-10 h-10 text-slate-300" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 5a2 2 0 012-2h10a2 2 0 012 2v16l-7-3.5L5 21V5z" /></svg>
           </div>
-          <h3 class="text-xl font-bold text-slate-900 mb-2">Your Wallet is Empty</h3>
+          <h3 class="text-xl font-bold text-slate-900 mb-2">No Bookmarks Yet</h3>
           <p class="text-slate-500 max-w-sm mx-auto">Saved keywords from your trending hub will appear here for future campaigns.</p>
         </div>
       </div>
@@ -170,7 +199,7 @@ import axios from 'axios'
 const activeTab = ref('trends')
 const loading = ref(false)
 const keywords = ref([])
-const walletItems = ref([])
+const bookmarkItems = ref([])
 const savingId = ref(null)
 
 const runDiscovery = async () => {
@@ -199,16 +228,16 @@ const fetchTrends = async () => {
   }
 }
 
-const fetchWallet = async () => {
+const fetchBookmarks = async () => {
   try {
     const res = await axios.get(route('api.keywords.wallet.index'))
-    walletItems.value = res.data.data
+    bookmarkItems.value = res.data.data
   } catch (err) {
     console.error(err)
   }
 }
 
-const saveToWallet = async (kw) => {
+const saveToBookmark = async (kw) => {
   savingId.value = kw.id
   try {
     await axios.post(route('api.keywords.wallet.store'), {
@@ -220,7 +249,7 @@ const saveToWallet = async (kw) => {
         type: kw.recommendation_type
       }
     })
-    fetchWallet()
+    fetchBookmarks()
     // Optional: Toast notification
   } catch (err) {
     console.error(err)
@@ -229,11 +258,11 @@ const saveToWallet = async (kw) => {
   }
 }
 
-const removeFromWallet = async (id) => {
-  if (!confirm('Remove this keyword from your wallet?')) return
+const removeFromBookmarks = async (id) => {
+  if (!confirm('Remove this keyword from your bookmarks?')) return
   try {
     await axios.delete(route('api.keywords.wallet.destroy', id))
-    fetchWallet()
+    fetchBookmarks()
   } catch (err) {
     console.error(err)
   }
@@ -241,7 +270,7 @@ const removeFromWallet = async (id) => {
 
 onMounted(async () => {
   const existing = await fetchTrends()
-  fetchWallet()
+  fetchBookmarks()
   
   // Auto-scout if empty
   if (!existing || existing.length === 0) {
