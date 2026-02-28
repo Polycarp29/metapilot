@@ -453,10 +453,16 @@ class PythonEngineService
             ]);
 
             if ($response->successful()) {
-                return $response->json();
+                $data = $response->json();
+                Log::debug("Python Engine: Global trends result for geo $geo", [
+                    'count' => $data['count'] ?? 0,
+                    'trends_sample' => array_slice($data['trends'] ?? [], 0, 3)
+                ]);
+                return $data;
             }
 
             Log::error("Python Engine: Global trends fetch failed", [
+                'geo' => $geo,
                 'status' => $response->status(),
                 'body' => $response->body()
             ]);

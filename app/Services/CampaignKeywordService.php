@@ -68,7 +68,8 @@ class CampaignKeywordService
             try {
                 Log::info("Calling Python Engine for smart discovery", [
                     'geo' => $countryCode,
-                    'niches' => $nichesToScan
+                    'niches' => $nichesToScan,
+                    'is_python_engine_up' => !!$this->pythonEngine
                 ]);
 
                 $response = $this->pythonEngine->getGlobalTrends($countryCode, $nichesToScan);

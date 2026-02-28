@@ -856,6 +856,22 @@
       </div>
     </div>
 
+    <!-- Import Success Toast -->
+    <Transition name="fade">
+      <div v-if="showImportToast" class="fixed bottom-28 right-10 z-[300] bg-blue-600 text-white px-6 py-4 rounded-2xl shadow-2xl flex items-center gap-4 border border-blue-400/50 backdrop-blur-md">
+        <div class="bg-white/20 p-2 rounded-full">
+          <svg class="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M5 13l4 4L19 7" /></svg>
+        </div>
+        <div class="flex flex-col">
+          <span class="text-[10px] font-black uppercase tracking-widest text-blue-100">Import Complete</span>
+          <span class="text-sm font-bold truncate max-w-[220px]">{{ importToastMessage }}</span>
+        </div>
+        <button @click="showImportToast = false" class="text-blue-200 hover:text-white transition-colors p-1">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" /></svg>
+        </button>
+      </div>
+    </Transition>
+
     <!-- Real-time Link Discovery Toast -->
     <Transition name="fade">
       <div v-if="showLinkToast" class="fixed bottom-10 right-10 z-[300] bg-emerald-600 text-white px-6 py-4 rounded-2xl shadow-2xl flex items-center gap-4 animate-bounce-subtle border border-emerald-400/50 backdrop-blur-md">
@@ -905,6 +921,8 @@ const showCompletionToast = ref(false)
 const showErrorToast = ref(false)
 const errorToastMessage = ref('')
 const showLinkToast = ref(false)
+const showImportToast = ref(false)
+const importToastMessage = ref('')
 const lastDiscoveredUrl = ref('')
 const discoveredTimeout = ref(null)
 const isFullScreen = ref(false)
@@ -966,7 +984,8 @@ const filteredLinks = computed(() => {
 })
 
 const stats = computed(() => {
-  const all = linksList.value.length
+  // Use the paginator's real total for 'all', not just the current page count
+  const all = props.links.total ?? linksList.value.length
   const good = linksList.value.filter(l => l.http_status === 200 && l.is_canonical).length
   const issues = linksList.value.filter(l => l.seo_audit?.errors?.length > 0 || l.seo_audit?.warnings?.length > 0).length
   const redirects = linksList.value.filter(l => l.http_status !== 200 || !l.is_canonical).length
@@ -1021,19 +1040,31 @@ const importLinks = () => {
   formData.append('file', selectedFile.value)
   
   router.post(route('sitemaps.import', props.sitemap.id), formData, {
-    onSuccess: () => {
+    onSuccess: (page) => {
       importing.value = false
       selectedFile.value = null
+      const flash = page?.props?.flash?.message || page?.props?.message
+      importToastMessage.value = flash || 'Links imported successfully!'
+      showImportToast.value = true
+      setTimeout(() => { showImportToast.value = false }, 5000)
     },
     onError: () => {
       importing.value = false
+      errorToastMessage.value = 'Import failed. Please check the file format.'
+      showErrorToast.value = true
+      setTimeout(() => { showErrorToast.value = false }, 5000)
     }
   })
 }
 
 const addSingleLink = () => {
   linkForm.post(route('sitemaps.links.store', props.sitemap.id), {
-    onSuccess: () => linkForm.reset('url')
+    onSuccess: () => {
+      linkForm.reset('url')
+      // Scroll table area to top so user sees new link
+      const tableEl = document.querySelector('tbody')
+      if (tableEl) tableEl.scrollIntoView({ behavior: 'smooth', block: 'start' })
+    }
   })
 }
 
