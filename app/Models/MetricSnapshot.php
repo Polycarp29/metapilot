@@ -61,6 +61,10 @@ class MetricSnapshot extends Model
         'bounce_rate' => 'decimal:2',
         'raw_response' => 'array',
         'returning_users' => 'integer',
+        'clicks' => 'integer',
+        'impressions' => 'integer',
+        'top_queries' => 'array',
+        'top_pages' => 'array',
     ];
 
     public function property()

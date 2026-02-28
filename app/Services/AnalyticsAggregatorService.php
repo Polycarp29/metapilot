@@ -328,8 +328,13 @@ class AnalyticsAggregatorService
                 'metric_snapshots.users',
                 'metric_snapshots.sessions',
                 'metric_snapshots.conversions',
+                'metric_snapshots.by_page_title',
+                'metric_snapshots.by_screen',
+                'metric_snapshots.by_event',
                 DB::raw('COALESCE(search_console_metrics.clicks, 0) as clicks'),
                 DB::raw('COALESCE(search_console_metrics.impressions, 0) as impressions'),
+                'search_console_metrics.top_queries',
+                'search_console_metrics.top_pages',
             ])
             ->orderBy('metric_snapshots.snapshot_date', 'asc')
             ->get();

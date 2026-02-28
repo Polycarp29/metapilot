@@ -587,7 +587,59 @@ const pagedPagesGsc = computed(() => {
   return filtered.slice(start, start + itemsPerPage)
 })
 
-const pagesGscTotalPages = computed(() => {
+const buildMultiLineData = (data, dimensionKey, metricKey, topN = 5) => {
+  if (!data || data.length === 0) return { labels: [], datasets: [] }
+
+  const labels = data.map(d => new Date(d.snapshot_date).toLocaleDateString(undefined, { month: 'short', day: 'numeric' }))
+  
+  // 1. Identify top N items overall across the period
+  const totals = {}
+  data.forEach(day => {
+    const items = day[dimensionKey] || []
+    items.forEach(item => {
+      const name = item.name || item.query || item.page || item.event_name || item.pageTitle || 'unknown'
+      totals[name] = (totals[name] || 0) + (item[metricKey] || item.activeUsers || item.eventCount || 0)
+    })
+  })
+
+  const topItems = Object.entries(totals)
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, topN)
+    .map(entry => entry[0])
+
+  // 2. Build datasets for top items
+  const colors = ['#3b82f6', '#10b981', '#f59e0b', '#8b5cf6', '#ec4899', '#6366f1', '#f43f5e']
+  
+  const datasets = topItems.map((name, index) => {
+    const seriesData = data.map(day => {
+      const items = day[dimensionKey] || []
+      const found = items.find(i => (i.name || i.query || i.page || i.event_name || i.pageTitle) === name)
+      return found ? (found[metricKey] || found.activeUsers || found.eventCount || 0) : 0
+    })
+
+    return {
+      label: name,
+      data: seriesData,
+      borderColor: colors[index % colors.length],
+      backgroundColor: `${colors[index % colors.length]}1A`, // 10% opacity
+      borderWidth: 2,
+      tension: 0.4,
+      pointRadius: 0,
+      pointHoverRadius: 4,
+      fill: true
+    }
+  })
+
+  return { labels, datasets }
+}
+
+const queriesChartData = computed(() => buildMultiLineData(trendData.value, 'top_queries', 'clicks'))
+const pagesGscChartData = computed(() => buildMultiLineData(trendData.value, 'top_pages', 'clicks'))
+const pageTitlesChartData = computed(() => buildMultiLineData(trendData.value, 'by_page_title', 'activeUsers'))
+const screensChartData = computed(() => buildMultiLineData(trendData.value, 'by_screen', 'activeUsers'))
+const eventsChartData = computed(() => buildMultiLineData(trendData.value, 'by_event', 'eventCount'))
+
+const pagesTotalPages = computed(() => {
   if (!overview.value?.top_pages_gsc) return 0
   let filtered = overview.value.top_pages_gsc
   
@@ -760,17 +812,18 @@ onUnmounted(() => {
         </div>
       </div>
 
-      <div v-if="activeTab === 'overview'" class="space-y-10 animate-in fade-in duration-500">
-        <!-- Stats Grid -->
-      <div v-if="isLoading" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-        <div v-for="i in 8" :key="i" class="bg-white p-7 rounded-[2.5rem] border border-slate-100 shadow-premium">
-          <div class="skeleton h-3 w-20 rounded-full mb-2"></div>
-          <div class="skeleton h-2 w-32 rounded-full mb-4 opacity-50"></div>
-          <div class="skeleton h-10 w-24 rounded-xl mt-3"></div>
-        </div>
-      </div>
+      <template v-if="activeTab === 'overview'">
+        <div class="space-y-10 animate-in fade-in duration-500">
+          <!-- Stats Grid -->
+          <div v-if="isLoading" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+            <div v-for="i in 8" :key="i" class="bg-white p-7 rounded-[2.5rem] border border-slate-100 shadow-premium">
+              <div class="skeleton h-3 w-20 rounded-full mb-2"></div>
+              <div class="skeleton h-2 w-32 rounded-full mb-4 opacity-50"></div>
+              <div class="skeleton h-10 w-24 rounded-xl mt-3"></div>
+            </div>
+          </div>
 
-      <!-- Google Connection Error Warning -->
+          <!-- Google Connection Error Warning -->
       <div v-if="overview?.google_token_invalid" class="mb-10 bg-rose-50 border border-rose-200 rounded-3xl p-6 flex flex-col md:flex-row items-center justify-between gap-4 animate-in fade-in slide-in-from-top-4 duration-500">
         <div class="flex items-center gap-4">
           <div class="w-12 h-12 rounded-2xl bg-rose-100 text-rose-600 flex items-center justify-center shrink-0">
@@ -1491,8 +1544,50 @@ onUnmounted(() => {
           </table>
           <p v-if="!overview?.by_page?.length" class="text-center py-20 bg-slate-50/50 rounded-[2rem] border-2 border-dashed border-slate-200 text-slate-400 italic text-sm m-4">No discovered page data available for this range</p>
         </div>
-      </div>
-    </div> <!-- End Overview Tab -->
+
+        <!-- GA4 Breakdown Trends -->
+        <div v-if="trendData && trendData.length > 0" class="space-y-8 py-10">
+          <h2 class="text-2xl font-black text-slate-900 flex items-center gap-3">
+            <span class="p-2 bg-emerald-500/10 rounded-xl">📊</span>
+            Content & Event Trends
+          </h2>
+          <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
+            <div class="bg-white p-8 rounded-[2.5rem] border border-slate-100 shadow-premium">
+              <h3 class="text-lg font-black text-slate-900 mb-6 flex items-center gap-2">
+                <div class="w-2 h-6 bg-amber-500 rounded-full"></div>
+                Views by Page Title
+              </h3>
+              <div class="h-[300px]">
+                <Line v-if="pageTitlesChartData.datasets.length" :data="pageTitlesChartData" :options="chartOptions" />
+                <div v-else class="h-full flex items-center justify-center text-slate-400 italic text-sm">No page title data available</div>
+              </div>
+            </div>
+            <div class="bg-white p-8 rounded-[2.5rem] border border-slate-100 shadow-premium">
+              <h3 class="text-lg font-black text-slate-900 mb-6 flex items-center gap-2">
+                <div class="w-2 h-6 bg-blue-500 rounded-full"></div>
+                Views by Screen Name
+              </h3>
+              <div class="h-[300px]">
+                <Line v-if="screensChartData.datasets.length" :data="screensChartData" :options="chartOptions" />
+                <div v-else class="h-full flex items-center justify-center text-slate-400 italic text-sm">No screen name data available</div>
+              </div>
+            </div>
+            <div class="bg-white p-8 rounded-[2.5rem] border border-slate-100 shadow-premium lg:col-span-2">
+              <h3 class="text-lg font-black text-slate-900 mb-6 flex items-center gap-2">
+                <div class="w-2 h-6 bg-rose-500 rounded-full"></div>
+                Event Performance (Event Count)
+              </h3>
+              <div class="h-[300px]">
+                <Line v-if="eventsChartData.datasets.length" :data="eventsChartData" :options="chartOptions" />
+                <div v-else class="h-full flex items-center justify-center text-slate-400 italic text-sm">No event data available</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div> <!-- End Discovered Page Performance -->
+      </div> <!-- End space-y-10 wrapper -->
+
+      </template> <!-- End Overview Tab -->
 
       <div v-if="activeTab === 'gsc'" class="space-y-10 animate-in fade-in duration-500">
         <!-- Flash Messages -->
@@ -1639,7 +1734,6 @@ onUnmounted(() => {
             </div>
           </div>
 
-          <!-- GSC Performance Trend Chart -->
           <div v-if="trendData && trendData.length > 0" class="bg-white p-10 rounded-[3rem] border border-slate-100 shadow-premium">
             <div class="flex items-center justify-between mb-10">
               <div>
@@ -1659,6 +1753,28 @@ onUnmounted(() => {
             </div>
             <div class="h-[400px]">
               <Line :data="searchChartData" :options="gscChartOptions" />
+            </div>
+          </div>
+
+          <!-- Breakdown Trends: Queries & Pages -->
+          <div v-if="trendData && trendData.length > 0" class="grid grid-cols-1 lg:grid-cols-2 gap-8">
+            <div class="bg-white p-8 rounded-[2.5rem] border border-slate-100 shadow-premium">
+              <h3 class="text-lg font-black text-slate-900 mb-6 flex items-center gap-2">
+                <div class="w-2 h-6 bg-emerald-500 rounded-full"></div>
+                Top Queries Trend (Clicks)
+              </h3>
+              <div class="h-[300px]">
+                <Line :data="queriesChartData" :options="chartOptions" />
+              </div>
+            </div>
+            <div class="bg-white p-8 rounded-[2.5rem] border border-slate-100 shadow-premium">
+              <h3 class="text-lg font-black text-slate-900 mb-6 flex items-center gap-2">
+                <div class="w-2 h-6 bg-blue-500 rounded-full"></div>
+                Top Pages Trend (Clicks)
+              </h3>
+              <div class="h-[300px]">
+                <Line :data="pagesGscChartData" :options="chartOptions" />
+              </div>
             </div>
           </div>
 
