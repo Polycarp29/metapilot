@@ -195,7 +195,7 @@ class GscService
             foreach ($sitemaps as $sitemap) {
                 $results[] = [
                     'path' => $sitemap->getPath(),
-                    'last_processed' => $sitemap->getLastProcessed(),
+                    'last_processed' => $sitemap->getLastSubmitted(),
                     'last_check' => $sitemap->getLastDownloaded(),
                     'errors' => $sitemap->getErrors(),
                     'warnings' => $sitemap->getWarnings(),
