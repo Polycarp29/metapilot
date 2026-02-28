@@ -261,41 +261,46 @@ class GscService
     {
         Log::info("Syncing GSC data for property {$property->id} from {$startDate} to {$endDate}");
         
-        // Fetch performance daily if range is multiple days, to match our daily snapshots
-        $start = \Carbon\Carbon::parse($startDate);
-        $end = \Carbon\Carbon::parse($endDate);
-        
-        $current = $start->copy();
-        while ($current->lte($end)) {
-            $date = $current->format('Y-m-d');
-            try {
-                $performance = $this->fetchPerformance($property, $date, $date);
-                $breakdowns = $this->fetchBreakdowns($property, $date, $date);
+        try {
+            // 1. Fetch performance for the whole range (daily rows)
+            $performanceData = $this->fetchPerformance($property, $startDate, $endDate);
+            
+            // 2. Fetch breakdowns for the whole range (aggregate)
+            $breakdowns = $this->fetchBreakdowns($property, $startDate, $endDate);
+            
+            // 3. Fetch sitemaps
+            $sitemaps = $this->fetchSitemaps($property);
 
-                if ($performance && !empty($performance)) {
-                    $daily = $performance[0];
-                    $sitemaps = ($date === $endDate) ? $this->fetchSitemaps($property) : null;
+            if ($performanceData) {
+                foreach ($performanceData as $daily) {
+                    $date = $daily['date'];
                     
+                    $dataToSave = [
+                        'clicks' => $daily['clicks'],
+                        'impressions' => $daily['impressions'],
+                        'ctr' => $daily['ctr'],
+                        'position' => $daily['position'],
+                    ];
+
+                    // Attach breakdowns and sitemaps to the latest date in the range
+                    if ($date === $endDate) {
+                        $dataToSave['top_queries'] = $breakdowns['top_queries'] ?? [];
+                        $dataToSave['top_pages'] = $breakdowns['top_pages'] ?? [];
+                        $dataToSave['sitemaps'] = $sitemaps;
+                    }
+
                     \App\Models\SearchConsoleMetric::updateOrCreate(
                         [
                             'analytics_property_id' => $property->id,
                             'snapshot_date' => $date,
                         ],
-                        [
-                            'clicks' => $daily['clicks'],
-                            'impressions' => $daily['impressions'],
-                            'ctr' => $daily['ctr'],
-                            'position' => $daily['position'],
-                            'top_queries' => $breakdowns['top_queries'] ?? [],
-                            'top_pages' => $breakdowns['top_pages'] ?? [],
-                            'sitemaps' => $sitemaps,
-                        ]
+                        $dataToSave
                     );
                 }
-            } catch (\Exception $e) {
-                Log::error("GSC Sync failed for date {$date}: " . $e->getMessage());
             }
-            $current->addDay();
+        } catch (\Exception $e) {
+            Log::error("GSC Sync failed for property {$property->id}: " . $e->getMessage());
+            return false;
         }
 
         if ($property->gsc_permission_error) {

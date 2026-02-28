@@ -1,52 +1,57 @@
 # Integrated Production Deployment Guide
 
-Since your Laravel project and Python Crawler service are in separate folders, follow this guide to set them up and ensure they communicate correctly in production.
+This guide covers setting up the Laravel project, Python Crawler, and the new **Analytics Engine** on your production server.
 
 ## 1. Directory Structure
-Assume the following paths on your server:
+Identify your project paths (standard example):
 - **Laravel**: `/var/www/metapilot`
 - **Crawler Service**: `/var/www/crawler`
+- **Analytics Engine**: `/var/www/analytics-engine`
 
-## 2. Setting Up the Python Crawler Service
-1.  **Move the folder**: Upload `crawler-service` to `/var/www/crawler`.
-2.  **Run Setup**:
+## 2. Python Services Setup
+
+### A. Crawler Service
+1.  **Setup**:
     ```bash
     cd /var/www/crawler
     chmod +x setup_crawler_production.sh
-    # Install full dependencies
-    /var/www/crawler/.venv/bin/python -m pip install scrapy scrapy-playwright redis beautifulsoup4 rake-nltk spacy pydantic python-dotenv flask flask-restful flask-cors requests gunicorn eventlet
-    ```
-3.  **Configure `.env`**: Create a `.env` in `/var/www/crawler`:
-    ```env
-    REDIS_HOST=127.0.0.1
-    REDIS_PORT=6379
-    REDIS_PREFIX=metapilot-database-
-    CRAWLER_PORT=5000
-    CRAWLER_WEBHOOK_SECRET=your_secret_here
+    ./setup_crawler_production.sh
     ```
 
-## 3. Configuring Laravel
-1.  **Update `.env`**: Ensure Laravel knows where the crawler is:
-    ```env
-    CRAWLER_SERVICE_URL=http://localhost:5000
-    REDIS_HOST=127.0.0.1
-    ```
-
-## 4. Process Management (Supervisor)
-Supervisor ensures all your processes stay alive.
-
-1.  **Install Supervisor**: `sudo apt install supervisor`
-2.  **Copy Configs**: Move the three `.conf` files I generated to `/etc/supervisor/conf.d/`:
-    - `laravel-worker.conf` -> Manages Laravel Jobs
-    - `crawler-consumer.conf` -> Manages Crawler Result Processing
-    - `crawler-api.conf` -> Manages the Python Flask API
-3.  **Update Paths**: Edit the `.conf` files to ensure they point to `/var/www/metapilot` and `/var/www/crawler` respectively.
-4.  **Activate**:
+### B. Analytics Engine
+1.  **Setup Environment**:
     ```bash
-    sudo supervisorctl reread
-    sudo supervisorctl update
-    sudo supervisorctl status
+    cd /var/www/analytics-engine
+    python3 -m venv venv
+    source venv/bin/activate
+    pip install -r requirements.txt
     ```
+2.  **Configure `.env`**:
+    Ensure `REDIS_HOST`, `APP_URL` (pointing to Laravel), and `REDIS_PREFIX` match your Laravel settings.
+
+## 3. Laravel Automation (Scheduler & Queues)
+
+### A. Crontab (Crucial for Scanners)
+The scanners (Keywords and Analytics) depend on the Laravel scheduler.
+1. Run `crontab -e`
+2. Add: `* * * * * cd /var/www/metapilot && php artisan schedule:run >> /dev/null 2>&1`
+
+### B. Supervisor (Background Workers)
+Copy configs from `deployment/` to `/etc/supervisor/conf.d/`:
+
+| Config File | Service |
+| :--- | :--- |
+| `laravel-worker.conf` | Processes Scanners & Job Queues |
+| `crawler-consumer.conf` | Processes Crawler Results |
+| `crawler-api.conf` | Python Crawler API (Port 5000) |
+| `analytics-worker.conf` | Python Analytics Worker |
+
+**Command to start everything:**
+```bash
+sudo supervisorctl reread
+sudo supervisorctl update
+sudo supervisorctl start all
+```
 
 ## 5. Network & Security (Nginx)
 - **Laravel**: Your existing Nginx config should handle the Laravel bit.
@@ -55,5 +60,6 @@ Supervisor ensures all your processes stay alive.
 ## 6. Testing the Connection
 - Run `curl http://localhost:5000/health`. It should return `{"status": "healthy"}`.
 - Trigger a crawl in Laravel. Monitor logs:
-    - Laravel: `tail -f storage/logs/laravel.log`
-    - Crawler: `tail -f ../crawler-service/logs/api.log`
+- Laravel: `tail -f storage/logs/laravel.log`
+- Analytics Engine: `tail -f /var/www/analytics-engine/engine.log`
+- Analytics Worker: `tail -f /var/www/analytics-engine/worker.log`

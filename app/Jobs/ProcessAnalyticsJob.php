@@ -15,31 +15,68 @@ class ProcessAnalyticsJob implements ShouldQueue
 {
     use Dispatchable, InteractsWithQueue, Queueable, SerializesModels;
 
-    protected $property;
-
     /**
-     * Create a new job instance.
+     * The number of seconds the job can run before timing out.
+     *
+     * @var int
      */
-    public function __construct(AnalyticsProperty $property)
-    {
-        $this->property = $property;
-        $this->queue = 'gsc'; // Reuse the gsc queue for now
-    }
+    public $timeout = 300;
 
     /**
      * Execute the job.
      */
-    public function handle(PythonEngineService $engine): void
+    public function handle(PythonEngineService $service): void
     {
-        Log::info("Processing predictive analytics for property: {$this->property->id}");
-        
-        $mainSuccess = $engine->processProperty($this->property);
-        $adSuccess = $engine->processAdPerformance($this->property);
+        Log::info("Starting automated analytics processing job");
 
-        if ($mainSuccess || $adSuccess) {
-            Log::info("Predictive analytics completed for property: {$this->property->id} (Ads: " . ($adSuccess ? 'Yes' : 'No') . ")");
-        } else {
-            Log::warning("Predictive analytics failed or skipped for property: {$this->property->id}");
-        }
+        $processed = 0;
+        $skipped = 0;
+        $errors = 0;
+
+        AnalyticsProperty::where('is_active', true)->chunk(10, function ($properties) use ($service, &$processed, &$skipped, &$errors) {
+            foreach ($properties as $property) {
+                try {
+                    $organization = $property->organization;
+                    if (!$organization) {
+                        Log::warning("Skipping property {$property->id} - no organization found");
+                        $skipped++;
+                        continue;
+                    }
+
+                    $frequency = $organization->keyword_discovery_frequency ?? 24;
+                    $lastSync = $property->last_sync_at;
+
+                    if ($lastSync && $lastSync->addHours($frequency)->isFuture()) {
+                        $skipped++;
+                        continue; // Not due yet
+                    }
+
+                    Log::info("Dispatching strategic analysis for property: {$property->name}", [
+                        'property_id' => $property->id,
+                        'org_id' => $organization->id
+                    ]);
+
+                    // Process property (this will dispatch to Redis/Worker if data is large)
+                    $success = $service->processProperty($property, 30);
+                    
+                    if ($success) {
+                        $property->update(['last_sync_at' => now()]);
+                        $processed++;
+                    } else {
+                        $errors++;
+                    }
+
+                } catch (\Exception $e) {
+                    $errors++;
+                    Log::error("Failed to process property {$property->id}: " . $e->getMessage());
+                }
+            }
+        });
+
+        Log::info("Automated analytics processing job completed", [
+            'properties_processed' => $processed,
+            'skipped' => $skipped,
+            'errors' => $errors
+        ]);
     }
 }

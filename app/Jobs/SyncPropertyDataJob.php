@@ -24,11 +24,19 @@ class SyncPropertyDataJob implements ShouldQueue
     protected $property;
 
     /**
+     * The number of days to sync.
+     *
+     * @var int
+     */
+    protected $days;
+
+    /**
      * Create a new job instance.
      */
-    public function __construct(AnalyticsProperty $property)
+    public function __construct(AnalyticsProperty $property, int $days = 30)
     {
         $this->property = $property;
+        $this->days = $days;
         $this->queue = 'gsc';
     }
 
@@ -39,10 +47,10 @@ class SyncPropertyDataJob implements ShouldQueue
     {
         $this->property->update(['sync_status' => 'syncing']);
         
-        Log::info("Starting background sync for property: {$this->property->name} ({$this->property->id})");
+        Log::info("Starting background sync for property: {$this->property->name} ({$this->property->id}) over {$this->days} days");
 
         $endDate = now()->subDay()->format('Y-m-d');
-        $startDate = now()->subDays(30)->format('Y-m-d');
+        $startDate = now()->subDays($this->days)->format('Y-m-d');
 
         try {
             // Sync GA4 Data

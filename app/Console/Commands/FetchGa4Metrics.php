@@ -23,7 +23,7 @@ class FetchGa4Metrics extends Command
     /**
      * Execute the console command.
      */
-    public function handle(\App\Services\Ga4Service $ga4Service)
+    public function handle()
     {
         $properties = \App\Models\AnalyticsProperty::where('is_active', true)->get();
 
@@ -33,60 +33,13 @@ class FetchGa4Metrics extends Command
         }
 
         $days = (int) $this->option('days');
-        $endDate = now()->subDay()->format('Y-m-d');
-        $startDate = now()->subDays($days)->format('Y-m-d');
-
-        $this->info("Fetching metrics from {$startDate} to {$endDate}...");
-
-        $startTime = microtime(true);
+        $this->info("Dispatching GA4 sync jobs for " . count($properties) . " properties (Range: {$days} days)...");
 
         foreach ($properties as $property) {
-            $this->info("Processing property: {$property->name} ({$property->property_id})");
-            
-            try {
-                $metrics = $ga4Service->fetchDailyMetrics($property, $startDate, $endDate);
-                $breakdowns = $ga4Service->fetchBreakdowns($property, $startDate, $endDate);
-
-                if ($metrics) {
-                    $this->table(
-                        ['Date', 'Users', 'Sessions', 'Engagement Rate', 'Conversions'],
-                        collect($metrics)->take(5)->map(fn($m) => [
-                            $m['date'],
-                            $m['users'],
-                            $m['sessions'],
-                            number_format($m['engagement_rate'] * 100, 2) . '%',
-                            $m['conversions'],
-                        ])->toArray()
-                    );
-
-                    if (count($metrics) > 5) {
-                        $this->info("... and " . (count($metrics) - 5) . " more days.");
-                    }
-
-                    foreach ($metrics as $dayData) {
-                        $dataToSave = $dayData;
-
-                        // If this is the latest date in the set, attach the breakdowns
-                        if ($dayData['date'] === $endDate) {
-                            $dataToSave = array_merge($dayData, $breakdowns);
-                        }
-
-                        \App\Models\MetricSnapshot::updateOrCreate([
-                            'analytics_property_id' => $property->id,
-                            'snapshot_date' => $dayData['date'],
-                        ], $dataToSave);
-                    }
-                    $this->info("Successfully saved metrics and breakdowns for: {$property->name}");
-                } else {
-                    $this->error("Failed to fetch metrics for: {$property->name}");
-                }
-            } catch (\Exception $e) {
-                $this->error("Error processing property {$property->name}: " . $e->getMessage());
-                \Illuminate\Support\Facades\Log::error("GA4 Fetch Loop Error for {$property->name}: " . $e->getMessage());
-            }
+            $this->info(" - Dispatching for property: {$property->name}");
+            \App\Jobs\SyncPropertyDataJob::dispatch($property, $days);
         }
 
-        $executionTime = round(microtime(true) - $startTime, 2);
-        $this->info("Metric fetching completed in {$executionTime}s.");
+        $this->info("GA4 sync jobs dispatched successfully.");
     }
 }
