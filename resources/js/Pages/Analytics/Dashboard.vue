@@ -519,8 +519,99 @@ const trajectoryAlert = computed(() => {
   return null
 })
 
+const querySearch = ref('')
+const pageSearch = ref('')
+const queryTrendFilter = ref('all') // 'all', 'growing', 'declining'
+const pageTrendFilter = ref('all') // 'all', 'growing', 'declining'
+const queryPage = ref(1)
+const pagePage = ref(1)
+const itemsPerPage = 10
+
+const pagedQueries = computed(() => {
+  if (!overview.value?.top_queries) return []
+  let filtered = overview.value.top_queries
+  
+  // Search filter
+  if (querySearch.value) {
+    const s = querySearch.value.toLowerCase()
+    filtered = filtered.filter(q => q.name.toLowerCase().includes(s))
+  }
+  
+  // Trend filter
+  if (queryTrendFilter.value === 'growing') {
+    filtered = filtered.filter(q => q.delta_clicks > 0)
+  } else if (queryTrendFilter.value === 'declining') {
+    filtered = filtered.filter(q => q.delta_clicks < 0)
+  }
+  
+  const start = (queryPage.value - 1) * itemsPerPage
+  return filtered.slice(start, start + itemsPerPage)
+})
+
+const queryTotalPages = computed(() => {
+  if (!overview.value?.top_queries) return 0
+  let filtered = overview.value.top_queries
+  
+  if (querySearch.value) {
+    const s = querySearch.value.toLowerCase()
+    filtered = filtered.filter(q => q.name.toLowerCase().includes(s))
+  }
+  
+  if (queryTrendFilter.value === 'growing') {
+    filtered = filtered.filter(q => q.delta_clicks > 0)
+  } else if (queryTrendFilter.value === 'declining') {
+    filtered = filtered.filter(q => q.delta_clicks < 0)
+  }
+  
+  return Math.ceil(filtered.length / itemsPerPage)
+})
+
+const pagedPagesGsc = computed(() => {
+  if (!overview.value?.top_pages_gsc) return []
+  let filtered = overview.value.top_pages_gsc
+  
+  // Search filter
+  if (pageSearch.value) {
+    const s = pageSearch.value.toLowerCase()
+    filtered = filtered.filter(p => p.name.toLowerCase().includes(s))
+  }
+  
+  // Trend filter
+  if (pageTrendFilter.value === 'growing') {
+    filtered = filtered.filter(p => p.delta_clicks > 0)
+  } else if (pageTrendFilter.value === 'declining') {
+    filtered = filtered.filter(p => p.delta_clicks < 0)
+  }
+  
+  const start = (pagePage.value - 1) * itemsPerPage
+  return filtered.slice(start, start + itemsPerPage)
+})
+
+const pagesGscTotalPages = computed(() => {
+  if (!overview.value?.top_pages_gsc) return 0
+  let filtered = overview.value.top_pages_gsc
+  
+  if (pageSearch.value) {
+    const s = pageSearch.value.toLowerCase()
+    filtered = filtered.filter(p => p.name.toLowerCase().includes(s))
+  }
+  
+  if (pageTrendFilter.value === 'growing') {
+    filtered = filtered.filter(p => p.delta_clicks > 0)
+  } else if (pageTrendFilter.value === 'declining') {
+    filtered = filtered.filter(p => p.delta_clicks < 0)
+  }
+  
+  return Math.ceil(filtered.length / itemsPerPage)
+})
+
+watch([querySearch, queryTrendFilter], () => queryPage.value = 1)
+watch([pageSearch, pageTrendFilter], () => pagePage.value = 1)
+
 watch([selectedPropertyId, timeframe, customStartDate, customEndDate], () => {
   fetchData()
+  queryPage.value = 1
+  pagePage.value = 1
 })
 
 import { onUnmounted } from 'vue'
@@ -1649,10 +1740,31 @@ onUnmounted(() => {
           <div class="grid grid-cols-1 lg:grid-cols-2 gap-8 pb-10">
             <!-- Detailed Top Queries -->
             <div class="bg-white p-8 rounded-[2.5rem] border border-slate-100 shadow-premium">
-              <h3 class="text-xl font-black text-slate-900 mb-8 flex items-center gap-2">
-                <svg class="w-5 h-5 text-emerald-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path></svg>
-                Top Search Queries
-              </h3>
+              <div class="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-8">
+                <h3 class="text-xl font-black text-slate-900 flex items-center gap-2">
+                  <svg class="w-5 h-5 text-emerald-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path></svg>
+                  Top Search Queries
+                </h3>
+                
+                <!-- Filters -->
+                <div class="flex items-center gap-3">
+                  <!-- Trend Filter -->
+                  <select v-model="queryTrendFilter" 
+                    class="bg-slate-50 border-none rounded-xl text-xs font-bold text-slate-600 focus:ring-2 focus:ring-emerald-500/20 py-2 px-4 appearance-none cursor-pointer">
+                    <option value="all">All Trends</option>
+                    <option value="growing">Growing ↑</option>
+                    <option value="declining">Declining ↓</option>
+                  </select>
+
+                  <!-- Search Input -->
+                  <div class="relative w-full md:w-64">
+                    <input v-model="querySearch" type="text" placeholder="Search queries..." 
+                      class="w-full pl-10 pr-4 py-2 bg-slate-50 border-none rounded-xl text-sm font-medium text-slate-700 placeholder-slate-400 focus:ring-2 focus:ring-emerald-500/20">
+                    <svg class="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path></svg>
+                  </div>
+                </div>
+              </div>
+
               <div class="overflow-x-auto">
                 <table class="w-full text-left">
                   <thead>
@@ -1664,7 +1776,7 @@ onUnmounted(() => {
                     </tr>
                   </thead>
                   <tbody class="divide-y divide-slate-50">
-                    <tr v-for="query in (overview?.top_queries || [])" :key="query.name" class="group hover:bg-slate-50 transition-colors">
+                    <tr v-for="query in pagedQueries" :key="query.name" class="group hover:bg-slate-50 transition-colors">
                       <td class="py-4 pr-4">
                         <span class="text-sm font-bold text-slate-700 block truncate max-w-[200px]" :title="query.name">{{ query.name }}</span>
                       </td>
@@ -1690,16 +1802,52 @@ onUnmounted(() => {
                     </tr>
                   </tbody>
                 </table>
-                <p v-if="!overview?.top_queries?.length" class="text-center py-10 text-slate-400 italic text-sm">No query data available</p>
+                <p v-if="!pagedQueries.length" class="text-center py-10 text-slate-400 italic text-sm">No query data available</p>
+
+                <!-- Pagination footer -->
+                <div v-if="queryTotalPages > 1" class="flex items-center justify-between pt-6 border-t border-slate-50 mt-4">
+                  <span class="text-[10px] font-black text-slate-400 uppercase tracking-widest leading-none">Page {{ queryPage }} of {{ queryTotalPages }}</span>
+                  <div class="flex items-center gap-2">
+                    <button @click="queryPage--" :disabled="queryPage <= 1" 
+                      class="p-2 bg-slate-50 hover:bg-slate-100 disabled:opacity-30 disabled:hover:bg-slate-50 rounded-lg border border-slate-100 transition-all text-slate-600">
+                      <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"></path></svg>
+                    </button>
+                    <button @click="queryPage++" :disabled="queryPage >= queryTotalPages" 
+                      class="p-2 bg-slate-50 hover:bg-slate-100 disabled:opacity-30 disabled:hover:bg-slate-50 rounded-lg border border-slate-100 transition-all text-slate-600">
+                      <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path></svg>
+                    </button>
+                  </div>
+                </div>
               </div>
             </div>
 
             <!-- Detailed Top Pages (GSC) -->
             <div class="bg-white p-8 rounded-[2.5rem] border border-slate-100 shadow-premium">
-              <h3 class="text-xl font-black text-slate-900 mb-8 flex items-center gap-2">
-                <svg class="w-5 h-5 text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path></svg>
-                Top Pages (GSC)
-              </h3>
+              <div class="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-8">
+                <h3 class="text-xl font-black text-slate-900 flex items-center gap-2">
+                  <svg class="w-5 h-5 text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path></svg>
+                  Top Pages (GSC)
+                </h3>
+
+                <!-- Filters -->
+                <div class="flex items-center gap-3">
+                  <!-- Trend Filter -->
+                  <select v-model="pageTrendFilter" 
+                    class="bg-slate-50 border-none rounded-xl text-xs font-bold text-slate-600 focus:ring-2 focus:ring-blue-500/20 py-2 px-4 appearance-none cursor-pointer">
+                    <option value="all">All Trends</option>
+                    <option value="growing">Growing ↑</option>
+                    <option value="declining">Declining ↓</option>
+                  </select>
+
+                  <!-- Search Input -->
+                  <div class="relative w-full md:w-64">
+                    <input v-model="pageSearch" type="text" placeholder="Search pages..." 
+                      class="w-full pl-10 pr-4 py-2 bg-slate-50 border-none rounded-xl text-sm font-medium text-slate-700 placeholder-slate-400 focus:ring-2 focus:ring-blue-500/20">
+                    <svg class="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path></svg>
+                  </div>
+                </div>
+              </div>
+
               <div class="overflow-x-auto">
                 <table class="w-full text-left">
                   <thead>
@@ -1710,7 +1858,7 @@ onUnmounted(() => {
                     </tr>
                   </thead>
                   <tbody class="divide-y divide-slate-50">
-                    <tr v-for="page in (overview?.top_pages_gsc || [])" :key="page.name" class="group hover:bg-slate-50 transition-colors">
+                    <tr v-for="page in pagedPagesGsc" :key="page.name" class="group hover:bg-slate-50 transition-colors">
                       <td class="py-4 pr-4">
                         <span class="text-sm font-bold text-slate-700 block truncate max-w-[250px]" :title="page.name">{{ page.name.replace(/^https?:\/\/[^\/]+/, '') || '/' }}</span>
                       </td>
@@ -1733,7 +1881,22 @@ onUnmounted(() => {
                     </tr>
                   </tbody>
                 </table>
-                <p v-if="!overview?.top_pages_gsc?.length" class="text-center py-10 text-slate-400 italic text-sm">No page data available</p>
+                <p v-if="!pagedPagesGsc.length" class="text-center py-10 text-slate-400 italic text-sm">No page data available</p>
+
+                <!-- Pagination footer -->
+                <div v-if="pagesGscTotalPages > 1" class="flex items-center justify-between pt-6 border-t border-slate-50 mt-4">
+                  <span class="text-[10px] font-black text-slate-400 uppercase tracking-widest leading-none">Page {{ pagePage }} of {{ pagesGscTotalPages }}</span>
+                  <div class="flex items-center gap-2">
+                    <button @click="pagePage--" :disabled="pagePage <= 1" 
+                      class="p-2 bg-slate-50 hover:bg-slate-100 disabled:opacity-30 disabled:hover:bg-slate-50 rounded-lg border border-slate-100 transition-all text-slate-600">
+                      <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"></path></svg>
+                    </button>
+                    <button @click="pagePage++" :disabled="pagePage >= pagesGscTotalPages" 
+                      class="p-2 bg-slate-50 hover:bg-slate-100 disabled:opacity-30 disabled:hover:bg-slate-50 rounded-lg border border-slate-100 transition-all text-slate-600">
+                      <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path></svg>
+                    </button>
+                  </div>
+                </div>
               </div>
             </div>
           </div>
