@@ -483,6 +483,42 @@ watch(chartMetric, () => {
   updateChart()
 })
 
+const getTrendInfo = (value) => {
+  if (value === 0 || value === null || isNaN(value)) return null
+  const isPositive = value > 0
+  return {
+    isPositive,
+    label: `${Math.abs(value).toFixed(1)}%`,
+    class: isPositive ? 'text-emerald-500 bg-emerald-500/10 border-emerald-500/20' : 'text-rose-500 bg-rose-500/10 border-rose-500/20',
+    icon: isPositive ? '↑' : '↓'
+  }
+}
+
+const trajectoryAlert = computed(() => {
+  if (!overview.value?.deltas) return null
+  
+  const userDelta = overview.value.deltas.total_users
+  if (userDelta < -10) {
+    return {
+      type: 'warning',
+      title: 'Traffic Drop Detected',
+      message: `You've lost ${Math.abs(userDelta).toFixed(1)}% of your traffic compared to the previous period.`,
+      icon: '📉'
+    }
+  }
+  
+  if (userDelta > 15) {
+    return {
+      type: 'success',
+      title: 'Strong Growth Spurt',
+      message: `Your traffic is up by ${userDelta.toFixed(1)}%! Keep up the momentum.`,
+      icon: '📈'
+    }
+  }
+  
+  return null
+})
+
 watch([selectedPropertyId, timeframe, customStartDate, customEndDate], () => {
   fetchData()
 })
@@ -614,6 +650,25 @@ onUnmounted(() => {
         </button>
       </div>
 
+      <!-- Trajectory Alert Banner -->
+      <div v-if="trajectoryAlert" 
+        :class="trajectoryAlert.type === 'warning' ? 'bg-rose-50 border-rose-200' : 'bg-emerald-50 border-emerald-200'"
+        class="p-6 rounded-[2.5rem] border shadow-sm flex items-center justify-between gap-6 animate-in slide-in-from-top-4 duration-500 mb-2">
+        <div class="flex items-center gap-5">
+          <div class="text-4xl">{{ trajectoryAlert.icon }}</div>
+          <div>
+            <h3 class="text-lg font-black" :class="trajectoryAlert.type === 'warning' ? 'text-rose-900' : 'text-emerald-900'">{{ trajectoryAlert.title }}</h3>
+            <p class="font-medium text-sm" :class="trajectoryAlert.type === 'warning' ? 'text-rose-700' : 'text-emerald-700'">{{ trajectoryAlert.message }}</p>
+          </div>
+        </div>
+        <div class="flex items-center gap-4">
+          <span class="text-xs font-black uppercase tracking-widest px-3 py-1 rounded-full border" 
+            :class="trajectoryAlert.type === 'warning' ? 'bg-rose-100/50 text-rose-600 border-rose-200' : 'bg-emerald-100/50 text-emerald-600 border-emerald-200'">
+            Anomaly Detected
+          </span>
+        </div>
+      </div>
+
       <div v-if="activeTab === 'overview'" class="space-y-10 animate-in fade-in duration-500">
         <!-- Stats Grid -->
       <div v-if="isLoading" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
@@ -669,9 +724,16 @@ onUnmounted(() => {
       <div v-if="overview && overview.total_users > 0" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
         <!-- GA4: Total Users -->
         <div class="bg-white p-7 rounded-[2.5rem] border border-slate-100 shadow-premium group hover:border-blue-500/30 transition-all">
-          <div class="flex flex-col">
-            <p class="text-slate-500 font-bold text-xs uppercase tracking-wider">Total Users</p>
-            <p class="text-[9px] text-slate-400 font-medium mt-0.5">Active vs Total (GA4)</p>
+          <div class="flex items-center justify-between mb-1">
+            <div class="flex flex-col">
+              <p class="text-slate-500 font-bold text-xs uppercase tracking-wider">Total Users</p>
+              <p class="text-[9px] text-slate-400 font-medium mt-0.5">Active vs Total (GA4)</p>
+            </div>
+            <!-- Trend Pill -->
+            <div v-if="overview.deltas?.total_users" :class="getTrendInfo(overview.deltas.total_users).class" class="px-2 py-0.5 rounded-lg border text-[10px] font-black flex items-center gap-1">
+              <span>{{ getTrendInfo(overview.deltas.total_users).icon }}</span>
+              <span>{{ getTrendInfo(overview.deltas.total_users).label }}</span>
+            </div>
           </div>
           <div class="flex items-baseline gap-2 mt-3">
             <h3 class="text-3xl font-black text-slate-900">{{ overview.total_users || 0 }}</h3>
@@ -681,15 +743,23 @@ onUnmounted(() => {
 
         <!-- GA4: Conversions -->
         <div class="bg-white p-7 rounded-[2.5rem] border border-slate-100 shadow-premium hover:border-blue-500/30 transition-all">
-          <div class="flex flex-col">
-            <p class="text-slate-500 font-bold text-xs uppercase tracking-wider">Conversions</p>
-            <p class="text-[9px] text-slate-400 font-medium mt-0.5">Key goal completions (GA4)</p>
+          <div class="flex items-center justify-between mb-1">
+            <div class="flex flex-col">
+              <p class="text-slate-500 font-bold text-xs uppercase tracking-wider">Conversions</p>
+              <p class="text-[9px] text-slate-400 font-medium mt-0.5">Key goal completions (GA4)</p>
+            </div>
+            <!-- Trend Pill -->
+            <div v-if="overview.deltas?.total_conversions" :class="getTrendInfo(overview.deltas.total_conversions).class" class="px-2 py-0.5 rounded-lg border text-[10px] font-black flex items-center gap-1">
+              <span>{{ getTrendInfo(overview.deltas.total_conversions).icon }}</span>
+              <span>{{ getTrendInfo(overview.deltas.total_conversions).label }}</span>
+            </div>
           </div>
           <h3 class="text-3xl font-black text-blue-600 mt-3">{{ overview.total_conversions || 0 }}</h3>
         </div>
 
         <!-- GSC: Impressions -->
         <div class="bg-white p-7 rounded-[2.5rem] border border-slate-100 shadow-premium hover:border-emerald-500/30 transition-all relative overflow-hidden group">
+          <!-- ... existing overlays ... -->
           <div v-if="overview.gsc_permission_error" class="absolute inset-0 bg-white/80 backdrop-blur-[2px] z-10 flex items-center justify-center text-center p-4">
             <span class="text-xs font-bold text-amber-600 bg-amber-50 px-3 py-1.5 rounded-lg border border-amber-100">Permission Denied</span>
           </div>
@@ -698,9 +768,17 @@ onUnmounted(() => {
               <span class="text-[10px] font-bold text-blue-600 bg-blue-50 px-3 py-1.5 rounded-lg border border-blue-100 animate-pulse">Syncing data...</span>
             </div>
           </div>
-          <div class="flex flex-col">
-            <p class="text-emerald-700 font-bold text-xs uppercase tracking-wider">Impressions</p>
-            <p class="text-[9px] text-slate-400 font-medium mt-0.5">Times seen in Search (GSC)</p>
+          
+          <div class="flex items-center justify-between mb-1">
+            <div class="flex flex-col">
+              <p class="text-emerald-700 font-bold text-xs uppercase tracking-wider">Impressions</p>
+              <p class="text-[9px] text-slate-400 font-medium mt-0.5">Times seen in Search (GSC)</p>
+            </div>
+            <!-- Trend Pill -->
+            <div v-if="overview.deltas?.total_impressions" :class="getTrendInfo(overview.deltas.total_impressions).class" class="px-2 py-0.5 rounded-lg border text-[10px] font-black flex items-center gap-1">
+              <span>{{ getTrendInfo(overview.deltas.total_impressions).icon }}</span>
+              <span>{{ getTrendInfo(overview.deltas.total_impressions).label }}</span>
+            </div>
           </div>
           <h3 class="text-3xl font-black text-slate-900 mt-3">{{ overview.total_impressions?.toLocaleString() || 0 }}</h3>
         </div>
@@ -710,9 +788,16 @@ onUnmounted(() => {
           <div v-if="overview.gsc_permission_error" class="absolute inset-0 bg-white/80 backdrop-blur-[2px] z-10 flex items-center justify-center text-center p-4">
             <span class="text-xs font-bold text-amber-600 bg-amber-50 px-3 py-1.5 rounded-lg border border-amber-100">Permission Required</span>
           </div>
-          <div class="flex flex-col">
-            <p class="text-emerald-700 font-bold text-xs uppercase tracking-wider">Clicks</p>
-            <p class="text-[9px] text-slate-400 font-medium mt-0.5">Visits from Search (GSC)</p>
+          <div class="flex items-center justify-between mb-1">
+            <div class="flex flex-col">
+              <p class="text-emerald-700 font-bold text-xs uppercase tracking-wider">Clicks</p>
+              <p class="text-[9px] text-slate-400 font-medium mt-0.5">Visits from Search (GSC)</p>
+            </div>
+            <!-- Trend Pill -->
+            <div v-if="overview.deltas?.total_clicks" :class="getTrendInfo(overview.deltas.total_clicks).class" class="px-2 py-0.5 rounded-lg border text-[10px] font-black flex items-center gap-1">
+              <span>{{ getTrendInfo(overview.deltas.total_clicks).icon }}</span>
+              <span>{{ getTrendInfo(overview.deltas.total_clicks).label }}</span>
+            </div>
           </div>
           <h3 class="text-3xl font-black text-slate-900 mt-3">{{ overview.total_clicks?.toLocaleString() || 0 }}</h3>
         </div>
@@ -722,9 +807,16 @@ onUnmounted(() => {
           <div v-if="overview.gsc_permission_error" class="absolute inset-0 bg-white/80 backdrop-blur-[2px] z-10 flex items-center justify-center text-center p-4">
             <span class="text-xs font-bold text-amber-600 bg-amber-50 px-3 py-1.5 rounded-lg border border-amber-100">Permission Required</span>
           </div>
-          <div class="flex flex-col">
-            <p class="text-emerald-700 font-bold text-xs uppercase tracking-wider">Avg. Position</p>
-            <p class="text-[9px] text-slate-400 font-medium mt-0.5">Mean rank in Search (GSC)</p>
+          <div class="flex items-center justify-between mb-1">
+            <div class="flex flex-col">
+              <p class="text-emerald-700 font-bold text-xs uppercase tracking-wider">Avg. Position</p>
+              <p class="text-[9px] text-slate-400 font-medium mt-0.5">Mean rank in Search (GSC)</p>
+            </div>
+            <!-- Trend Pill -->
+            <div v-if="overview.deltas?.avg_position" :class="getTrendInfo(overview.deltas.avg_position).class" class="px-2 py-0.5 rounded-lg border text-[10px] font-black flex items-center gap-1">
+              <span>{{ getTrendInfo(overview.deltas.avg_position).icon }}</span>
+              <span>{{ getTrendInfo(overview.deltas.avg_position).label }}</span>
+            </div>
           </div>
           <h3 class="text-3xl font-black text-slate-900 mt-3">{{ overview.avg_position?.toFixed(1) || 0 }}</h3>
         </div>
@@ -1393,36 +1485,64 @@ onUnmounted(() => {
           <div v-if="overview" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
             <!-- GSC: Impressions -->
             <div class="bg-white p-7 rounded-[2.5rem] border border-slate-100 shadow-premium group hover:border-emerald-500/30 transition-all">
-              <div class="flex flex-col">
-                <p class="text-emerald-700 font-bold text-xs uppercase tracking-wider">Total Impressions</p>
-                <p class="text-[9px] text-slate-400 font-medium mt-0.5">Visibility in Search Engine</p>
+              <div class="flex items-center justify-between mb-1">
+                <div class="flex flex-col">
+                  <p class="text-emerald-700 font-bold text-xs uppercase tracking-wider">Total Impressions</p>
+                  <p class="text-[9px] text-slate-400 font-medium mt-0.5">Visibility in Search Engine</p>
+                </div>
+                <!-- Trend Pill -->
+                <div v-if="overview.deltas?.total_impressions" :class="getTrendInfo(overview.deltas.total_impressions).class" class="px-2 py-0.5 rounded-lg border text-[10px] font-black flex items-center gap-1">
+                  <span>{{ getTrendInfo(overview.deltas.total_impressions).icon }}</span>
+                  <span>{{ getTrendInfo(overview.deltas.total_impressions).label }}</span>
+                </div>
               </div>
               <h3 class="text-3xl font-black text-slate-900 mt-3">{{ (overview?.total_impressions || 0).toLocaleString() }}</h3>
             </div>
 
             <!-- GSC: Clicks -->
             <div class="bg-white p-7 rounded-[2.5rem] border border-slate-100 shadow-premium group hover:border-emerald-500/30 transition-all">
-              <div class="flex flex-col">
-                <p class="text-emerald-700 font-bold text-xs uppercase tracking-wider">Total Clicks</p>
-                <p class="text-[9px] text-slate-400 font-medium mt-0.5">Traffic from Search Console</p>
+              <div class="flex items-center justify-between mb-1">
+                <div class="flex flex-col">
+                  <p class="text-emerald-700 font-bold text-xs uppercase tracking-wider">Total Clicks</p>
+                  <p class="text-[9px] text-slate-400 font-medium mt-0.5">Traffic from Search Console</p>
+                </div>
+                <!-- Trend Pill -->
+                <div v-if="overview.deltas?.total_clicks" :class="getTrendInfo(overview.deltas.total_clicks).class" class="px-2 py-0.5 rounded-lg border text-[10px] font-black flex items-center gap-1">
+                  <span>{{ getTrendInfo(overview.deltas.total_clicks).icon }}</span>
+                  <span>{{ getTrendInfo(overview.deltas.total_clicks).label }}</span>
+                </div>
               </div>
               <h3 class="text-3xl font-black text-slate-900 mt-3">{{ (overview?.total_clicks || 0).toLocaleString() }}</h3>
             </div>
 
             <!-- GSC: Avg. Position -->
             <div class="bg-white p-7 rounded-[2.5rem] border border-slate-100 shadow-premium group hover:border-emerald-500/30 transition-all">
-              <div class="flex flex-col">
-                <p class="text-emerald-700 font-bold text-xs uppercase tracking-wider">Avg. Position</p>
-                <p class="text-[9px] text-slate-400 font-medium mt-0.5">Mean rank across all queries</p>
+              <div class="flex items-center justify-between mb-1">
+                <div class="flex flex-col">
+                  <p class="text-emerald-700 font-bold text-xs uppercase tracking-wider">Avg. Position</p>
+                  <p class="text-[9px] text-slate-400 font-medium mt-0.5">Mean rank across all queries</p>
+                </div>
+                <!-- Trend Pill -->
+                <div v-if="overview.deltas?.avg_position" :class="getTrendInfo(overview.deltas.avg_position).class" class="px-2 py-0.5 rounded-lg border text-[10px] font-black flex items-center gap-1">
+                  <span>{{ getTrendInfo(overview.deltas.avg_position).icon }}</span>
+                  <span>{{ getTrendInfo(overview.deltas.avg_position).label }}</span>
+                </div>
               </div>
               <h3 class="text-3xl font-black text-slate-900 mt-3">{{ (overview?.avg_position || 0).toFixed(1) }}</h3>
             </div>
 
             <!-- GSC: Avg. CTR -->
             <div class="bg-white p-7 rounded-[2.5rem] border border-slate-100 shadow-premium group hover:border-emerald-500/30 transition-all">
-              <div class="flex flex-col">
-                <p class="text-emerald-700 font-bold text-xs uppercase tracking-wider">Avg. CTR</p>
-                <p class="text-[9px] text-slate-400 font-medium mt-0.5">Click-through rate average</p>
+              <div class="flex items-center justify-between mb-1">
+                <div class="flex flex-col">
+                  <p class="text-emerald-700 font-bold text-xs uppercase tracking-wider">Avg. CTR</p>
+                  <p class="text-[9px] text-slate-400 font-medium mt-0.5">Click-through rate average</p>
+                </div>
+                <!-- Trend Pill -->
+                <div v-if="overview.deltas?.avg_ctr" :class="getTrendInfo(overview.deltas.avg_ctr).class" class="px-2 py-0.5 rounded-lg border text-[10px] font-black flex items-center gap-1">
+                  <span>{{ getTrendInfo(overview.deltas.avg_ctr).icon }}</span>
+                  <span>{{ getTrendInfo(overview.deltas.avg_ctr).label }}</span>
+                </div>
               </div>
               <h3 class="text-3xl font-black text-slate-900 mt-3">{{ ((overview?.avg_ctr || 0) * 100).toFixed(2) }}%</h3>
             </div>
@@ -1549,13 +1669,23 @@ onUnmounted(() => {
                         <span class="text-sm font-bold text-slate-700 block truncate max-w-[200px]" :title="query.name">{{ query.name }}</span>
                       </td>
                       <td class="py-4 text-right">
-                        <span class="text-sm font-black text-slate-900">{{ (query.clicks || 0).toLocaleString() }}</span>
+                        <div class="flex flex-col items-end">
+                          <span class="text-sm font-black text-slate-900">{{ (query.clicks || 0).toLocaleString() }}</span>
+                          <span v-if="query.delta_clicks" :class="query.delta_clicks > 0 ? 'text-emerald-500' : 'text-rose-500'" class="text-[9px] font-bold flex items-center gap-0.5 mt-0.5">
+                            {{ query.delta_clicks > 0 ? '↑' : '↓' }} {{ Math.abs(query.delta_clicks).toFixed(1) }}%
+                          </span>
+                        </div>
                       </td>
                       <td class="py-4 text-right">
                         <span class="text-sm font-medium text-slate-500">{{ (query.impressions || 0).toLocaleString() }}</span>
                       </td>
                       <td class="py-4 text-right">
-                        <span class="text-sm font-bold" :class="(query.position || 0) <= 3 ? 'text-emerald-500' : 'text-slate-600'">{{ (query.position || 0).toFixed(1) }}</span>
+                        <div class="flex flex-col items-end">
+                          <span class="text-sm font-bold" :class="(query.position || 0) <= 3 ? 'text-emerald-500' : 'text-slate-600'">{{ (query.position || 0).toFixed(1) }}</span>
+                          <span v-if="query.delta_position" :class="query.delta_position > 0 ? 'text-emerald-500' : 'text-rose-500'" class="text-[9px] font-bold flex items-center gap-0.5">
+                            {{ query.delta_position > 0 ? '↑' : '↓' }} {{ Math.abs(query.delta_position).toFixed(1) }}%
+                          </span>
+                        </div>
                       </td>
                     </tr>
                   </tbody>
@@ -1585,10 +1715,20 @@ onUnmounted(() => {
                         <span class="text-sm font-bold text-slate-700 block truncate max-w-[250px]" :title="page.name">{{ page.name.replace(/^https?:\/\/[^\/]+/, '') || '/' }}</span>
                       </td>
                       <td class="py-4 text-right">
-                        <span class="text-sm font-black text-slate-900">{{ (page.clicks || 0).toLocaleString() }}</span>
+                        <div class="flex flex-col items-end">
+                          <span class="text-sm font-black text-slate-900">{{ (page.clicks || 0).toLocaleString() }}</span>
+                          <span v-if="page.delta_clicks" :class="page.delta_clicks > 0 ? 'text-emerald-500' : 'text-rose-500'" class="text-[9px] font-bold flex items-center gap-0.5 mt-0.5">
+                            {{ page.delta_clicks > 0 ? '↑' : '↓' }} {{ Math.abs(page.delta_clicks).toFixed(1) }}%
+                          </span>
+                        </div>
                       </td>
                       <td class="py-4 text-right">
-                        <span class="text-sm font-bold text-slate-600">{{ (page.position || 0).toFixed(1) }}</span>
+                        <div class="flex flex-col items-end">
+                          <span class="text-sm font-bold text-slate-600">{{ (page.position || 0).toFixed(1) }}</span>
+                          <span v-if="page.delta_position" :class="page.delta_position > 0 ? 'text-emerald-500' : 'text-rose-500'" class="text-[9px] font-bold flex items-center gap-0.5">
+                            {{ page.delta_position > 0 ? '↑' : '↓' }} {{ Math.abs(page.delta_position).toFixed(1) }}%
+                          </span>
+                        </div>
                       </td>
                     </tr>
                   </tbody>

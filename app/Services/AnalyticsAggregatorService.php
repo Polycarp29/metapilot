@@ -247,6 +247,71 @@ class AnalyticsAggregatorService
         ]);
     }
 
+    public function getOverviewWithComparison($propertyId, $startDate, $endDate)
+    {
+        $current = $this->getOverview($propertyId, $startDate, $endDate);
+        
+        // Calculate previous period
+        $start = Carbon::parse($startDate);
+        $end = Carbon::parse($endDate);
+        $days = $start->diffInDays($end) + 1;
+        
+        $prevEndDate = $start->copy()->subDay()->format('Y-m-d');
+        $prevStartDate = $start->copy()->subDays($days)->format('Y-m-d');
+        
+        $previous = $this->getOverview($propertyId, $prevStartDate, $prevEndDate);
+        
+        $deltas = [
+            'total_users' => $this->calculateDelta($current['total_users'], $previous['total_users']),
+            'total_sessions' => $this->calculateDelta($current['total_sessions'], $previous['total_sessions']),
+            'total_conversions' => $this->calculateDelta($current['total_conversions'], $previous['total_conversions']),
+            'total_clicks' => $this->calculateDelta($current['total_clicks'], $previous['total_clicks']),
+            'total_impressions' => $this->calculateDelta($current['total_impressions'], $previous['total_impressions']),
+            'avg_ctr' => $this->calculateDelta($current['avg_ctr'], $previous['avg_ctr']),
+            'avg_position' => $this->calculateImprovement($current['avg_position'], $previous['avg_position']), // Lower is better
+            'avg_bounce_rate' => $this->calculateImprovement($current['avg_bounce_rate'], $previous['avg_bounce_rate']), // Lower is better
+        ];
+
+        // Add deltas to top queries
+        if (isset($current['top_queries']) && isset($previous['top_queries'])) {
+            $prevQueries = collect($previous['top_queries'])->keyBy('name');
+            foreach ($current['top_queries'] as &$query) {
+                $prev = $prevQueries->get($query['name']);
+                if ($prev) {
+                    $query['delta_clicks'] = $this->calculateDelta($query['clicks'], $prev['clicks']);
+                    $query['delta_position'] = $this->calculateImprovement($query['position'], $prev['position']);
+                }
+            }
+        }
+
+        // Add deltas to top pages
+        if (isset($current['top_pages_gsc']) && isset($previous['top_pages_gsc'])) {
+            $prevPages = collect($previous['top_pages_gsc'])->keyBy('name');
+            foreach ($current['top_pages_gsc'] as &$page) {
+                $prev = $prevPages->get($page['name']);
+                if ($prev) {
+                    $page['delta_clicks'] = $this->calculateDelta($page['clicks'], $prev['clicks']);
+                    $page['delta_position'] = $this->calculateImprovement($page['position'], $prev['position']);
+                }
+            }
+        }
+
+        return array_merge($current, ['deltas' => $deltas]);
+    }
+
+    /**
+     * Calculate improvement (for metrics where lower is better).
+     */
+    protected function calculateImprovement($currentValue, $previousValue)
+    {
+        if ($previousValue == 0) {
+            return $currentValue == 0 ? 0 : -100;
+        }
+
+        // If current is lower than previous, it's an improvement (positive)
+        return (($previousValue - $currentValue) / $previousValue) * 100;
+    }
+
     /**
      * Get trend data for a specific metric.
      */

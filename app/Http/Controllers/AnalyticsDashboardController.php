@@ -86,7 +86,7 @@ class AnalyticsDashboardController extends Controller
             $syncingQueued = true;
         }
 
-        $overview = $this->aggregator->getOverview($property->id, $startDate, $endDate);
+        $overview = $this->aggregator->getOverviewWithComparison($property->id, $startDate, $endDate);
         $overview['syncing_queued'] = $syncingQueued;
         
         Log::debug("Analytics overview data for property {$property->id}: " . json_encode($overview));
