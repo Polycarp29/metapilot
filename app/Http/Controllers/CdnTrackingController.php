@@ -46,25 +46,30 @@ class CdnTrackingController extends Controller
         
         $geo = $this->getGeoData($request->ip());
 
-        AdTrackEvent::create([
-            'organization_id' => $organization->id,
-            'site_token' => $request->token,
-            'country_code' => $geo['country_code'] ?? $request->header('CF-IPCountry'),
-            'city' => $geo['city'] ?? null,
-            'browser' => $deviceData['browser'],
-            'platform' => $deviceData['platform'],
-            'device_type' => $deviceData['device_type'],
-            'screen_resolution' => $request->screen_resolution,
-            'google_campaign_id' => $request->campaign_id,
-            'page_url' => $request->page_url,
-            'referrer' => $request->referrer,
-            'session_id' => $request->session_id,
-            'gclid' => $request->gclid,
-            'utm_source' => $request->utm_source,
-            'utm_medium' => $request->utm_medium,
-            'utm_campaign' => $request->utm_campaign,
-            'ip_hash' => hash('sha256', $request->ip()),
-        ]);
+        AdTrackEvent::updateOrCreate(
+            ['page_view_id' => $request->page_view_id],
+            [
+                'organization_id' => $organization->id,
+                'site_token' => $request->token,
+                'country_code' => $geo['country_code'] ?? $request->header('CF-IPCountry'),
+                'city' => $geo['city'] ?? null,
+                'browser' => $deviceData['browser'],
+                'platform' => $deviceData['platform'],
+                'device_type' => $deviceData['device_type'],
+                'screen_resolution' => $request->screen_resolution,
+                'duration_seconds' => $request->duration_seconds ?? 0,
+                'click_count' => $request->click_count ?? 0,
+                'google_campaign_id' => $request->campaign_id,
+                'page_url' => $request->page_url,
+                'referrer' => $request->referrer,
+                'session_id' => $request->session_id,
+                'gclid' => $request->gclid,
+                'utm_source' => $request->utm_source,
+                'utm_medium' => $request->utm_medium,
+                'utm_campaign' => $request->utm_campaign,
+                'ip_hash' => hash('sha256', $request->ip()),
+            ]
+        );
 
         return response()->json(null, 204);
     }

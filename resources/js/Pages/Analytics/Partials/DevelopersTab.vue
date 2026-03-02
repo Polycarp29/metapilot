@@ -135,6 +135,53 @@ const deviceBreakdown = computed(() => {
     return devices
 })
 
+const searchQuery = ref('')
+const selectedSession = ref(null)
+
+const filteredEvents = computed(() => {
+    if (!searchQuery.value) return events.value
+    const q = searchQuery.value.toLowerCase()
+    return events.value.filter(e => 
+        e.page_url?.toLowerCase().includes(q) || 
+        e.session_id?.toLowerCase().includes(q) ||
+        e.utm_campaign?.toLowerCase().includes(q) ||
+        e.city?.toLowerCase().includes(q)
+    )
+})
+
+const sessionTimeline = computed(() => {
+    if (!selectedSession.value) return []
+    return events.value
+        .filter(e => e.session_id === selectedSession.value.session_id)
+        .sort((a, b) => new Date(a.created_at) - new Date(b.created_at))
+})
+
+const sessionChartData = computed(() => {
+    if (!selectedSession.value) return null
+    const timeline = sessionTimeline.value
+    return {
+        labels: timeline.map(e => new Date(e.created_at).toLocaleTimeString()),
+        datasets: [
+            {
+                label: 'Clicks',
+                data: timeline.map(e => e.click_count),
+                borderColor: '#6366f1',
+                backgroundColor: 'rgba(99, 102, 241, 0.1)',
+                fill: true,
+                tension: 0.4
+            },
+            {
+                label: 'Time (s)',
+                data: timeline.map(e => e.duration_seconds),
+                borderColor: '#10b981',
+                backgroundColor: 'rgba(16, 185, 129, 0.1)',
+                fill: true,
+                tension: 0.4
+            }
+        ]
+    }
+})
+
 const chartOptions = {
     responsive: true,
     maintainAspectRatio: false,
@@ -280,9 +327,19 @@ const chartOptions = {
 
         <!-- Event Log -->
         <div class="bg-white rounded-[3rem] border border-slate-100 shadow-premium overflow-hidden">
-            <div class="p-10 border-b border-slate-100">
-                <h3 class="text-2xl font-black text-slate-900">Pixel Event Log</h3>
-                <p class="text-slate-500 font-medium mt-1">Real-time tracking hits with enriched behavioral metadata</p>
+            <div class="p-10 border-b border-slate-100 flex items-center justify-between flex-wrap gap-6">
+                <div>
+                    <h3 class="text-2xl font-black text-slate-900">Pixel Event Log</h3>
+                    <p class="text-slate-500 font-medium mt-1">Real-time tracking hits with enriched behavioral metadata</p>
+                </div>
+                <div class="flex-1 max-w-md relative group">
+                    <input 
+                        v-model="searchQuery" 
+                        placeholder="Search URL, Session, or Campaign..." 
+                        class="w-full bg-slate-50 border-transparent focus:border-blue-500 focus:ring-0 rounded-2xl text-xs font-bold text-slate-700 py-4 pl-12 shadow-inner"
+                    />
+                    <svg class="w-4 h-4 absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path></svg>
+                </div>
             </div>
 
             <div class="overflow-x-auto">
@@ -290,18 +347,36 @@ const chartOptions = {
                     <thead class="bg-slate-50/50">
                         <tr>
                             <th class="py-6 pl-10 text-xs font-black text-slate-400 uppercase tracking-widest">User / Session</th>
+                            <th class="py-6 text-xs font-black text-slate-400 uppercase tracking-widest">Behavior</th>
                             <th class="py-6 text-xs font-black text-slate-400 uppercase tracking-widest">Location</th>
                             <th class="py-6 text-xs font-black text-slate-400 uppercase tracking-widest">Device</th>
                             <th class="py-6 text-xs font-black text-slate-400 uppercase tracking-widest">Page / Referrer</th>
-                            <th class="py-6 text-xs font-black text-slate-400 uppercase tracking-widest">Source</th>
                             <th class="py-6 pr-10 text-xs font-black text-slate-400 uppercase tracking-widest text-right">GCLID</th>
                         </tr>
                     </thead>
                     <tbody class="divide-y divide-slate-50">
-                        <tr v-for="event in events" :key="event.id" class="group hover:bg-slate-50/50 transition-colors">
+                        <tr 
+                            v-for="event in filteredEvents" 
+                            :key="event.id" 
+                            @click="selectedSession = event"
+                            class="group hover:bg-blue-50/50 transition-colors cursor-pointer"
+                        >
                             <td class="py-6 pl-10">
-                                <p class="text-xs font-black text-slate-900">Session: {{ event.session_id ? event.session_id.substring(0, 8) : 'Anon' }}</p>
+                                <p class="text-xs font-black text-slate-900 group-hover:text-blue-600 transition-colors">Session: {{ event.session_id ? event.session_id.substring(0, 8) : 'Anon' }}</p>
                                 <p class="text-[10px] text-slate-400 font-medium mt-1">{{ new Date(event.created_at).toLocaleString() }}</p>
+                            </td>
+                            <td class="py-6">
+                                <div class="flex items-center gap-3">
+                                    <div class="flex flex-col">
+                                        <span class="text-[10px] font-black text-slate-700">{{ event.duration_seconds }}s</span>
+                                        <span class="text-[9px] text-slate-400 uppercase font-bold tracking-tighter">Stay</span>
+                                    </div>
+                                    <div class="w-px h-6 bg-slate-100"></div>
+                                    <div class="flex flex-col">
+                                        <span class="text-[10px] font-black text-slate-700">{{ event.click_count }}</span>
+                                        <span class="text-[9px] text-slate-400 uppercase font-bold tracking-tighter">Clicks</span>
+                                    </div>
+                                </div>
                             </td>
                             <td class="py-6 whitespace-nowrap">
                                 <div class="flex items-center gap-2">
@@ -311,18 +386,13 @@ const chartOptions = {
                             </td>
                             <td class="py-6">
                                 <div class="flex flex-col">
-                                    <span class="text-[10px] font-black text-slate-700">{{ event.browser }} on {{ event.platform }}</span>
-                                    <span class="text-[9px] text-slate-400 uppercase tracking-tighter">{{ event.screen_resolution || '-' }}</span>
+                                    <span class="text-[10px] font-black text-slate-700">{{ event.browser }}</span>
+                                    <span class="text-[9px] text-slate-400 uppercase tracking-tighter">{{ event.platform }}</span>
                                 </div>
                             </td>
                             <td class="py-6">
                                 <p class="text-xs font-bold text-slate-900 truncate max-w-[150px]" :title="event.page_url">{{ event.page_url.split('/').pop() || '/' }}</p>
                                 <p class="text-[10px] text-slate-400 truncate max-w-[150px]" :title="event.referrer">{{ event.referrer ? 'via ' + (new URL(event.referrer).hostname) : 'Direct' }}</p>
-                            </td>
-                            <td class="py-6 text-xs text-slate-600">
-                                <span class="font-bold">{{ event.utm_source || '-' }}</span>
-                                <span class="text-slate-400 mx-1">/</span>
-                                <span>{{ event.utm_medium || '-' }}</span>
                             </td>
                             <td class="py-6 pr-10 text-right">
                                 <span v-if="event.gclid" class="px-2 py-1 bg-amber-50 text-amber-700 text-[10px] font-black rounded-lg border border-amber-100" :title="event.gclid">
@@ -331,14 +401,107 @@ const chartOptions = {
                                 <span v-else class="text-slate-300">-</span>
                             </td>
                         </tr>
-                        <tr v-if="events.length === 0 && !isLoading">
+                        <tr v-if="filteredEvents.length === 0 && !isLoading">
                             <td colspan="6" class="py-20 text-center">
-                                <p class="text-slate-400 font-bold italic">No pixel events detected yet.</p>
+                                <p class="text-slate-400 font-bold italic">No pixel events match your search.</p>
                             </td>
                         </tr>
                     </tbody>
                 </table>
             </div>
         </div>
+
+        <!-- Session Detail Modal -->
+        <div v-if="selectedSession" class="fixed inset-0 z-[60] flex items-center justify-center p-4 md:p-10">
+            <div class="absolute inset-0 bg-slate-900/60 backdrop-blur-sm" @click="selectedSession = null"></div>
+            <div class="relative w-full max-w-5xl bg-white rounded-[3rem] shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
+                <!-- Modal Header -->
+                <div class="p-10 border-b border-slate-100 flex items-center justify-between">
+                    <div>
+                        <div class="flex items-center gap-3">
+                            <h3 class="text-2xl font-black text-slate-900">Session Breakdown</h3>
+                            <span class="px-3 py-1 bg-blue-50 text-blue-600 text-[10px] font-black rounded-full uppercase tracking-widest">{{ selectedSession.session_id }}</span>
+                        </div>
+                        <p class="text-slate-500 font-medium mt-1">Detailed behavioral journey and engagement metrics</p>
+                    </div>
+                    <button @click="selectedSession = null" class="p-4 bg-slate-50 hover:bg-slate-100 text-slate-400 rounded-2xl transition-colors">
+                        <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M6 18L18 6M6 6l12 12"></path></svg>
+                    </button>
+                </div>
+
+                <div class="flex-1 overflow-y-auto p-10 custom-scrollbar">
+                    <div class="grid grid-cols-1 lg:grid-cols-3 gap-10">
+                        <!-- Left: Journey Timeline -->
+                        <div class="lg:col-span-1 space-y-6">
+                            <h4 class="text-xs font-black text-slate-400 uppercase tracking-widest">Visitor Journey</h4>
+                            <div class="space-y-4 relative before:absolute before:left-[11px] before:top-2 before:bottom-2 before:w-0.5 before:bg-slate-100">
+                                <div v-for="(entry, idx) in sessionTimeline" :key="entry.id" class="relative pl-8">
+                                    <div class="absolute left-0 top-1.5 w-[24px] h-[24px] bg-white border-2 border-blue-500 rounded-full flex items-center justify-center z-10">
+                                        <div class="w-1.5 h-1.5 bg-blue-500 rounded-full"></div>
+                                    </div>
+                                    <div>
+                                        <p class="text-xs font-black text-slate-900 truncate" :title="entry.page_url">{{ entry.page_url.split('/').pop() || 'Home' }}</p>
+                                        <p class="text-[10px] text-slate-400 font-bold mt-0.5">{{ new Date(entry.created_at).toLocaleTimeString() }} • {{ entry.duration_seconds }}s stay</p>
+                                        <div v-if="entry.click_count > 0" class="mt-2 flex items-center gap-1.5">
+                                            <span class="px-2 py-0.5 bg-emerald-50 text-emerald-600 text-[9px] font-black rounded-md border border-emerald-100">
+                                                {{ entry.click_count }} CLICKS
+                                            </span>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Right: Engagement Graph & Metadata -->
+                        <div class="lg:col-span-2 space-y-10">
+                            <div class="bg-slate-50 p-8 rounded-[2rem] border border-slate-100 shadow-inner">
+                                <h4 class="text-xs font-black text-slate-400 uppercase tracking-widest mb-6 px-2">Session Engagement over time</h4>
+                                <div class="h-64">
+                                    <Line :data="sessionChartData" :options="chartOptions" />
+                                </div>
+                            </div>
+
+                            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                <div class="p-6 bg-white border border-slate-100 rounded-3xl shadow-sm">
+                                    <p class="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-4">Traffic Attribution</p>
+                                    <div class="space-y-3">
+                                        <div class="flex justify-between">
+                                            <span class="text-[10px] font-bold text-slate-500 uppercase">Source</span>
+                                            <span class="text-xs font-black text-slate-900">{{ selectedSession.utm_source || 'Direct' }}</span>
+                                        </div>
+                                        <div class="flex justify-between">
+                                            <span class="text-[10px] font-bold text-slate-500 uppercase">Campaign</span>
+                                            <span class="text-xs font-black text-slate-900">{{ selectedSession.utm_campaign || 'N/A' }}</span>
+                                        </div>
+                                        <div class="flex justify-between">
+                                            <span class="text-[10px] font-bold text-slate-500 uppercase">Referrer</span>
+                                            <span class="text-xs font-black text-slate-900 truncate max-w-[120px]" :title="selectedSession.referrer">{{ selectedSession.referrer ? new URL(selectedSession.referrer).hostname : 'None' }}</span>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="p-6 bg-white border border-slate-100 rounded-3xl shadow-sm">
+                                    <p class="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-4">Device Details</p>
+                                    <div class="space-y-3">
+                                        <div class="flex justify-between">
+                                            <span class="text-[10px] font-bold text-slate-500 uppercase">Platform</span>
+                                            <span class="text-xs font-black text-slate-900">{{ selectedSession.platform }} ({{ selectedSession.device_type }})</span>
+                                        </div>
+                                        <div class="flex justify-between">
+                                            <span class="text-[10px] font-bold text-slate-500 uppercase">Browser</span>
+                                            <span class="text-xs font-black text-slate-900">{{ selectedSession.browser }}</span>
+                                        </div>
+                                        <div class="flex justify-between">
+                                            <span class="text-[10px] font-bold text-slate-500 uppercase">Resolution</span>
+                                            <span class="text-xs font-black text-slate-900">{{ selectedSession.screen_resolution }}</span>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
     </div>
 </template>
+
