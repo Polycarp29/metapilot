@@ -20,11 +20,12 @@ class CdnTrackingTest extends TestCase
 
         $payload = [
             'token' => $token,
+            'page_view_id' => 'test-pv-123',
             'page_url' => 'https://example.com/landing',
             'referrer' => 'https://google.com',
             'session_id' => 'test-session-xyz',
             'screen_resolution' => '1920x1080',
-            'campaign' => 'spring_promo',
+            'campaign_id' => 'spring_promo',
             'utm_source' => 'google',
             'utm_medium' => 'cpc',
             'gclid' => 'GCLID12345'
@@ -48,6 +49,21 @@ class CdnTrackingTest extends TestCase
             'utm_source' => 'google',
             'gclid' => 'GCLID12345'
         ]);
+    }
+
+    public function test_pixel_hit_without_page_view_id_is_rejected()
+    {
+        $token = (string) \Illuminate\Support\Str::uuid();
+        Organization::factory()->create(['ads_site_token' => $token]);
+
+        $payload = [
+            'token' => $token,
+            'page_url' => 'https://example.com'
+        ];
+
+        $response = $this->postJson('/cdn/ad-hit', $payload);
+
+        $response->assertStatus(422);
     }
 
     public function test_pixel_hit_with_invalid_token_is_rejected()

@@ -33,6 +33,7 @@ class CdnTrackingController extends Controller
     {
         $request->validate([
             'token' => 'required|uuid',
+            'page_view_id' => 'required|string',
             'page_url' => 'nullable|url',
         ]);
 
@@ -115,22 +116,24 @@ class CdnTrackingController extends Controller
     {
         if ($ip === '127.0.0.1' || $ip === '::1') return null;
 
-        try {
-            // Using a free IP info service with a timeout to avoid blocking the pixel.
-            $response = \Illuminate\Support\Facades\Http::timeout(2)
-                ->get("http://ip-api.com/json/{$ip}?fields=status,countryCode,city");
-            
-            if ($response->successful() && $response->json('status') === 'success') {
-                return [
-                    'country_code' => $response->json('countryCode'),
-                    'city' => $response->json('city')
-                ];
+        return \Illuminate\Support\Facades\Cache::remember("geoip_{$ip}", 86400, function () use ($ip) {
+            try {
+                // Using a free IP info service with a timeout to avoid blocking the pixel.
+                $response = \Illuminate\Support\Facades\Http::timeout(2)
+                    ->get("http://ip-api.com/json/{$ip}?fields=status,countryCode,city");
+                
+                if ($response->successful() && $response->json('status') === 'success') {
+                    return [
+                        'country_code' => $response->json('countryCode'),
+                        'city' => $response->json('city')
+                    ];
+                }
+            } catch (\Exception $e) {
+                // Silently fail if geo lookup fails
             }
-        } catch (\Exception $e) {
-            // Silently fail if geo lookup fails
-        }
 
-        return null;
+            return null;
+        });
     }
 
     /**
