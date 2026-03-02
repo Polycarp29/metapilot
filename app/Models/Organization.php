@@ -8,6 +8,16 @@ use Illuminate\Database\Eloquent\Model;
 class Organization extends Model
 {
     use HasFactory;
+
+    protected static function booted()
+    {
+        static::creating(function ($organization) {
+            if (!$organization->ads_site_token) {
+                $organization->ads_site_token = (string) \Illuminate\Support\Str::uuid();
+            }
+        });
+    }
+
     protected $fillable = [
         'name',
         'slug',

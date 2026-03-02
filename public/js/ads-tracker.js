@@ -25,16 +25,16 @@
     };
 
     const endpoint = script.src.split('/cdn/')[0] + '/cdn/ad-hit';
+    const params = new URLSearchParams(payload);
 
     if (navigator.sendBeacon) {
-        const blob = new Blob([JSON.stringify(payload)], { type: 'application/json' });
-        navigator.sendBeacon(endpoint, blob);
+        navigator.sendBeacon(endpoint, params);
     } else {
         fetch(endpoint, {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
             mode: 'no-cors',
-            body: JSON.stringify(payload)
+            body: params.toString()
         }).catch(() => { });
     }
 })();
