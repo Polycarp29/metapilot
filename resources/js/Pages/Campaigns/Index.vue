@@ -15,8 +15,11 @@ import {
 } from 'chart.js'
 import { Bar, Doughnut } from 'vue-chartjs'
 import AdPredictionsCard from '../Analytics/Partials/AdPredictionsCard.vue'
+import GoogleAdsSection from './Partials/GoogleAdsSection.vue'
 
 ChartJS.register(CategoryScale, LinearScale, BarElement, Title, Tooltip, Legend, ArcElement)
+
+const activeTab = ref('overview')
 
 const props = defineProps({
   campaigns: Array,
@@ -230,40 +233,61 @@ const getStatusColor = (status) => {
         </Link>
       </div>
 
-      <!-- Campaign List -->
-      <div v-if="campaigns.length" class="grid grid-cols-1 gap-6">
-        <Link 
-          v-for="campaign in campaigns" 
-          :key="campaign.id" 
-          :href="route('campaigns.show', { campaign: campaign.id })"
-          class="bg-white p-8 rounded-[2.5rem] border border-slate-100 shadow-premium group hover:border-blue-500/30 transition-all flex flex-col md:flex-row md:items-center justify-between gap-6"
-        >
-          <div class="space-y-2">
-            <div class="flex items-center gap-3">
-              <span :class="['px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider', getStatusColor(campaign.status)]">
-                {{ campaign.status }}
-              </span>
-              <span class="text-slate-400 font-medium text-sm">{{ campaign.property?.name }}</span>
-            </div>
-            <h3 class="text-2xl font-black text-slate-900 group-hover:text-blue-600 transition-colors">{{ campaign.name }}</h3>
-            <p class="text-slate-500 max-w-2xl line-clamp-2 italic">"{{ campaign.objective }}"</p>
-          </div>
-
-          <div class="flex items-center gap-4">
-             <div class="text-right hidden sm:block">
-                <p class="text-xs font-bold text-slate-400 uppercase tracking-widest">Target URLs</p>
-                <p class="text-lg font-black text-slate-900">{{ campaign.target_urls?.length || 0 }}</p>
-             </div>
-             <div class="w-px h-10 bg-slate-100 hidden sm:block"></div>
-             <div class="bg-slate-50 group-hover:bg-blue-600 group-hover:text-white text-slate-700 px-6 py-3 rounded-xl font-bold transition-all">
-                View Impact
-             </div>
-          </div>
-        </Link>
+      <!-- Tab Navigation -->
+      <div class="flex items-center gap-4 bg-slate-50/50 p-1.5 rounded-3xl w-fit border border-slate-100 mx-auto md:mx-0">
+          <button 
+            @click="activeTab = 'overview'" 
+            :class="activeTab === 'overview' ? 'bg-white shadow-premium text-slate-900' : 'text-slate-500 hover:text-slate-700'" 
+            class="px-8 py-3 rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all"
+          >
+            Overview
+          </button>
+          <button 
+            @click="activeTab = 'ads'" 
+            :class="activeTab === 'ads' ? 'bg-white shadow-premium text-slate-900 border-blue-100' : 'text-slate-500 hover:text-slate-700'" 
+            class="px-8 py-3 rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all flex items-center gap-2"
+          >
+            Campaign Analytics
+            <span v-if="organization?.ads_customer_id" class="w-2 h-2 bg-green-500 rounded-full animate-pulse"></span>
+          </button>
       </div>
 
-      <!-- Acquisition & Performance Section -->
-      <div v-if="properties && properties.length > 0" class="bg-slate-50 p-8 rounded-[3rem] border border-slate-200/60">
+      <div v-if="activeTab === 'overview'" class="space-y-10 animate-fade-in">
+          <!-- Campaign List -->
+          <div v-if="campaigns.length" class="grid grid-cols-1 gap-6">
+            <Link 
+              v-for="campaign in campaigns" 
+              :key="campaign.id" 
+              :href="route('campaigns.show', { campaign: campaign.id })"
+              class="bg-white p-8 rounded-[2.5rem] border border-slate-100 shadow-premium group hover:border-blue-500/30 transition-all flex flex-col md:flex-row md:items-center justify-between gap-6"
+            >
+              <div class="space-y-2">
+                <div class="flex items-center gap-3">
+                  <span :class="['px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider', getStatusColor(campaign.status)]">
+                    {{ campaign.status }}
+                  </span>
+                  <span class="text-slate-400 font-medium text-sm">{{ campaign.property?.name }}</span>
+                </div>
+                <h3 class="text-2xl font-black text-slate-900 group-hover:text-blue-600 transition-colors">{{ campaign.name }}</h3>
+                <p class="text-slate-500 max-w-2xl line-clamp-2 italic">"{{ campaign.objective }}"</p>
+              </div>
+
+              <div class="flex items-center gap-4">
+                 <div class="text-right hidden sm:block">
+                    <p class="text-xs font-bold text-slate-400 uppercase tracking-widest">Target URLs</p>
+                    <p class="text-lg font-black text-slate-900">{{ campaign.target_urls?.length || 0 }}</p>
+                 </div>
+                 <div class="w-px h-10 bg-slate-100 hidden sm:block"></div>
+                 <div class="bg-slate-50 group-hover:bg-blue-600 group-hover:text-white text-slate-700 px-6 py-3 rounded-xl font-bold transition-all">
+                    View Impact
+                 </div>
+              </div>
+            </Link>
+          </div>
+
+          <!-- Acquisition & Performance Section -->
+          <div v-if="properties && properties.length > 0" class="bg-slate-50 p-8 rounded-[3rem] border border-slate-200/60">
+            <!-- (The rest of the acquisition content matches below) -->
         <div class="flex flex-col md:flex-row md:items-center justify-between gap-6 mb-8">
             <div>
                 <h2 class="text-2xl font-black text-slate-900 flex items-center gap-3">
@@ -462,15 +486,22 @@ const getStatusColor = (status) => {
             <p class="text-slate-400 font-medium">No acquisition data found for this period.</p>
         </div>
       </div>
-      
-      <!-- Existing Empty State -->
-      <div v-else class="text-center py-20 bg-white rounded-[3rem] border border-slate-100 shadow-premium">
-         <div class="text-6xl mb-6">🎯</div>
-         <h2 class="text-2xl font-bold text-slate-900">No Campaigns Yet</h2>
-         <p class="text-slate-500 mt-2 max-w-md mx-auto">Create a campaign to start tracking specific SEO goals like "Improve Blog Traffic" or "Boost Form Conversions".</p>
-         <Link :href="route('campaigns.create')" class="inline-block mt-8 bg-blue-600 text-white px-8 py-3 rounded-2xl font-bold hover:bg-blue-700 transition-all shadow-lg shadow-blue-200">
-            Create Your First Campaign
-         </Link>
+        <!-- Existing Empty State -->
+        <div v-if="!campaigns.length && !isLoadingAcquisition && properties.length === 0" class="text-center py-20 bg-white rounded-[3rem] border border-slate-100 shadow-premium">
+           <div class="text-6xl mb-6">🎯</div>
+           <h2 class="text-2xl font-bold text-slate-900">No Campaigns Yet</h2>
+           <p class="text-slate-500 mt-2 max-w-md mx-auto">Create a campaign to start tracking specific SEO goals like "Improve Blog Traffic" or "Boost Form Conversions".</p>
+           <Link :href="route('campaigns.create')" class="inline-block mt-8 bg-blue-600 text-white px-8 py-3 rounded-2xl font-bold hover:bg-blue-700 transition-all shadow-lg shadow-blue-200">
+              Create Your First Campaign
+           </Link>
+        </div>
+      </div>
+
+      <div v-else-if="activeTab === 'ads'" class="animate-fade-in">
+          <GoogleAdsSection 
+            :property-id="selectedPropertyId" 
+            :organization="organization" 
+          />
       </div>
     </div>
 

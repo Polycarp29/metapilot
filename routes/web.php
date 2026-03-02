@@ -167,6 +167,22 @@ Route::middleware(['auth', 'verified'])->group(function () {
     // Organization Selection
     Route::get('organizations/select', [\App\Http\Controllers\OrganizationController::class, 'select'])->name('organizations.select');
     Route::post('organizations/select', [\App\Http\Controllers\OrganizationController::class, 'store'])->name('organizations.select.store');
+
+    // Google Ads Management
+    Route::prefix('google-ads')->name('google-ads.')->group(function () {
+        Route::get('/data', [\App\Http\Controllers\AdCampaignController::class, 'index'])->name('index');
+        Route::post('/connect', [\App\Http\Controllers\AdCampaignController::class, 'connect'])->name('connect');
+        Route::post('/sync', [\App\Http\Controllers\AdCampaignController::class, 'sync'])->name('sync');
+        Route::get('/embed-snippet', [\App\Http\Controllers\AdCampaignController::class, 'embedSnippet'])->name('embed-snippet');
+        Route::post('/regenerate-token', [\App\Http\Controllers\AdCampaignController::class, 'regenerateToken'])->name('regenerate-token');
+        Route::get('/pixel-events', [\App\Http\Controllers\CdnTrackingController::class, 'events'])->name('pixel-events');
+    });
+});
+
+// CDN Tracking (Unauthenticated)
+Route::prefix('cdn')->name('cdn.')->middleware('throttle:120,1')->group(function () {
+    Route::get('/ads-tracker.js', [\App\Http\Controllers\CdnTrackingController::class, 'serveScript'])->name('serve-script');
+    Route::post('/ad-hit', [\App\Http\Controllers\CdnTrackingController::class, 'trackHit'])->name('track-hit');
 });
 
 // Invitation Acceptance (Public/Guest or Auth)

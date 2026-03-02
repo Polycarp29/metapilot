@@ -150,19 +150,45 @@ class PythonEngineService
 
         // 1. Extract Campaign Data
         $campaignData = [];
-        foreach ($snapshots as $snapshot) {
-            $byCampaign = $snapshot->by_campaign ?: [];
-            foreach ($byCampaign as $campaignName => $data) {
-                if (!isset($data['ad_cost']) || $data['ad_cost'] == 0) continue;
-                
+        
+        // Try real Google Ads data first
+        $realAdData = \App\Models\AdCampaign::where('organization_id', $property->organization_id)
+            ->where('analytics_property_id', $property->id)
+            ->where('synced_at', '>=', now()->subDays(1)) // Ensure it's fresh
+            ->get();
+
+        if ($realAdData->isNotEmpty()) {
+            foreach ($realAdData as $ad) {
+                // For Prophet, we ideally need historical daily data. 
+                // The current AdCampaign stores a summary for a date_range.
+                // If we want Prophet to work well, we need daily snapshots.
+                // However, the current requirement is to feed the summary for now.
+                // In a future phase, we would create AdCampaignSnapshot to store daily data.
                 $campaignData[] = [
-                    'date' => $snapshot->snapshot_date->format('Y-m-d'),
-                    'campaign_name' => (string) $campaignName,
-                    'clicks' => (int) ($data['ad_clicks'] ?? 0),
-                    'conversions' => (int) ($data['conversions'] ?? 0),
-                    'cost' => (float) ($data['ad_cost'] ?? 0),
-                    'impressions' => (int) ($data['ad_impressions'] ?? 0),
+                    'date' => $ad->synced_at->format('Y-m-d'),
+                    'campaign_name' => $ad->name,
+                    'clicks' => (int) ($ad->metrics['clicks'] ?? 0),
+                    'conversions' => (int) ($ad->metrics['conversions'] ?? 0),
+                    'cost' => (float) (($ad->metrics['cost_micros'] ?? 0) / 1000000),
+                    'impressions' => (int) ($ad->metrics['impressions'] ?? 0),
                 ];
+            }
+        } else {
+            // Fallback to GA4 snapshots
+            foreach ($snapshots as $snapshot) {
+                $byCampaign = $snapshot->by_campaign ?: [];
+                foreach ($byCampaign as $campaignName => $data) {
+                    if (!isset($data['ad_cost']) || $data['ad_cost'] == 0) continue;
+                    
+                    $campaignData[] = [
+                        'date' => $snapshot->snapshot_date->format('Y-m-d'),
+                        'campaign_name' => (string) $campaignName,
+                        'clicks' => (int) ($data['ad_clicks'] ?? 0),
+                        'conversions' => (int) ($data['conversions'] ?? 0),
+                        'cost' => (float) ($data['ad_cost'] ?? 0),
+                        'impressions' => (int) ($data['ad_impressions'] ?? 0),
+                    ];
+                }
             }
         }
 

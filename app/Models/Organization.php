@@ -15,6 +15,8 @@ class Organization extends Model
         'settings',
         'keyword_discovery_frequency',
         'last_keyword_discovery_at',
+        'ads_customer_id',
+        'ads_site_token',
     ];
 
     protected $casts = [
@@ -111,5 +113,21 @@ class Organization extends Model
     public function controlEngineAlerts()
     {
         return $this->hasMany(ControlEngineAlert::class);
+    }
+
+    /**
+     * Get the ad campaigns for the organization.
+     */
+    public function adCampaigns()
+    {
+        return $this->hasMany(AdCampaign::class);
+    }
+
+    /**
+     * Get the ad track events for the organization.
+     */
+    public function adTrackEvents()
+    {
+        return $this->hasMany(AdTrackEvent::class);
     }
 }

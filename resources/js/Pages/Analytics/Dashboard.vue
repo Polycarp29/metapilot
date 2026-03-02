@@ -32,6 +32,7 @@ ChartJS.register(
 )
 
 import PredictionsTab from './Partials/PredictionsTab.vue'
+import DevelopersTab from './Partials/DevelopersTab.vue'
 
 const props = defineProps({
   properties: Array,
@@ -790,6 +791,14 @@ onUnmounted(() => {
         >
           <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M13 10V3L4 14h7v7l9-11h-7z"></path></svg>
           Predictions & Insights
+        </button>
+        <button 
+          @click="activeTab = 'developers'" 
+          :class="activeTab === 'developers' ? 'text-indigo-600 border-indigo-600 bg-indigo-50/50' : 'text-slate-400 border-transparent hover:text-slate-600 hover:bg-slate-50'"
+          class="flex items-center gap-2 px-8 py-4 border-b-2 font-black uppercase tracking-widest text-xs transition-all rounded-t-2xl"
+        >
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4"></path></svg>
+          Developers
         </button>
       </div>
 
@@ -2022,6 +2031,16 @@ onUnmounted(() => {
       <!-- Predictions Tab -->
       <div v-if="activeTab === 'predictions'">
         <PredictionsTab :propertyId="selectedPropertyId" :organization="organization" />
+      </div>
+
+      <!-- Developers Tab -->
+      <div v-if="activeTab === 'developers'">
+        <DevelopersTab 
+          :propertyId="selectedPropertyId" 
+          :organization="organization" 
+          :properties="properties"
+          :forecastData="forecastData"
+        />
       </div>
 
 
