@@ -94,7 +94,7 @@ const hitsChartData = computed(() => {
         counts[date] = (counts[date] || 0) + 1
     })
     
-    const sortedDates = Object.keys(counts).sort((a, b) => new Date(a) - new Date(b))
+const sortedDates = Object.keys(counts).sort((a, b) => new Date(a) - new Date(b))
     
     return {
         labels: sortedDates,
@@ -110,6 +110,29 @@ const hitsChartData = computed(() => {
             pointBackgroundColor: '#fff'
         }]
     }
+})
+
+const topCountries = computed(() => {
+    const countries = {}
+    events.value.forEach(e => {
+        if (e.country_code) {
+            countries[e.country_code] = (countries[e.country_code] || 0) + 1
+        }
+    })
+    return Object.entries(countries)
+        .map(([code, count]) => ({ code, count }))
+        .sort((a, b) => b.count - a.count)
+        .slice(0, 5)
+})
+
+const deviceBreakdown = computed(() => {
+    const devices = { Mobile: 0, Desktop: 0, Tablet: 0 }
+    events.value.forEach(e => {
+        if (e.device_type && devices[e.device_type] !== undefined) {
+            devices[e.device_type]++
+        }
+    })
+    return devices
 })
 
 const chartOptions = {
@@ -190,32 +213,66 @@ const chartOptions = {
             </div>
 
             <!-- Hit Trends (Prophet Analysis) -->
-            <div class="bg-white p-10 rounded-[3rem] border border-slate-100 shadow-premium">
-                <div class="flex items-center justify-between mb-8">
-                    <h3 class="text-xl font-black text-slate-900 flex items-center gap-3">
-                        <span class="p-2 bg-emerald-50 text-emerald-600 rounded-xl">
-                            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6"></path></svg>
-                        </span>
-                        Pixel Signal Analytics
-                    </h3>
-                    <div class="flex items-center gap-2">
-                        <span class="w-2 h-2 bg-emerald-500 rounded-full animate-pulse"></span>
-                        <span class="text-[10px] font-black text-slate-400 uppercase tracking-widest">Live Signals</span>
+            <div class="space-y-8">
+                <div class="bg-white p-10 rounded-[3rem] border border-slate-100 shadow-premium">
+                    <div class="flex items-center justify-between mb-8">
+                        <h3 class="text-xl font-black text-slate-900 flex items-center gap-3">
+                            <span class="p-2 bg-emerald-50 text-emerald-600 rounded-xl">
+                                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6"></path></svg>
+                            </span>
+                            Pixel Signal Analytics
+                        </h3>
+                        <div class="flex items-center gap-2">
+                            <span class="w-2 h-2 bg-emerald-500 rounded-full animate-pulse"></span>
+                            <span class="text-[10px] font-black text-slate-400 uppercase tracking-widest">Live Signals</span>
+                        </div>
+                    </div>
+
+                    <div class="h-48 mb-8">
+                        <Line :data="hitsChartData" :options="chartOptions" />
+                    </div>
+
+                    <div class="grid grid-cols-2 gap-4">
+                        <div class="p-4 bg-slate-50 rounded-2xl border border-slate-100">
+                            <p class="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Total Hits</p>
+                            <p class="text-2xl font-black text-slate-900">{{ events.length }}</p>
+                        </div>
+                        <div class="p-4 bg-slate-50 rounded-2xl border border-slate-100">
+                            <p class="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Active Sessions</p>
+                            <p class="text-2xl font-black text-blue-600">{{ new Set(events.map(e => e.session_id)).size }}</p>
+                        </div>
                     </div>
                 </div>
 
-                <div class="h-48 mb-8">
-                    <Line :data="hitsChartData" :options="chartOptions" />
-                </div>
-
-                <div class="grid grid-cols-2 gap-4">
-                    <div class="p-4 bg-slate-50 rounded-2xl border border-slate-100">
-                        <p class="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Total Signals</p>
-                        <p class="text-2xl font-black text-slate-900">{{ events.length }}</p>
-                    </div>
-                    <div class="p-4 bg-slate-50 rounded-2xl border border-slate-100">
-                        <p class="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Correlation Accuracy</p>
-                        <p class="text-2xl font-black text-emerald-600">High</p>
+                <!-- Geography & Devices Breakdown -->
+                <div class="bg-white p-10 rounded-[3rem] border border-slate-100 shadow-premium">
+                    <div class="grid grid-cols-2 gap-8">
+                        <div>
+                            <h4 class="text-xs font-black text-slate-400 uppercase tracking-widest mb-4">Top Geography</h4>
+                            <div class="space-y-3">
+                                <div v-for="geo in topCountries" :key="geo.code" class="flex items-center justify-between">
+                                    <div class="flex items-center gap-2">
+                                        <span class="text-lg">{{ geo.code === 'US' ? '🇺🇸' : geo.code === 'GB' ? '🇬🇧' : geo.code === 'CA' ? '🇨🇦' : '🌍' }}</span>
+                                        <span class="text-xs font-bold text-slate-700">{{ geo.code }}</span>
+                                    </div>
+                                    <span class="text-xs font-black text-slate-400">{{ geo.count }}</span>
+                                </div>
+                                <div v-if="topCountries.length === 0" class="text-[10px] text-slate-400 italic">Waiting for geo data...</div>
+                            </div>
+                        </div>
+                        <div>
+                            <h4 class="text-xs font-black text-slate-400 uppercase tracking-widest mb-4">Device Usage</h4>
+                            <div class="space-y-3">
+                                <div v-for="(count, type) in deviceBreakdown" :key="type" class="flex items-center justify-between">
+                                    <div class="flex items-center gap-2">
+                                        <svg v-if="type === 'Mobile'" class="w-3 h-3 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 18h.01M8 21h8a2 2 0 002-2V5a2 2 0 00-2-2H8a2 2 0 00-2 2v14a2 2 0 002 2z"></path></svg>
+                                        <svg v-else-if="type === 'Desktop'" class="w-3 h-3 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"></path></svg>
+                                        <span class="text-[10px] font-bold text-slate-700">{{ type }}</span>
+                                    </div>
+                                    <span class="text-xs font-black text-slate-400">{{ count }}</span>
+                                </div>
+                            </div>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -225,33 +282,47 @@ const chartOptions = {
         <div class="bg-white rounded-[3rem] border border-slate-100 shadow-premium overflow-hidden">
             <div class="p-10 border-b border-slate-100">
                 <h3 class="text-2xl font-black text-slate-900">Pixel Event Log</h3>
-                <p class="text-slate-500 font-medium mt-1">Real-time tracking hits for debugging</p>
+                <p class="text-slate-500 font-medium mt-1">Real-time tracking hits with enriched behavioral metadata</p>
             </div>
 
             <div class="overflow-x-auto">
                 <table class="w-full text-left border-collapse">
                     <thead class="bg-slate-50/50">
                         <tr>
-                            <th class="py-6 pl-10 text-xs font-black text-slate-400 uppercase tracking-widest">Timestamp</th>
-                            <th class="py-6 text-xs font-black text-slate-400 uppercase tracking-widest">Page URL</th>
-                            <th class="py-6 text-xs font-black text-slate-400 uppercase tracking-widest">Source/Medium</th>
-                            <th class="py-6 text-xs font-black text-slate-400 uppercase tracking-widest">Campaign</th>
+                            <th class="py-6 pl-10 text-xs font-black text-slate-400 uppercase tracking-widest">User / Session</th>
+                            <th class="py-6 text-xs font-black text-slate-400 uppercase tracking-widest">Location</th>
+                            <th class="py-6 text-xs font-black text-slate-400 uppercase tracking-widest">Device</th>
+                            <th class="py-6 text-xs font-black text-slate-400 uppercase tracking-widest">Page / Referrer</th>
+                            <th class="py-6 text-xs font-black text-slate-400 uppercase tracking-widest">Source</th>
                             <th class="py-6 pr-10 text-xs font-black text-slate-400 uppercase tracking-widest text-right">GCLID</th>
                         </tr>
                     </thead>
                     <tbody class="divide-y divide-slate-50">
                         <tr v-for="event in events" :key="event.id" class="group hover:bg-slate-50/50 transition-colors">
-                            <td class="py-6 pl-10 text-sm font-medium text-slate-500 whitespace-nowrap">
-                                {{ new Date(event.created_at).toLocaleString() }}
+                            <td class="py-6 pl-10">
+                                <p class="text-xs font-black text-slate-900">Session: {{ event.session_id ? event.session_id.substring(0, 8) : 'Anon' }}</p>
+                                <p class="text-[10px] text-slate-400 font-medium mt-1">{{ new Date(event.created_at).toLocaleString() }}</p>
                             </td>
-                            <td class="py-6 text-sm font-bold text-slate-900 max-w-xs truncate" :title="event.page_url">
-                                {{ event.page_url }}
+                            <td class="py-6 whitespace-nowrap">
+                                <div class="flex items-center gap-2">
+                                    <span class="text-sm">{{ event.country_code || '🌍' }}</span>
+                                    <span class="text-[10px] font-bold text-slate-600 truncate max-w-[80px]">{{ event.city || 'Unknown' }}</span>
+                                </div>
                             </td>
-                            <td class="py-6 text-sm text-slate-600">
-                                {{ event.utm_source || '-' }} / {{ event.utm_medium || '-' }}
+                            <td class="py-6">
+                                <div class="flex flex-col">
+                                    <span class="text-[10px] font-black text-slate-700">{{ event.browser }} on {{ event.platform }}</span>
+                                    <span class="text-[9px] text-slate-400 uppercase tracking-tighter">{{ event.screen_resolution || '-' }}</span>
+                                </div>
                             </td>
-                            <td class="py-6 text-sm text-slate-600">
-                                {{ event.utm_campaign || '-' }}
+                            <td class="py-6">
+                                <p class="text-xs font-bold text-slate-900 truncate max-w-[150px]" :title="event.page_url">{{ event.page_url.split('/').pop() || '/' }}</p>
+                                <p class="text-[10px] text-slate-400 truncate max-w-[150px]" :title="event.referrer">{{ event.referrer ? 'via ' + (new URL(event.referrer).hostname) : 'Direct' }}</p>
+                            </td>
+                            <td class="py-6 text-xs text-slate-600">
+                                <span class="font-bold">{{ event.utm_source || '-' }}</span>
+                                <span class="text-slate-400 mx-1">/</span>
+                                <span>{{ event.utm_medium || '-' }}</span>
                             </td>
                             <td class="py-6 pr-10 text-right">
                                 <span v-if="event.gclid" class="px-2 py-1 bg-amber-50 text-amber-700 text-[10px] font-black rounded-lg border border-amber-100" :title="event.gclid">
@@ -261,7 +332,7 @@ const chartOptions = {
                             </td>
                         </tr>
                         <tr v-if="events.length === 0 && !isLoading">
-                            <td colspan="5" class="py-20 text-center">
+                            <td colspan="6" class="py-20 text-center">
                                 <p class="text-slate-400 font-bold italic">No pixel events detected yet.</p>
                             </td>
                         </tr>

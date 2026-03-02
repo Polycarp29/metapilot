@@ -41,14 +41,24 @@ class CdnTrackingController extends Controller
             return response()->json(['error' => 'Invalid site token'], 422);
         }
 
-        // Logic for extracting campaign from data-campaign if provided in script tag
-        // or from UTM params in the payload.
+        $ua = $request->header('User-Agent');
+        $deviceData = $this->parseUserAgent($ua);
         
+        $geo = $this->getGeoData($request->ip());
+
         AdTrackEvent::create([
             'organization_id' => $organization->id,
             'site_token' => $request->token,
+            'country_code' => $geo['country_code'] ?? $request->header('CF-IPCountry'),
+            'city' => $geo['city'] ?? null,
+            'browser' => $deviceData['browser'],
+            'platform' => $deviceData['platform'],
+            'device_type' => $deviceData['device_type'],
+            'screen_resolution' => $request->screen_resolution,
             'google_campaign_id' => $request->campaign_id,
             'page_url' => $request->page_url,
+            'referrer' => $request->referrer,
+            'session_id' => $request->session_id,
             'gclid' => $request->gclid,
             'utm_source' => $request->utm_source,
             'utm_medium' => $request->utm_medium,
@@ -57,6 +67,65 @@ class CdnTrackingController extends Controller
         ]);
 
         return response()->json(null, 204);
+    }
+
+    /**
+     * Simple UA parser to avoid heavy dependencies for now.
+     */
+    protected function parseUserAgent($ua)
+    {
+        $browser = 'Unknown';
+        $platform = 'Unknown';
+        $device = 'Desktop';
+
+        if (stripos($ua, 'Mobile') !== false || stripos($ua, 'Android') !== false) {
+            $device = 'Mobile';
+        } elseif (stripos($ua, 'Tablet') !== false || stripos($ua, 'iPad') !== false) {
+            $device = 'Tablet';
+        }
+
+        if (stripos($ua, 'Firefox') !== false) $browser = 'Firefox';
+        elseif (stripos($ua, 'Chrome') !== false) $browser = 'Chrome';
+        elseif (stripos($ua, 'Safari') !== false) $browser = 'Safari';
+        elseif (stripos($ua, 'Edge') !== false) $browser = 'Edge';
+        elseif (stripos($ua, 'MSIE') !== false || stripos($ua, 'Trident') !== false) $browser = 'Internet Explorer';
+
+        if (stripos($ua, 'Windows') !== false) $platform = 'Windows';
+        elseif (stripos($ua, 'Macintosh') !== false) $platform = 'macOS';
+        elseif (stripos($ua, 'Linux') !== false) $platform = 'Linux';
+        elseif (stripos($ua, 'Android') !== false) $platform = 'Android';
+        elseif (stripos($ua, 'iPhone') !== false || stripos($ua, 'iPad') !== false) $platform = 'iOS';
+
+        return [
+            'browser' => $browser,
+            'platform' => $platform,
+            'device_type' => $device
+        ];
+    }
+
+    /**
+     * Basic GeoIP lookup.
+     */
+    protected function getGeoData($ip)
+    {
+        if ($ip === '127.0.0.1' || $ip === '::1') return null;
+
+        try {
+            // Using a free IP info service with a timeout to avoid blocking the pixel.
+            $response = \Illuminate\Support\Facades\Http::timeout(2)
+                ->get("http://ip-api.com/json/{$ip}?fields=status,countryCode,city");
+            
+            if ($response->successful() && $response->json('status') === 'success') {
+                return [
+                    'country_code' => $response->json('countryCode'),
+                    'city' => $response->json('city')
+                ];
+            }
+        } catch (\Exception $e) {
+            // Silently fail if geo lookup fails
+        }
+
+        return null;
     }
 
     /**

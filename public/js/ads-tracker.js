@@ -14,10 +14,22 @@
         return urlParams.get(param);
     };
 
+    const getSessionId = () => {
+        let sid = sessionStorage.getItem('mp_sid');
+        if (!sid) {
+            sid = Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15);
+            sessionStorage.setItem('mp_sid', sid);
+        }
+        return sid;
+    };
+
     const payload = {
         token: siteToken,
         campaign_id: campaignId,
         page_url: window.location.href,
+        referrer: document.referrer,
+        session_id: getSessionId(),
+        screen_resolution: `${window.screen.width}x${window.screen.height}`,
         gclid: getUrlParam('gclid'),
         utm_source: getUrlParam('utm_source'),
         utm_medium: getUrlParam('utm_medium'),
