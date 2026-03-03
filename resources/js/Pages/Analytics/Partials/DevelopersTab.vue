@@ -1,6 +1,8 @@
 <script setup>
 import { ref, onMounted, onUnmounted, computed, watch } from 'vue'
 import axios from 'axios'
+import { useToastStore } from '@/stores/useToastStore'
+import ConfirmationModal from '@/Components/ConfirmationModal.vue'
 import {
   Chart as ChartJS, Title, Tooltip, Legend,
   LineElement, PointElement, LinearScale, CategoryScale, Filler
@@ -18,11 +20,13 @@ const props = defineProps({
 
 // ─── State ────────────────────────────────────────────────────────────────────
 const snippet            = ref('')
-const events             = ref([])
+const logResponse        = ref({ data: [], current_page: 1, last_page: 1, total: 0 })
+const chartEvents        = ref([]) // Separate set for the trend chart
 const isLoading          = ref(false)
 const isRegenerating     = ref(false)
 const isTestingConn      = ref(false)
 const isSavingDomain     = ref(false)
+const toast              = useToastStore()
 const selectedPropId     = ref(props.propertyId || props.properties?.[0]?.id)
 const selectedCampaignId = ref('')
 const selectedSession    = ref(null)
@@ -30,8 +34,19 @@ const searchQuery        = ref('')
 const connectionStatus   = ref(null)
 const allowedDomainInput = ref(props.organization?.allowed_domain || '')
 const domainSavedMsg     = ref('')
-// Filter for log and chart
-const campaignFilter     = ref('all')
+const showRegenModal     = ref(false)
+
+// Filters
+const filters = ref({
+    campaign_id: 'all',
+    type: 'all',
+    device: 'all',
+    country: 'all',
+    start_date: '',
+    end_date: '',
+    per_page: 25,
+    page: 1
+})
 
 let eventsInterval = null
 let connInterval   = null
@@ -60,13 +75,15 @@ const filteredEvents = computed(() => {
 
 const availableCampaigns = computed(() => {
     const caps = new Set()
-    events.value.forEach(e => { if (e.google_campaign_id) caps.add(e.google_campaign_id) })
+    chartEvents.value.forEach(e => { if (e.google_campaign_id) caps.add(e.google_campaign_id) })
     return Array.from(caps)
 })
 
 const sessionTimeline = computed(() => {
     if (!selectedSession.value) return []
-    return events.value
+    // We check both log and chart events to find the full timeline
+    const all = [...logResponse.value.data, ...chartEvents.value]
+    return all
         .filter(e => e.session_id === selectedSession.value.session_id)
         .sort((a, b) => new Date(a.created_at) - new Date(b.created_at))
 })
@@ -93,7 +110,7 @@ const hitsChartData = computed(() => {
     const totalCounts = {}
     const adCounts = {}
     
-    events.value.forEach(e => {
+    chartEvents.value.forEach(e => {
         const d = new Date(e.created_at).toLocaleDateString()
         totalCounts[d] = (totalCounts[d] || 0) + 1
         
@@ -131,19 +148,19 @@ const hitsChartData = computed(() => {
 
 const topCountries = computed(() => {
     const c = {}
-    events.value.forEach(e => { if (e.country_code) c[e.country_code] = (c[e.country_code] || 0) + 1 })
+    chartEvents.value.forEach(e => { if (e.country_code) c[e.country_code] = (c[e.country_code] || 0) + 1 })
     return Object.entries(c).map(([code, count]) => ({ code, count }))
         .sort((a, b) => b.count - a.count).slice(0, 8)
 })
 
 const deviceBreakdown = computed(() => {
     const d = { Mobile: 0, Desktop: 0, Tablet: 0 }
-    events.value.forEach(e => { if (e.device_type && d[e.device_type] !== undefined) d[e.device_type]++ })
+    chartEvents.value.forEach(e => { if (e.device_type && d[e.device_type] !== undefined) d[e.device_type]++ })
     return d
 })
 
 const avgClicks = computed(() => {
-    const ads = events.value.filter(e => e.gclid || e.utm_campaign || e.google_campaign_id)
+    const ads = chartEvents.value.filter(e => e.gclid || e.utm_campaign || e.google_campaign_id)
     if (ads.length === 0) return 0
     const total = ads.reduce((sum, e) => sum + (e.click_count || 0), 0)
     return (total / ads.length).toFixed(1)
@@ -156,9 +173,9 @@ const pixelStatusBadge = computed(() => {
         if (cs.status === 'connected_inactive') return { label: 'Connected – Inactive', color: 'amber',   icon: '○' }
         return { label: 'Not Detected', color: 'rose', icon: '✕' }
     }
-    const recent = events.value.some(e => new Date(e.created_at) > new Date(Date.now() - 86400000))
+    const recent = chartEvents.value.some(e => new Date(e.created_at) > new Date(Date.now() - 86400000))
     if (recent) return { label: 'Connected & Active', color: 'emerald', icon: '✓' }
-    if (events.value.length) return { label: 'Connected – Inactive', color: 'amber', icon: '○' }
+    if (logResponse.value.total > 0) return { label: 'Connected – Inactive', color: 'amber', icon: '○' }
     return { label: 'Not Detected', color: 'rose', icon: '✕' }
 })
 
@@ -196,13 +213,52 @@ const modalChartOptions = {
 const fetchEvents = async () => {
     isLoading.value = true
     try {
-        const r = await axios.get(route('google-ads.pixel-events'))
-        events.value = r.data
+        const params = {
+            ...filters.value,
+            search: searchQuery.value,
+            campaign_id: filters.value.campaign_id
+        }
+        const r = await axios.get(route('google-ads.pixel-events'), { params })
+        logResponse.value = r.data
+        
+        // Also update chart data (we fetch more for the chart but without full pagination meta)
+        if (filters.value.page === 1) {
+            const chartParams = { ...params, per_page: 500 }
+            const cr = await axios.get(route('google-ads.pixel-events'), { params: chartParams })
+            chartEvents.value = cr.data.data
+        }
     } catch (e) {
         console.error('Failed to fetch pixel events', e)
     } finally {
         isLoading.value = false
     }
+}
+
+const nextPage = () => {
+    if (filters.value.page < logResponse.value.last_page) {
+        filters.value.page++
+        fetchEvents()
+    }
+}
+
+const prevPage = () => {
+    if (filters.value.page > 1) {
+        filters.value.page--
+        fetchEvents()
+    }
+}
+
+const applyFilters = () => {
+    filters.value.page = 1
+    fetchEvents()
+}
+
+const downloadCsv = () => {
+    const params = new URLSearchParams({
+        ...filters.value,
+        search: searchQuery.value
+    }).toString()
+    window.location.href = route('google-ads.pixel-events.csv') + '?' + params
 }
 
 const fetchConnectionStatus = async () => {
@@ -232,9 +288,11 @@ const saveAllowedDomain = async () => {
             allowed_domain: allowedDomainInput.value
         })
         domainSavedMsg.value = r.data.message
+        toast.success(r.data.message || 'Domain saved successfully')
         fetchConnectionStatus()
     } catch (e) {
         domainSavedMsg.value = 'Error saving domain.'
+        toast.error('Failed to save allowed domain')
     } finally {
         isSavingDomain.value = false
     }
@@ -247,13 +305,15 @@ const updateSnippet = () => {
 }
 
 const regenerateToken = async () => {
-    if (!confirm('Regenerating the token will break all existing trackers. Continue?')) return
+    showRegenModal.value = false
     isRegenerating.value = true
     try {
         await axios.post(route('google-ads.regenerate-token'))
+        toast.success('Site token regenerated successfully')
         window.location.reload()
     } catch (e) {
         console.error('Failed to regenerate token', e)
+        toast.error('Failed to regenerate site token')
     } finally {
         isRegenerating.value = false
     }
@@ -261,7 +321,7 @@ const regenerateToken = async () => {
 
 const copySnippet = () => {
     navigator.clipboard.writeText(snippet.value)
-    alert('Snippet copied!')
+    toast.success('Snippet copied to clipboard!', 'Copied')
 }
 
 const safeHostname = (url) => {
@@ -331,13 +391,13 @@ watch([selectedPropId, selectedCampaignId, siteToken], updateSnippet)
             <!-- Stats -->
             <div class="lg:col-span-8 grid grid-cols-1 md:grid-cols-3 gap-6">
                 <div class="bg-white p-8 shadow-premium rounded-[2.5rem] border border-slate-100 relative overflow-hidden">
-                    <p class="text-[11px] font-black text-slate-400 uppercase tracking-widest mb-1">Total Reach</p>
-                    <h4 class="text-4xl font-black text-slate-900 tracking-tight">{{ events.length }}</h4>
+                    <p class="text-[11px] font-black text-slate-400 uppercase tracking-widest mb-1">Total Signals</p>
+                    <h4 class="text-4xl font-black text-slate-900 tracking-tight">{{ logResponse.total }}</h4>
                     <div class="mt-3 text-[10px] font-black text-slate-400">{{ connectionStatus?.hits_last_24h ?? '—' }} in last 24h</div>
                 </div>
                 <div class="bg-white p-8 shadow-premium rounded-[2.5rem] border border-slate-100 relative overflow-hidden">
                     <p class="text-[11px] font-black text-indigo-400 uppercase tracking-widest mb-1">Ad Conversions</p>
-                    <h4 class="text-4xl font-black text-indigo-600 tracking-tight">{{ events.filter(e => e.gclid || e.utm_campaign || e.google_campaign_id).length }}</h4>
+                    <h4 class="text-4xl font-black text-indigo-600 tracking-tight">{{ chartEvents.filter(e => e.gclid || e.utm_campaign || e.google_campaign_id).length }}</h4>
                     <div class="mt-3 flex items-center gap-1.5 text-[10px] font-black text-indigo-500">
                         Targeted Traffic
                     </div>
@@ -394,7 +454,7 @@ watch([selectedPropId, selectedCampaignId, siteToken], updateSnippet)
                         <div v-for="(count, type) in deviceBreakdown" :key="type" class="flex items-center justify-between">
                             <span class="text-[10px] font-black text-slate-600 uppercase">{{ type }}</span>
                             <div class="flex-1 mx-4 h-1.5 bg-slate-100 rounded-full overflow-hidden">
-                                <div class="h-full bg-indigo-500 rounded-full" :style="{ width: events.length > 0 ? (count / events.length * 100) + '%' : '0%' }"></div>
+                                <div class="h-full bg-indigo-500 rounded-full" :style="{ width: chartEvents.length > 0 ? (count / chartEvents.length * 100) + '%' : '0%' }"></div>
                             </div>
                             <span class="text-[10px] font-black text-slate-900">{{ count }}</span>
                         </div>
@@ -425,7 +485,7 @@ watch([selectedPropId, selectedCampaignId, siteToken], updateSnippet)
                 </div>
             </div>
             <div class="h-[450px] relative">
-                <div v-if="events.length === 0" class="absolute inset-0 flex flex-col items-center justify-center text-slate-400 bg-white/50 backdrop-blur-sm z-10">
+                <div v-if="chartEvents.length === 0" class="absolute inset-0 flex flex-col items-center justify-center text-slate-400 bg-white/50 backdrop-blur-sm z-10">
                     <div class="w-16 h-16 bg-slate-100 rounded-full flex items-center justify-center animate-pulse mb-4">
                         <svg class="w-8 h-8 text-slate-200" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M13 10V3L4 14h7v7l9-11h-7z"/></svg>
                     </div>
@@ -476,7 +536,7 @@ watch([selectedPropId, selectedCampaignId, siteToken], updateSnippet)
                         <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
                         <p class="text-[10px] font-medium leading-relaxed max-w-md">Every hit from this pixel will be permanently attributed to <span class="text-indigo-400 font-black">{{ selectedCampaignId || 'Default' }}</span> for campaign isolation.</p>
                     </div>
-                    <button @click="regenerateToken" class="text-[10px] font-black text-rose-500 hover:text-white transition-colors uppercase tracking-widest">Regenerate Secret</button>
+                    <button @click="showRegenModal = true" class="text-[10px] font-black text-rose-500 hover:text-white transition-colors uppercase tracking-widest">Regenerate Secret</button>
                 </div>
             </div>
 
@@ -499,28 +559,70 @@ watch([selectedPropId, selectedCampaignId, siteToken], updateSnippet)
 
         <!-- ── Signal Intelligence Log ──────────────────────────────────── -->
         <div class="space-y-8">
-            <div class="flex items-center justify-between">
-                <div class="flex items-center gap-8">
-                    <div>
-                        <h3 class="text-3xl font-black text-slate-900 tracking-tight">Intelligence Log</h3>
-                        <p class="text-slate-500 font-medium mt-1">Real-time attribution and behavioral forensics</p>
-                    </div>
-                    <!-- Agency Logic: Campaign Filter -->
-                    <div class="relative min-w-[200px]">
-                        <select v-model="campaignFilter" class="w-full bg-indigo-50 border-indigo-100 focus:border-indigo-500 focus:ring-0 rounded-2xl text-[10px] font-black text-indigo-700 py-3.5 px-6 appearance-none uppercase tracking-widest cursor-pointer">
-                            <option value="all">🌐 All Campaigns</option>
-                            <option v-for="cap in availableCampaigns" :key="cap" :value="cap">🏷️ {{ cap }}</option>
-                        </select>
-                        <div class="absolute right-6 top-1/2 -translate-y-1/2 pointer-events-none text-indigo-400">
-                            <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M19 9l-7 7-7-7"/></svg>
+            <div class="flex items-end justify-between gap-8">
+                <div class="flex-1">
+                    <h3 class="text-3xl font-black text-slate-900 tracking-tight">Intelligence Log</h3>
+                    <p class="text-slate-500 font-medium mt-1">Real-time attribution and behavioral forensics</p>
+                </div>
+                <div class="flex items-center gap-3">
+                    <button @click="downloadCsv" class="px-6 py-4 bg-white border border-slate-200 text-slate-600 rounded-2xl text-[10px] font-black uppercase tracking-widest hover:bg-slate-50 transition-all flex items-center gap-3">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
+                        Export CSV
+                    </button>
+                    <div class="w-80 relative">
+                        <div class="absolute inset-y-0 left-0 pl-6 flex items-center pointer-events-none">
+                            <svg class="w-4 h-4 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
                         </div>
+                        <input v-model="searchQuery" @keyup.enter="applyFilters" placeholder="Search Session, URL, City..." class="w-full bg-white border-slate-200 focus:border-indigo-500 focus:ring-0 rounded-2xl text-xs font-bold text-slate-800 py-4 pl-14 shadow-premium-soft" />
                     </div>
                 </div>
-                <div class="w-80 relative">
-                    <div class="absolute inset-y-0 left-0 pl-6 flex items-center pointer-events-none">
-                        <svg class="w-4 h-4 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
+            </div>
+
+            <!-- Advanced Filter Bar -->
+            <div class="bg-white p-8 rounded-[2.5rem] border border-slate-100 shadow-premium-soft flex flex-wrap items-center gap-6">
+                <!-- Type -->
+                <div class="flex-1 min-w-[150px] space-y-2">
+                    <label class="text-[9px] font-black text-slate-400 uppercase tracking-widest ml-1">Traffic Type</label>
+                    <select v-model="filters.type" @change="applyFilters" class="w-full bg-slate-50 border-slate-100 rounded-xl text-[11px] font-bold text-slate-700 py-3 px-4 focus:ring-0">
+                        <option value="all">🌐 All Traffic</option>
+                        <option value="ads">🎯 Ad Conversions</option>
+                        <option value="organic">🌿 Organic Only</option>
+                    </select>
+                </div>
+                <!-- Campaign -->
+                <div class="flex-1 min-w-[200px] space-y-2">
+                    <label class="text-[9px] font-black text-slate-400 uppercase tracking-widest ml-1">Campaign ID</label>
+                    <select v-model="filters.campaign_id" @change="applyFilters" class="w-full bg-slate-50 border-slate-100 rounded-xl text-[11px] font-bold text-slate-700 py-3 px-4 focus:ring-0">
+                        <option value="all">🏷️ All Campaigns</option>
+                        <option v-for="cap in availableCampaigns" :key="cap" :value="cap">{{ cap }}</option>
+                    </select>
+                </div>
+                <!-- Device -->
+                <div class="flex-1 min-w-[140px] space-y-2">
+                    <label class="text-[9px] font-black text-slate-400 uppercase tracking-widest ml-1">Device</label>
+                    <select v-model="filters.device" @change="applyFilters" class="w-full bg-slate-50 border-slate-100 rounded-xl text-[11px] font-bold text-slate-700 py-3 px-4 focus:ring-0">
+                        <option value="all">📱 All Devices</option>
+                        <option value="Mobile">Mobile</option>
+                        <option value="Desktop">Desktop</option>
+                        <option value="Tablet">Tablet</option>
+                    </select>
+                </div>
+                <!-- Country -->
+                <div class="flex-1 min-w-[140px] space-y-2">
+                    <label class="text-[9px] font-black text-slate-400 uppercase tracking-widest ml-1">Country</label>
+                    <select v-model="filters.country" @change="applyFilters" class="w-full bg-slate-50 border-slate-100 rounded-xl text-[11px] font-bold text-slate-700 py-3 px-4 focus:ring-0">
+                        <option value="all">🌍 Global</option>
+                        <option v-for="c in topCountries" :key="c.code" :value="c.code">{{ c.code }}</option>
+                    </select>
+                </div>
+                <!-- Date Range -->
+                <div class="flex-[1.5] min-w-[300px] space-y-2">
+                    <label class="text-[9px] font-black text-slate-400 uppercase tracking-widest ml-1">Date Range</label>
+                    <div class="flex items-center gap-2">
+                        <input type="date" v-model="filters.start_date" @change="applyFilters" class="flex-1 bg-slate-50 border-slate-100 rounded-xl text-[11px] font-bold text-slate-700 py-3 px-4 focus:ring-0" />
+                        <span class="text-slate-300">→</span>
+                        <input type="date" v-model="filters.end_date" @change="applyFilters" class="flex-1 bg-slate-50 border-slate-100 rounded-xl text-[11px] font-bold text-slate-700 py-3 px-4 focus:ring-0" />
                     </div>
-                    <input v-model="searchQuery" placeholder="Filter deep signals..." class="w-full bg-white border-slate-200 focus:border-indigo-500 focus:ring-0 rounded-2xl text-xs font-bold text-slate-800 py-4 pl-14 shadow-premium-soft" />
                 </div>
             </div>
 
@@ -537,7 +639,7 @@ watch([selectedPropId, selectedCampaignId, siteToken], updateSnippet)
                             </tr>
                         </thead>
                         <tbody class="divide-y divide-slate-50">
-                            <tr v-for="event in filteredEvents" :key="event.id"
+                            <tr v-for="event in logResponse.data" :key="event.id"
                                 @click="selectedSession = event"
                                 class="group hover:bg-slate-50 transition-all cursor-pointer">
                                 <td class="py-8 px-10">
@@ -593,12 +695,39 @@ watch([selectedPropId, selectedCampaignId, siteToken], updateSnippet)
                         </tbody>
                     </table>
                 </div>
-                <div v-if="filteredEvents.length === 0" class="p-32 text-center">
+                
+                <!-- Pagination -->
+                <div class="px-10 py-8 bg-slate-50/50 border-t border-slate-100 flex items-center justify-between">
+                    <p class="text-[10px] font-black text-slate-400 uppercase tracking-widest">
+                        Showing <span class="text-slate-900">{{ logResponse.from || 0 }}-{{ logResponse.to || 0 }}</span> of <span class="text-slate-900">{{ logResponse.total }}</span> signals
+                    </p>
+                    <div class="flex items-center gap-3">
+                        <button 
+                            @click="prevPage" 
+                            :disabled="filters.page === 1 || isLoading"
+                            class="px-5 py-2.5 bg-white border border-slate-200 rounded-xl text-[10px] font-black uppercase tracking-widest disabled:opacity-30 disabled:cursor-not-allowed hover:bg-slate-50 transition-all"
+                        >
+                            Prev
+                        </button>
+                        <div class="flex items-center gap-2">
+                            <span class="text-[10px] font-black text-slate-900">Page {{ filters.page }} of {{ logResponse.last_page }}</span>
+                        </div>
+                        <button 
+                            @click="nextPage" 
+                            :disabled="filters.page === logResponse.last_page || isLoading"
+                            class="px-5 py-2.5 bg-white border border-slate-200 rounded-xl text-[10px] font-black uppercase tracking-widest disabled:opacity-30 disabled:cursor-not-allowed hover:bg-slate-50 transition-all"
+                        >
+                            Next
+                        </button>
+                    </div>
+                </div>
+
+                <div v-if="logResponse.data.length === 0" class="p-32 text-center">
                     <div class="w-24 h-24 bg-slate-50 rounded-[3rem] flex items-center justify-center mx-auto mb-10 border-2 border-dashed border-slate-200">
                         <svg class="w-10 h-10 text-slate-200" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M13 10V3L4 14h7v7l9-11h-7z"/></svg>
                     </div>
                     <h4 class="text-3xl font-black text-slate-900 mb-4 tracking-tighter uppercase italic">Silenced Signals</h4>
-                    <p class="text-slate-500 max-w-sm mx-auto font-medium">Listening for pixel signals on the authorised domain. No active signals captured for this campaign filter.</p>
+                    <p class="text-slate-500 max-w-sm mx-auto font-medium">Listening for pixel signals on the authorised domain. No active signals captured with current filters.</p>
                 </div>
             </div>
         </div>
@@ -696,5 +825,15 @@ watch([selectedPropId, selectedCampaignId, siteToken], updateSnippet)
                 </div>
             </div>
         </transition>
+
+        <!-- ── Regeneration Confirmation ────────── -->
+        <ConfirmationModal
+            :show="showRegenModal"
+            title="Regenerate Site Token?"
+            message="This action is irreversible. All current tracking scripts will stop working until updated with the new token."
+            confirmText="Regenerate"
+            @close="showRegenModal = false"
+            @confirm="regenerateToken"
+        />
     </div>
 </template>

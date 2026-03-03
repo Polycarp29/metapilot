@@ -176,6 +176,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::get('/embed-snippet', [\App\Http\Controllers\AdCampaignController::class, 'embedSnippet'])->name('embed-snippet');
         Route::post('/regenerate-token', [\App\Http\Controllers\AdCampaignController::class, 'regenerateToken'])->name('regenerate-token');
         Route::get('/pixel-events', [\App\Http\Controllers\CdnTrackingController::class, 'events'])->name('pixel-events');
+        Route::get('/pixel-events/csv', [\App\Http\Controllers\CdnTrackingController::class, 'downloadCsv'])->name('pixel-events.csv');
         // Pixel connection health & domain management
         Route::get('/connection-status', [\App\Http\Controllers\CdnTrackingController::class, 'connectionStatus'])->name('connection-status');
         Route::put('/allowed-domain', [\App\Http\Controllers\CdnTrackingController::class, 'saveAllowedDomain'])->name('allowed-domain');

@@ -217,7 +217,7 @@ class CdnTrackingController extends Controller
     }
 
     /**
-     * Get recent track events for the authenticated organization (for the Developer Tab).
+     * Get paginated track events for the authenticated organization with advanced filtering.
      */
     public function events(Request $request)
     {
@@ -226,12 +226,116 @@ class CdnTrackingController extends Controller
             return response()->json(['error' => 'Organization not found'], 404);
         }
 
-        $events = AdTrackEvent::where('organization_id', $organization->id)
-            ->orderBy('created_at', 'desc')
-            ->limit(100)
-            ->get();
+        $query = AdTrackEvent::where('organization_id', $organization->id);
+
+        // Filter by Campaign ID (Agency Isolation)
+        if ($request->filled('campaign_id') && $request->campaign_id !== 'all') {
+            $query->where('google_campaign_id', $request->campaign_id);
+        }
+
+        // Filter by Traffic Type
+        if ($request->filled('type')) {
+            if ($request->type === 'ads') {
+                $query->where(function($q) {
+                    $q->whereNotNull('gclid')
+                      ->orWhereNotNull('utm_campaign')
+                      ->orWhereNotNull('google_campaign_id');
+                });
+            } elseif ($request->type === 'organic') {
+                $query->whereNull('gclid')
+                      ->whereNull('utm_campaign')
+                      ->whereNull('google_campaign_id');
+            }
+        }
+
+        // Filter by Device
+        if ($request->filled('device') && $request->device !== 'all') {
+            $query->where('device_type', $request->device);
+        }
+
+        // Filter by Country
+        if ($request->filled('country') && $request->country !== 'all') {
+            $query->where('country_code', $request->country);
+        }
+
+        // Date Range
+        if ($request->filled('start_date')) {
+            $query->whereDate('created_at', '>=', $request->start_date);
+        }
+        if ($request->filled('end_date')) {
+            $query->whereDate('created_at', '<=', $request->end_date);
+        }
+
+        // Search (URL, Session, City)
+        if ($request->filled('search')) {
+            $s = $request->search;
+            $query->where(function($q) use ($s) {
+                $q->where('session_id', 'like', "%$s%")
+                  ->orWhere('page_url', 'like', "%$s%")
+                  ->orWhere('city', 'like', "%$s%");
+            });
+        }
+
+        $perPage = $request->input('per_page', 25);
+        $events = $query->orderBy('created_at', 'desc')->paginate($perPage);
 
         return response()->json($events);
+    }
+
+    /**
+     * Export filtered events to CSV.
+     */
+    public function downloadCsv(Request $request)
+    {
+        $organization = $request->user()->currentOrganization();
+        if (!$organization) return abort(404);
+
+        $query = AdTrackEvent::where('organization_id', $organization->id);
+
+        // Apply same filters as events()
+        if ($request->filled('campaign_id') && $request->campaign_id !== 'all') $query->where('google_campaign_id', $request->campaign_id);
+        if ($request->filled('type') && $request->type === 'ads') $query->whereNotNull('gclid');
+        if ($request->filled('device') && $request->device !== 'all') $query->where('device_type', $request->device);
+        if ($request->filled('country') && $request->country !== 'all') $query->where('country_code', $request->country);
+        if ($request->filled('search')) {
+            $s = $request->search;
+            $query->where('session_id', 'like', "%$s%")->orWhere('page_url', 'like', "%$s%");
+        }
+
+        $events = $query->orderBy('created_at', 'desc')->limit(5000)->get();
+
+        $headers = [
+            "Content-type"        => "text/csv",
+            "Content-Disposition" => "attachment; filename=intelligence_log_".now()->format('Y-m-d').".csv",
+            "Pragma"              => "no-cache",
+            "Cache-Control"       => "must-revalidate, post-check=0, pre-check=0",
+            "Expires"             => "0"
+        ];
+
+        $columns = ['ID', 'Date', 'Session', 'Campaign', 'GCLID', 'URL', 'Device', 'Location', 'Clicks', 'Dwell(s)'];
+
+        $callback = function() use($events, $columns) {
+            $file = fopen('php://output', 'w');
+            fputcsv($file, $columns);
+
+            foreach ($events as $e) {
+                fputcsv($file, [
+                    $e->id,
+                    $e->created_at,
+                    $e->session_id,
+                    $e->google_campaign_id,
+                    $e->gclid,
+                    $e->page_url,
+                    $e->device_type,
+                    $e->city . ', ' . $e->country_code,
+                    $e->click_count,
+                    $e->duration_seconds
+                ]);
+            }
+            fclose($file);
+        };
+
+        return response()->stream($callback, 200, $headers);
     }
 
     /**
