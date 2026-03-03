@@ -27,12 +27,15 @@ class Organization extends Model
         'last_keyword_discovery_at',
         'ads_customer_id',
         'ads_site_token',
+        'allowed_domain',
+        'pixel_verified_at',
     ];
 
     protected $casts = [
         'settings' => 'array',
         'keyword_discovery_frequency' => 'integer',
         'last_keyword_discovery_at' => 'datetime',
+        'pixel_verified_at' => 'datetime',
     ];
 
     /**

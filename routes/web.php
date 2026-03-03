@@ -176,13 +176,21 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::get('/embed-snippet', [\App\Http\Controllers\AdCampaignController::class, 'embedSnippet'])->name('embed-snippet');
         Route::post('/regenerate-token', [\App\Http\Controllers\AdCampaignController::class, 'regenerateToken'])->name('regenerate-token');
         Route::get('/pixel-events', [\App\Http\Controllers\CdnTrackingController::class, 'events'])->name('pixel-events');
+        // Pixel connection health & domain management
+        Route::get('/connection-status', [\App\Http\Controllers\CdnTrackingController::class, 'connectionStatus'])->name('connection-status');
+        Route::put('/allowed-domain', [\App\Http\Controllers\CdnTrackingController::class, 'saveAllowedDomain'])->name('allowed-domain');
     });
 });
 
-// CDN Tracking (Unauthenticated)
+// CDN Tracking (Unauthenticated — external pixel endpoints)
+// The OPTIONS preflight must be outside throttle for CORS to work reliably.
+Route::options('/cdn/ad-hit', [\App\Http\Controllers\CdnTrackingController::class, 'preflight']);
+Route::options('/cdn/verify-connection', [\App\Http\Controllers\CdnTrackingController::class, 'preflight']);
+
 Route::prefix('cdn')->name('cdn.')->middleware('throttle:120,1')->group(function () {
     Route::get('/ads-tracker.js', [\App\Http\Controllers\CdnTrackingController::class, 'serveScript'])->name('serve-script');
     Route::post('/ad-hit', [\App\Http\Controllers\CdnTrackingController::class, 'trackHit'])->name('track-hit');
+    Route::get('/verify-connection', [\App\Http\Controllers\CdnTrackingController::class, 'verifyConnection'])->name('verify-connection');
 });
 
 // Invitation Acceptance (Public/Guest or Auth)
