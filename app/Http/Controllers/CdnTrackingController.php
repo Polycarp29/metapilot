@@ -86,11 +86,15 @@ class CdnTrackingController extends Controller
 
             // Strip www. for comparison
             $normalise = fn($h) => preg_replace('/^www\./', '', $h);
+            $cleanAllowed = $normalise($allowed);
 
-            if (
-                $normalise($originHost)  !== $normalise($allowed) &&
-                $normalise($refererHost) !== $normalise($allowed)
-            ) {
+            $checkDomain = function($host) use ($cleanAllowed, $normalise) {
+                if (!$host) return false;
+                $host = $normalise($host);
+                return $host === $cleanAllowed || str_ends_with($host, '.' . $cleanAllowed);
+            };
+
+            if (!$checkDomain($originHost) && !$checkDomain($refererHost)) {
                 Log::warning('Pixel domain pinning violation', [
                     'expected' => $allowed,
                     'origin'   => $originHost,
@@ -193,10 +197,15 @@ class CdnTrackingController extends Controller
             $referer    = strtolower(parse_url($request->header('Referer', ''), PHP_URL_HOST) ?? '');
             $allowed    = strtolower($organization->allowed_domain);
             $normalise  = fn($h) => preg_replace('/^www\./', '', $h);
-            $domainVerified = (
-                $normalise($origin)  === $normalise($allowed) ||
-                $normalise($referer) === $normalise($allowed)
-            );
+            $cleanAllowed = $normalise($allowed);
+
+            $checkDomain = function($host) use ($cleanAllowed, $normalise) {
+                if (!$host) return false;
+                $host = $normalise($host);
+                return $host === $cleanAllowed || str_ends_with($host, '.' . $cleanAllowed);
+            };
+
+            $domainVerified = $checkDomain($origin) || $checkDomain($referer);
         }
 
         return response()->json([
