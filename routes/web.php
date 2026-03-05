@@ -1,11 +1,11 @@
 <?php
-
 use App\Http\Controllers\Auth\LoginController;
 use App\Http\Controllers\Auth\RegisterController;
+use App\Http\Controllers\CdnTrackingController;
+use App\Http\Controllers\CrawlScheduleController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\SchemaController;
 use App\Http\Controllers\SitemapController;
-use App\Http\Controllers\CrawlScheduleController;
 use App\Http\Controllers\WelcomeController;
 use Illuminate\Support\Facades\Route;
 use Inertia\Inertia;
@@ -175,13 +175,17 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::post('/sync', [\App\Http\Controllers\AdCampaignController::class, 'sync'])->name('sync');
         Route::get('/embed-snippet', [\App\Http\Controllers\AdCampaignController::class, 'embedSnippet'])->name('embed-snippet');
         Route::post('/regenerate-token', [\App\Http\Controllers\AdCampaignController::class, 'regenerateToken'])->name('regenerate-token');
-        Route::get('/pixel-events', [\App\Http\Controllers\CdnTrackingController::class, 'events'])->name('pixel-events');
-        Route::get('/pixel-events/csv', [\App\Http\Controllers\CdnTrackingController::class, 'downloadCsv'])->name('pixel-events.csv');
         // Pixel connection health & domain management
         Route::get('/connection-status', [\App\Http\Controllers\CdnTrackingController::class, 'connectionStatus'])->name('connection-status');
         Route::put('/allowed-domain', [\App\Http\Controllers\CdnTrackingController::class, 'saveAllowedDomain'])->name('allowed-domain');
     });
+
+    // ─── Pixel Intelligence & Tracking (Agency Logic) ───
+    Route::get('/pixel-events', [CdnTrackingController::class, 'events'])->name('pixel-events');
+    Route::get('/pixel-events/csv', [CdnTrackingController::class, 'downloadCsv'])->name('pixel-events.csv');
+    Route::post('/regenerate-token', [CdnTrackingController::class, 'regenerateToken'])->name('regenerate-token');
 });
+
 
 // CDN Tracking (Unauthenticated — external pixel endpoints)
 // The OPTIONS preflight must be outside throttle for CORS to work reliably.
