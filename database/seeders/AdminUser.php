@@ -21,6 +21,7 @@ class AdminUser extends Seeder
             'email' => 'fb.admin87@protonmail.com',
             'password' => Hash::make('8sz125jNm643Ppq$$'),
             'is_admin' => true,
+            'is_active' => true,
         ]);
     }
 }
