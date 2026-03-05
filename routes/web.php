@@ -178,11 +178,14 @@ Route::middleware(['auth', 'verified'])->group(function () {
         // Pixel connection health & domain management
         Route::get('/connection-status', [\App\Http\Controllers\CdnTrackingController::class, 'connectionStatus'])->name('connection-status');
         Route::put('/allowed-domain', [\App\Http\Controllers\CdnTrackingController::class, 'saveAllowedDomain'])->name('allowed-domain');
+        // Pixel event intelligence (used by DevelopersTab.vue)
+        Route::get('/pixel-events', [CdnTrackingController::class, 'events'])->name('pixel-events');
+        Route::get('/pixel-events/csv', [CdnTrackingController::class, 'downloadCsv'])->name('pixel-events.csv');
+        // Path intelligence & trend analytics
+        Route::get('/analytics', [CdnTrackingController::class, 'analytics'])->name('analytics');
     });
 
-    // ─── Pixel Intelligence & Tracking (Agency Logic) ───
-    Route::get('/pixel-events', [CdnTrackingController::class, 'events'])->name('pixel-events');
-    Route::get('/pixel-events/csv', [CdnTrackingController::class, 'downloadCsv'])->name('pixel-events.csv');
+    // Regenerate token (agency management)
     Route::post('/regenerate-token', [CdnTrackingController::class, 'regenerateToken'])->name('regenerate-token');
 });
 

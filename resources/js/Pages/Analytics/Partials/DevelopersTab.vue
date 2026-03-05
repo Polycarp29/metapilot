@@ -5,11 +5,12 @@ import { useToastStore } from '@/stores/useToastStore'
 import ConfirmationModal from '@/Components/ConfirmationModal.vue'
 import {
   Chart as ChartJS, Title, Tooltip, Legend,
-  LineElement, PointElement, LinearScale, CategoryScale, Filler
+  LineElement, PointElement, LinearScale, CategoryScale, Filler,
+  BarElement, BarController
 } from 'chart.js'
-import { Line } from 'vue-chartjs'
+import { Line, Bar } from 'vue-chartjs'
 
-ChartJS.register(Title, Tooltip, Legend, LineElement, PointElement, LinearScale, CategoryScale, Filler)
+ChartJS.register(Title, Tooltip, Legend, LineElement, PointElement, LinearScale, CategoryScale, Filler, BarElement, BarController)
 
 const props = defineProps({
     organization: Object,
@@ -35,6 +36,9 @@ const connectionStatus   = ref(null)
 const allowedDomainInput = ref(props.organization?.allowed_domain || '')
 const domainSavedMsg     = ref('')
 const showRegenModal     = ref(false)
+const analyticsData      = ref(null)
+const isLoadingAnalytics = ref(false)
+const pathFilter         = ref('')  // filter log by clicking a path row
 
 // Filters
 const filters = ref({
@@ -48,8 +52,9 @@ const filters = ref({
     page: 1
 })
 
-let eventsInterval = null
-let connInterval   = null
+let eventsInterval     = null
+let connInterval       = null
+let analyticsInterval  = null
 
 // ─── Computed ─────────────────────────────────────────────────────────────────
 const siteToken = computed(() => props.organization?.ads_site_token)
@@ -166,6 +171,109 @@ const avgClicks = computed(() => {
     return (total / ads.length).toFixed(1)
 })
 
+// ── Analytics-driven computed ──────────────────────────────────────────────
+const todayDelta = computed(() => analyticsData.value?.summary?.today_delta ?? null)
+const weekDelta  = computed(() => analyticsData.value?.summary?.week_delta  ?? null)
+
+const historyChartData = computed(() => {
+    const rows = analyticsData.value?.daily_history ?? []
+    if (!rows.length) return { labels: [], datasets: [] }
+    const avg = rows.reduce((s, r) => s + r.total, 0) / rows.length
+    return {
+        labels: rows.map(r => r.label),
+        datasets: [
+            {
+                type: 'bar',
+                label: 'Total Signals',
+                data: rows.map(r => r.total),
+                backgroundColor: rows.map(r =>
+                    r.total >= avg * 1.15 ? 'rgba(99,102,241,0.85)' :
+                    r.total <= avg * 0.6  ? 'rgba(226,232,240,0.6)'  :
+                    'rgba(99,102,241,0.35)'
+                ),
+                borderRadius: 8,
+                borderSkipped: false,
+                order: 2,
+            },
+            {
+                type: 'line',
+                label: 'Ad Hits',
+                data: rows.map(r => r.ad_hits),
+                borderColor: '#f59e0b',
+                backgroundColor: 'rgba(245,158,11,0.08)',
+                fill: true,
+                tension: 0.45,
+                borderWidth: 3,
+                pointRadius: 4,
+                pointBackgroundColor: '#f59e0b',
+                pointBorderColor: '#fff',
+                pointBorderWidth: 2,
+                order: 1,
+            }
+        ]
+    }
+})
+
+const historyChartOptions = {
+    responsive: true,
+    maintainAspectRatio: false,
+    interaction: { intersect: false, mode: 'index' },
+    plugins: {
+        legend: { display: true, position: 'top', align: 'end',
+            labels: { boxWidth: 10, font: { family: 'Inter', weight: 'bold', size: 10 }, padding: 20 } },
+        tooltip: {
+            backgroundColor: '#0f172a',
+            titleFont: { family: 'Inter', weight: 'black', size: 11 },
+            bodyFont: { family: 'Inter', size: 11 },
+            padding: 14,
+            cornerRadius: 12,
+            callbacks: {
+                title: (items) => {
+                    const row = analyticsData.value?.daily_history?.[items[0].dataIndex]
+                    return row ? new Date(row.date).toLocaleDateString('en', { weekday: 'long', month: 'short', day: 'numeric' }) : ''
+                }
+            }
+        }
+    },
+    scales: {
+        x: { grid: { display: false }, ticks: { font: { family: 'Inter', size: 10 }, maxTicksLimit: 10 } },
+        y: { beginAtZero: true, grid: { color: '#f1f5f9' }, ticks: { font: { family: 'Inter', size: 10 } } }
+    }
+}
+
+const topPages   = computed(() => analyticsData.value?.top_pages      ?? [])
+const topReferers = computed(() => analyticsData.value?.top_referrers ?? [])
+const rising     = computed(() => analyticsData.value?.trend_velocity?.rising  ?? [])
+const falling    = computed(() => analyticsData.value?.trend_velocity?.falling ?? [])
+
+const safePathLabel = (url) => {
+    if (!url) return '—'
+    try { return new URL(url).pathname || '/' } catch { return url }
+}
+
+const deltaBadgeClass = (pct) => {
+    if (pct === null || pct === undefined) return 'bg-slate-100 text-slate-400'
+    if (pct >= 5)  return 'bg-emerald-50 text-emerald-600 border border-emerald-200'
+    if (pct <= -5) return 'bg-rose-50 text-rose-600 border border-rose-200'
+    return 'bg-amber-50 text-amber-600 border border-amber-200'
+}
+
+const deltaIcon = (pct) => {
+    if (pct === null || pct === undefined) return '—'
+    if (pct >= 5)  return `↑ +${pct}%`
+    if (pct <= -5) return `↓ ${pct}%`
+    return `→ ${pct > 0 ? '+' : ''}${pct}%`
+}
+
+// Inline SVG sparkline (14 data points → path)
+const sparklinePath = (series) => {
+    if (!series?.length) return ''
+    const w = 80, h = 28
+    const max = Math.max(...series, 1)
+    const pts = series.map((v, i) => `${(i / (series.length - 1)) * w},${h - (v / max) * h}`)
+    return `M${pts.join(' L')}`
+}
+
 const pixelStatusBadge = computed(() => {
     const cs = connectionStatus.value
     if (cs) {
@@ -215,13 +323,13 @@ const fetchEvents = async () => {
     try {
         const params = {
             ...filters.value,
-            search: searchQuery.value,
+            search: pathFilter.value || searchQuery.value,
             campaign_id: filters.value.campaign_id
         }
         const r = await axios.get(route('google-ads.pixel-events'), { params })
         logResponse.value = r.data
-        
-        // Also update chart data (we fetch more for the chart but without full pagination meta)
+
+        // Also update chart data (we fetch more for the chart but without pagination meta)
         if (filters.value.page === 1) {
             const chartParams = { ...params, per_page: 500 }
             const cr = await axios.get(route('google-ads.pixel-events'), { params: chartParams })
@@ -232,6 +340,26 @@ const fetchEvents = async () => {
     } finally {
         isLoading.value = false
     }
+}
+
+const fetchAnalytics = async () => {
+    isLoadingAnalytics.value = true
+    try {
+        const r = await axios.get(route('google-ads.analytics'))
+        analyticsData.value = r.data
+    } catch (e) {
+        console.error('Failed to fetch analytics', e)
+    } finally {
+        isLoadingAnalytics.value = false
+    }
+}
+
+const drillToPath = (pageUrl) => {
+    pathFilter.value = pageUrl
+    filters.value.page = 1
+    fetchEvents()
+    // scroll to log
+    document.getElementById('intel-log')?.scrollIntoView({ behavior: 'smooth' })
 }
 
 const nextPage = () => {
@@ -347,16 +475,20 @@ onMounted(() => {
     updateSnippet()
     fetchEvents()
     fetchConnectionStatus()
-    eventsInterval = setInterval(fetchEvents, 60000)
-    connInterval   = setInterval(fetchConnectionStatus, 30000)
+    fetchAnalytics()
+    eventsInterval    = setInterval(fetchEvents, 60000)
+    connInterval      = setInterval(fetchConnectionStatus, 30000)
+    analyticsInterval = setInterval(fetchAnalytics, 300000) // every 5 min
 })
 
 onUnmounted(() => {
     clearInterval(eventsInterval)
     clearInterval(connInterval)
+    clearInterval(analyticsInterval)
 })
 
 watch([selectedPropId, selectedCampaignId, siteToken], updateSnippet)
+watch(pathFilter, () => { if (!pathFilter.value) fetchEvents() })
 </script>
 
 <template>
@@ -390,18 +522,31 @@ watch([selectedPropId, selectedCampaignId, siteToken], updateSnippet)
         <div class="grid grid-cols-1 lg:grid-cols-12 gap-8">
             <!-- Stats -->
             <div class="lg:col-span-8 grid grid-cols-1 md:grid-cols-3 gap-6">
+                <!-- Total Signals -->
                 <div class="bg-white p-8 shadow-premium rounded-[2.5rem] border border-slate-100 relative overflow-hidden">
                     <p class="text-[11px] font-black text-slate-400 uppercase tracking-widest mb-1">Total Signals</p>
                     <h4 class="text-4xl font-black text-slate-900 tracking-tight">{{ logResponse.total }}</h4>
-                    <div class="mt-3 text-[10px] font-black text-slate-400">{{ connectionStatus?.hits_last_24h ?? '—' }} in last 24h</div>
+                    <div class="mt-3 flex items-center justify-between">
+                        <span class="text-[10px] font-black text-slate-400">{{ connectionStatus?.hits_last_24h ?? '—' }} in last 24h</span>
+                        <span v-if="todayDelta !== null" class="text-[10px] font-black px-2 py-0.5 rounded-lg"
+                            :class="deltaBadgeClass(todayDelta)">
+                            {{ deltaIcon(todayDelta) }} today
+                        </span>
+                    </div>
                 </div>
+                <!-- Ad Conversions -->
                 <div class="bg-white p-8 shadow-premium rounded-[2.5rem] border border-slate-100 relative overflow-hidden">
                     <p class="text-[11px] font-black text-indigo-400 uppercase tracking-widest mb-1">Ad Conversions</p>
                     <h4 class="text-4xl font-black text-indigo-600 tracking-tight">{{ chartEvents.filter(e => e.gclid || e.utm_campaign || e.google_campaign_id).length }}</h4>
-                    <div class="mt-3 flex items-center gap-1.5 text-[10px] font-black text-indigo-500">
-                        Targeted Traffic
+                    <div class="mt-3 flex items-center justify-between">
+                        <span class="text-[10px] font-black text-indigo-500">Targeted Traffic</span>
+                        <span v-if="weekDelta !== null" class="text-[10px] font-black px-2 py-0.5 rounded-lg"
+                            :class="deltaBadgeClass(weekDelta)">
+                            {{ deltaIcon(weekDelta) }} 7d
+                        </span>
                     </div>
                 </div>
+                <!-- Engagement -->
                 <div class="bg-indigo-600 p-8 shadow-indigo-200 shadow-2xl rounded-[2.5rem] text-white">
                     <p class="text-[11px] font-black text-indigo-200 uppercase tracking-widest mb-1">Engagement Qty</p>
                     <h4 class="text-4xl font-black tracking-tight">{{ avgClicks }}</h4>
@@ -463,35 +608,204 @@ watch([selectedPropId, selectedCampaignId, siteToken], updateSnippet)
             </div>
         </div>
 
-        <!-- ── Full Width Signal chart ─────────────────────────────── -->
+        <!-- ══ 30-Day Signal History Chart ════════════════════════════════ -->
         <div class="bg-white p-12 shadow-premium rounded-[3.5rem] border border-slate-100/50 overflow-hidden relative">
             <div class="flex items-center justify-between mb-10">
                 <div>
                     <h3 class="text-2xl font-black text-slate-900 tracking-tight flex items-center gap-4">
-                        Traffic Signal Trends
-                        <span class="px-3 py-1 bg-emerald-50 text-emerald-600 text-[9px] font-black rounded-full uppercase tracking-widest border border-emerald-100">Live</span>
+                        30-Day Signal History
+                        <span class="px-3 py-1 bg-indigo-50 text-indigo-600 text-[9px] font-black rounded-full uppercase tracking-widest border border-indigo-100">Daily</span>
                     </h3>
-                    <p class="text-slate-400 font-medium text-xs mt-1">Daily reach vs Attribution funnel (GCLID/Campaign hits)</p>
+                    <p class="text-slate-400 font-medium text-xs mt-1">Total pixel hits (bars) vs Ad-attributed hits (amber line) — darker bars = above-average days</p>
                 </div>
                 <div class="flex gap-4">
-                    <div class="flex items-center gap-2 px-4 py-2 bg-slate-50 rounded-xl border border-slate-100">
-                        <span class="w-1.5 h-1.5 bg-slate-300 rounded-full"></span>
-                        <span class="text-[10px] font-black text-slate-500 uppercase">Total Reach</span>
-                    </div>
                     <div class="flex items-center gap-2 px-4 py-2 bg-indigo-50 rounded-xl border border-indigo-100">
-                        <span class="w-1.5 h-1.5 bg-indigo-500 rounded-full shadow-[0_0_8px_rgba(99,102,241,0.5)]"></span>
-                        <span class="text-[10px] font-black text-indigo-600 uppercase">Ad Conversions</span>
+                        <span class="w-3 h-3 bg-indigo-500 rounded-sm"></span>
+                        <span class="text-[10px] font-black text-indigo-600 uppercase">Total Signals</span>
+                    </div>
+                    <div class="flex items-center gap-2 px-4 py-2 bg-amber-50 rounded-xl border border-amber-100">
+                        <span class="w-1.5 h-1.5 bg-amber-400 rounded-full"></span>
+                        <span class="text-[10px] font-black text-amber-600 uppercase">Ad Hits</span>
                     </div>
                 </div>
             </div>
-            <div class="h-[450px] relative">
-                <div v-if="chartEvents.length === 0" class="absolute inset-0 flex flex-col items-center justify-center text-slate-400 bg-white/50 backdrop-blur-sm z-10">
-                    <div class="w-16 h-16 bg-slate-100 rounded-full flex items-center justify-center animate-pulse mb-4">
-                        <svg class="w-8 h-8 text-slate-200" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M13 10V3L4 14h7v7l9-11h-7z"/></svg>
-                    </div>
-                    <p class="text-[11px] font-black uppercase tracking-widest italic opacity-50">Listening for signals...</p>
+            <div class="h-[380px] relative">
+                <div v-if="!analyticsData" class="absolute inset-0 flex flex-col items-center justify-center z-10">
+                    <div class="w-12 h-12 border-4 border-indigo-200 border-t-indigo-600 rounded-full animate-spin mb-4"></div>
+                    <p class="text-[11px] font-black uppercase tracking-widest text-slate-300">Computing history...</p>
                 </div>
-                <Line :data="hitsChartData" :options="mainChartOptions" />
+                <Bar v-if="analyticsData" :data="historyChartData" :options="historyChartOptions" />
+            </div>
+        </div>
+
+        <!-- ══ Path Intelligence Table ════════════════════════════════════ -->
+        <div class="bg-white shadow-premium rounded-[3.5rem] border border-slate-100/50 overflow-hidden">
+            <div class="px-12 pt-12 pb-8 flex items-end justify-between border-b border-slate-50">
+                <div>
+                    <h3 class="text-2xl font-black text-slate-900 tracking-tight flex items-center gap-4">
+                        Path Intelligence
+                        <span class="px-3 py-1 bg-slate-50 text-slate-500 text-[9px] font-black rounded-full uppercase tracking-widest border border-slate-100">Top 10</span>
+                    </h3>
+                    <p class="text-slate-400 text-xs font-medium mt-1">Most-visited pages with 14-day trend sparkline and day-over-day delta. Click a row to drill into its log.</p>
+                </div>
+                <button v-if="pathFilter" @click="pathFilter = ''" class="flex items-center gap-2 px-5 py-3 bg-rose-50 text-rose-600 rounded-2xl text-[10px] font-black border border-rose-100 hover:bg-rose-100 transition-all">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M6 18L18 6M6 6l12 12"/></svg>
+                    Clear filter
+                </button>
+            </div>
+            <div class="overflow-x-auto">
+                <table class="w-full text-left min-w-[900px]">
+                    <thead>
+                        <tr class="bg-slate-50/60">
+                            <th class="py-5 px-12 text-[9px] font-black text-slate-400 uppercase tracking-widest">Page / Path</th>
+                            <th class="py-5 px-6 text-[9px] font-black text-slate-400 uppercase tracking-widest text-center">Total Hits</th>
+                            <th class="py-5 px-6 text-[9px] font-black text-slate-400 uppercase tracking-widest text-center">Ad Hits</th>
+                            <th class="py-5 px-6 text-[9px] font-black text-slate-400 uppercase tracking-widest text-center">Avg Stay</th>
+                            <th class="py-5 px-6 text-[9px] font-black text-slate-400 uppercase tracking-widest text-center">Avg Clicks</th>
+                            <th class="py-5 px-6 text-[9px] font-black text-slate-400 uppercase tracking-widest text-center">14-Day Trend</th>
+                            <th class="py-5 px-10 text-[9px] font-black text-slate-400 uppercase tracking-widest text-right">Δ vs Yesterday</th>
+                        </tr>
+                    </thead>
+                    <tbody class="divide-y divide-slate-50">
+                        <tr v-if="isLoadingAnalytics && !topPages.length">
+                            <td colspan="7" class="py-16 text-center text-slate-300 text-[10px] font-black uppercase tracking-widest">Loading path data...</td>
+                        </tr>
+                        <tr v-for="(page, idx) in topPages" :key="page.page_url"
+                            @click="drillToPath(page.page_url)"
+                            class="group hover:bg-indigo-50/30 cursor-pointer transition-all"
+                            :class="{ 'bg-indigo-50/20 border-l-4 border-indigo-500': pathFilter === page.page_url }">
+                            <td class="py-7 px-12">
+                                <div class="flex items-center gap-4">
+                                    <span class="w-7 h-7 flex items-center justify-center rounded-xl bg-slate-100 text-slate-400 text-[10px] font-black group-hover:bg-indigo-100 group-hover:text-indigo-600 transition-all">{{ idx + 1 }}</span>
+                                    <div class="min-w-0">
+                                        <p class="text-xs font-black text-slate-900 truncate max-w-xs" :title="page.page_url">
+                                            {{ safePathLabel(page.page_url) }}
+                                        </p>
+                                        <p class="text-[9px] text-slate-400 font-bold truncate max-w-xs">{{ safeHostname(page.page_url) }}</p>
+                                    </div>
+                                </div>
+                            </td>
+                            <td class="py-7 px-6 text-center">
+                                <span class="text-sm font-black text-slate-900">{{ page.total_hits }}</span>
+                            </td>
+                            <td class="py-7 px-6 text-center">
+                                <span class="text-sm font-black" :class="page.ad_hits > 0 ? 'text-indigo-600' : 'text-slate-300'">{{ page.ad_hits }}</span>
+                            </td>
+                            <td class="py-7 px-6 text-center">
+                                <span class="text-xs font-black text-slate-700">{{ page.avg_duration }}s</span>
+                            </td>
+                            <td class="py-7 px-6 text-center">
+                                <span class="text-xs font-black text-slate-700">{{ page.avg_clicks }}</span>
+                            </td>
+                            <td class="py-7 px-6">
+                                <!-- SVG sparkline -->
+                                <div class="flex items-center justify-center">
+                                    <svg width="80" height="28" class="overflow-visible">
+                                        <defs>
+                                            <linearGradient :id="'sg'+idx" x1="0" y1="0" x2="0" y2="1">
+                                                <stop offset="0%" stop-color="#6366f1" stop-opacity="0.3"/>
+                                                <stop offset="100%" stop-color="#6366f1" stop-opacity="0"/>
+                                            </linearGradient>
+                                        </defs>
+                                        <path v-if="sparklinePath(page.sparkline)" :d="sparklinePath(page.sparkline) + ' L80,28 L0,28 Z'"
+                                            :fill="'url(#sg'+idx+')'" />
+                                        <path :d="sparklinePath(page.sparkline)" fill="none" stroke="#6366f1" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                                    </svg>
+                                </div>
+                            </td>
+                            <td class="py-7 px-10 text-right">
+                                <span class="inline-flex items-center px-3 py-1.5 rounded-xl text-[10px] font-black"
+                                    :class="deltaBadgeClass(page.delta_pct)">
+                                    {{ deltaIcon(page.delta_pct) }}
+                                </span>
+                                <p class="text-[9px] text-slate-400 font-bold mt-1.5 text-right">Today: {{ page.today_count }} / Yday: {{ page.yesterday_count }}</p>
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+            <div v-if="topPages.length === 0 && !isLoadingAnalytics" class="p-16 text-center">
+                <p class="text-slate-300 text-[11px] font-black uppercase tracking-widest italic">No page data yet — signals will appear as your pixel fires.</p>
+            </div>
+        </div>
+
+        <!-- ══ Trend Velocity + Top Referrers ════════════════════════════ -->
+        <div class="grid grid-cols-1 lg:grid-cols-12 gap-8">
+            <!-- Rising & Falling -->
+            <div class="lg:col-span-8 grid grid-cols-1 md:grid-cols-2 gap-6">
+                <!-- Fastest Rising -->
+                <div class="bg-white rounded-[2.5rem] border border-slate-100 shadow-premium p-10">
+                    <div class="flex items-center gap-3 mb-7">
+                        <div class="w-10 h-10 rounded-2xl bg-emerald-50 flex items-center justify-center text-lg">🚀</div>
+                        <div>
+                            <p class="text-[11px] font-black text-slate-900 uppercase tracking-widest">Fastest Rising</p>
+                            <p class="text-[9px] text-slate-400 font-bold">7-day growth vs prior 7 days</p>
+                        </div>
+                    </div>
+                    <div class="space-y-4">
+                        <div v-if="rising.length === 0" class="text-[10px] text-slate-300 font-black uppercase tracking-widest italic py-4 text-center">Collecting velocity data...</div>
+                        <div v-for="page in rising" :key="page.page_url"
+                            @click="drillToPath(page.page_url)"
+                            class="flex items-center justify-between p-5 bg-emerald-50/50 hover:bg-emerald-50 rounded-2xl border border-emerald-100/50 cursor-pointer transition-all group">
+                            <div class="min-w-0 mr-4">
+                                <p class="text-xs font-black text-slate-900 truncate group-hover:text-emerald-700 transition-colors">{{ safePathLabel(page.page_url) }}</p>
+                                <p class="text-[9px] text-slate-400 font-bold mt-0.5">{{ page.last7 }} hits this week</p>
+                            </div>
+                            <span class="shrink-0 text-[11px] font-black text-emerald-600 bg-white px-3 py-1.5 rounded-xl border border-emerald-200 shadow-sm">
+                                ↑ +{{ page.delta_pct }}%
+                            </span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Needs Attention -->
+                <div class="bg-white rounded-[2.5rem] border border-slate-100 shadow-premium p-10">
+                    <div class="flex items-center gap-3 mb-7">
+                        <div class="w-10 h-10 rounded-2xl bg-rose-50 flex items-center justify-center text-lg">📉</div>
+                        <div>
+                            <p class="text-[11px] font-black text-slate-900 uppercase tracking-widest">Needs Attention</p>
+                            <p class="text-[9px] text-slate-400 font-bold">Biggest drops vs prior week</p>
+                        </div>
+                    </div>
+                    <div class="space-y-4">
+                        <div v-if="falling.length === 0" class="text-[10px] text-slate-300 font-black uppercase tracking-widest italic py-4 text-center">No declining pages detected.</div>
+                        <div v-for="page in falling" :key="page.page_url"
+                            @click="drillToPath(page.page_url)"
+                            class="flex items-center justify-between p-5 bg-rose-50/30 hover:bg-rose-50/60 rounded-2xl border border-rose-100/50 cursor-pointer transition-all group">
+                            <div class="min-w-0 mr-4">
+                                <p class="text-xs font-black text-slate-900 truncate group-hover:text-rose-700 transition-colors">{{ safePathLabel(page.page_url) }}</p>
+                                <p class="text-[9px] text-slate-400 font-bold mt-0.5">{{ page.last7 }} hits this week</p>
+                            </div>
+                            <span class="shrink-0 text-[11px] font-black text-rose-600 bg-white px-3 py-1.5 rounded-xl border border-rose-200 shadow-sm">
+                                ↓ {{ page.delta_pct }}%
+                            </span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Top Referrers -->
+            <div class="lg:col-span-4 bg-slate-900 p-10 rounded-[2.5rem] shadow-2xl">
+                <div class="flex items-center gap-3 mb-7">
+                    <div class="w-10 h-10 rounded-2xl bg-white/10 flex items-center justify-center">
+                        <svg class="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1"/></svg>
+                    </div>
+                    <div>
+                        <p class="text-[11px] font-black text-white uppercase tracking-widest">Top Referrers</p>
+                        <p class="text-[9px] text-slate-400 font-bold">Where your visitors came from</p>
+                    </div>
+                </div>
+                <div class="space-y-3">
+                    <div v-if="topReferers.length === 0" class="text-[10px] text-slate-600 font-black uppercase tracking-widest italic py-4 text-center">No referrer data yet.</div>
+                    <div v-for="ref in topReferers" :key="ref.domain"
+                        class="flex items-center justify-between p-4 bg-white/5 rounded-2xl hover:bg-white/10 transition-all">
+                        <div class="flex items-center gap-3 min-w-0">
+                            <div class="w-2.5 h-2.5 rounded-full bg-indigo-400 shrink-0"></div>
+                            <p class="text-[11px] font-black text-slate-200 truncate" :title="ref.domain">{{ safeHostname(ref.domain) || 'Direct / None' }}</p>
+                        </div>
+                        <span class="text-[10px] font-black text-slate-400 shrink-0 ml-3">{{ ref.count }}</span>
+                    </div>
+                </div>
             </div>
         </div>
 
@@ -558,7 +872,7 @@ watch([selectedPropId, selectedCampaignId, siteToken], updateSnippet)
         </div>
 
         <!-- ── Signal Intelligence Log ──────────────────────────────────── -->
-        <div class="space-y-8">
+        <div id="intel-log" class="space-y-8">
             <div class="flex items-end justify-between gap-8">
                 <div class="flex-1">
                     <h3 class="text-3xl font-black text-slate-900 tracking-tight">Intelligence Log</h3>

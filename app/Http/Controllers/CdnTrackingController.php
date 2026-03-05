@@ -418,6 +418,170 @@ class CdnTrackingController extends Controller
         ]);
     }
 
+    /**
+     * Rich analytics payload for the Developer Tools "Path Intelligence" UI.
+     *
+     * Returns:
+     *  - daily_history  : 30-day array of {date, total, ad_hits}
+     *  - top_pages      : top 10 pages with delta%, sparkline (14d), avg dwell, avg clicks
+     *  - top_referrers  : top 8 referrer domains with count
+     *  - summary        : today vs yesterday, 7d vs prev-7d growth %
+     */
+    public function analytics(Request $request)
+    {
+        $organization = $request->user()->currentOrganization();
+        if (!$organization) {
+            return response()->json(['error' => 'Organization not found'], 404);
+        }
+
+        $orgId = $organization->id;
+
+        // ── 1. 30-day daily history ──────────────────────────────────────────
+        $thirtyDaysAgo = now()->subDays(29)->startOfDay();
+
+        $rawDaily = AdTrackEvent::where('organization_id', $orgId)
+            ->where('created_at', '>=', $thirtyDaysAgo)
+            ->selectRaw("DATE(created_at) as date, COUNT(*) as total,
+                SUM(CASE WHEN (gclid IS NOT NULL OR utm_campaign IS NOT NULL OR google_campaign_id IS NOT NULL) THEN 1 ELSE 0 END) as ad_hits")
+            ->groupBy('date')
+            ->orderBy('date')
+            ->get()
+            ->keyBy('date');
+
+        // Fill every day in the 30-day window (even days with zero hits)
+        $dailyHistory = [];
+        for ($i = 29; $i >= 0; $i--) {
+            $d = now()->subDays($i)->format('Y-m-d');
+            $dailyHistory[] = [
+                'date'    => $d,
+                'label'   => now()->subDays($i)->format('M j'),
+                'total'   => (int) ($rawDaily[$d]->total   ?? 0),
+                'ad_hits' => (int) ($rawDaily[$d]->ad_hits ?? 0),
+            ];
+        }
+
+        // ── 2. Summary: today vs yesterday, 7d vs prev-7d ───────────────────
+        $todayStr     = now()->format('Y-m-d');
+        $yesterdayStr = now()->subDay()->format('Y-m-d');
+        $todayHits     = (int) ($rawDaily[$todayStr]->total     ?? 0);
+        $yesterdayHits = (int) ($rawDaily[$yesterdayStr]->total ?? 0);
+
+        $last7  = array_sum(array_column(array_slice($dailyHistory, -7),  'total'));
+        $prev7  = array_sum(array_column(array_slice($dailyHistory, -14, 7), 'total'));
+        $weekDelta = $prev7 > 0 ? round((($last7 - $prev7) / $prev7) * 100, 1) : null;
+
+        $todayDelta = $yesterdayHits > 0
+            ? round((($todayHits - $yesterdayHits) / $yesterdayHits) * 100, 1)
+            : null;
+
+        // ── 3. Top pages with 14-day sparkline & delta ───────────────────────
+        $topPageRows = AdTrackEvent::where('organization_id', $orgId)
+            ->whereNotNull('page_url')
+            ->selectRaw("page_url,
+                COUNT(*) as total_hits,
+                AVG(duration_seconds) as avg_duration,
+                AVG(click_count) as avg_clicks,
+                SUM(CASE WHEN (gclid IS NOT NULL OR utm_campaign IS NOT NULL OR google_campaign_id IS NOT NULL) THEN 1 ELSE 0 END) as ad_hits,
+                SUM(CASE WHEN DATE(created_at) = CURDATE() THEN 1 ELSE 0 END) as today_count,
+                SUM(CASE WHEN DATE(created_at) = CURDATE() - INTERVAL 1 DAY THEN 1 ELSE 0 END) as yesterday_count")
+            ->groupBy('page_url')
+            ->orderByDesc('total_hits')
+            ->limit(10)
+            ->get();
+
+        // 14-day sparkline per top page
+        $fourteenDaysAgo = now()->subDays(13)->startOfDay();
+        $topPageUrls = $topPageRows->pluck('page_url')->toArray();
+
+        $sparklineRaw = AdTrackEvent::where('organization_id', $orgId)
+            ->whereIn('page_url', $topPageUrls)
+            ->where('created_at', '>=', $fourteenDaysAgo)
+            ->selectRaw("page_url, DATE(created_at) as date, COUNT(*) as cnt")
+            ->groupBy('page_url', 'date')
+            ->get()
+            ->groupBy('page_url');
+
+        $topPages = $topPageRows->map(function ($row) use ($sparklineRaw) {
+            $todayC     = (int) $row->today_count;
+            $yesterdayC = (int) $row->yesterday_count;
+            $deltaPct   = $yesterdayC > 0
+                ? round((($todayC - $yesterdayC) / $yesterdayC) * 100, 1)
+                : ($todayC > 0 ? 100 : null);
+
+            // Build 14-day series (fill gaps with 0)
+            $seriesMap = collect($sparklineRaw->get($row->page_url, []))->keyBy('date');
+            $series = [];
+            for ($i = 13; $i >= 0; $i--) {
+                $d = now()->subDays($i)->format('Y-m-d');
+                $series[] = (int) ($seriesMap[$d]->cnt ?? 0);
+            }
+
+            return [
+                'page_url'       => $row->page_url,
+                'total_hits'     => (int) $row->total_hits,
+                'ad_hits'        => (int) $row->ad_hits,
+                'avg_duration'   => round($row->avg_duration ?? 0),
+                'avg_clicks'     => round($row->avg_clicks ?? 0, 1),
+                'today_count'    => $todayC,
+                'yesterday_count'=> $yesterdayC,
+                'delta_pct'      => $deltaPct,
+                'sparkline'      => $series,
+            ];
+        })->values();
+
+        // ── 4. Top referrers ─────────────────────────────────────────────────
+        $topReferrers = AdTrackEvent::where('organization_id', $orgId)
+            ->whereNotNull('referrer')
+            ->where('referrer', '!=', '')
+            ->selectRaw("referrer, COUNT(*) as count")
+            ->groupBy('referrer')
+            ->orderByDesc('count')
+            ->limit(50) // fetch more so we can group by domain below
+            ->get()
+            ->groupBy(fn($r) => strtolower(parse_url($r->referrer, PHP_URL_HOST) ?? $r->referrer))
+            ->map(fn($group) => ['domain' => $group->first()->referrer, 'count' => $group->sum('count')])
+            ->sortByDesc('count')
+            ->take(8)
+            ->values();
+
+        // ── 5. Trend velocity (fastest rising and falling over last 7d vs prev-7d per page) ─
+        $velocityRows = AdTrackEvent::where('organization_id', $orgId)
+            ->whereNotNull('page_url')
+            ->where('created_at', '>=', now()->subDays(13)->startOfDay())
+            ->selectRaw("page_url,
+                SUM(CASE WHEN created_at >= NOW() - INTERVAL 7 DAY THEN 1 ELSE 0 END) as last7,
+                SUM(CASE WHEN created_at < NOW() - INTERVAL 7 DAY THEN 1 ELSE 0 END) as prev7")
+            ->groupBy('page_url')
+            ->having('last7', '>', 0)
+            ->get()
+            ->map(function ($r) {
+                $delta = $r->prev7 > 0
+                    ? round((($r->last7 - $r->prev7) / $r->prev7) * 100, 1)
+                    : ($r->last7 > 0 ? 100 : 0);
+                return ['page_url' => $r->page_url, 'last7' => (int)$r->last7, 'prev7' => (int)$r->prev7, 'delta_pct' => $delta];
+            })
+            ->sortByDesc('delta_pct')
+            ->values();
+
+        $rising  = $velocityRows->filter(fn($r) => $r['delta_pct'] > 0)->take(3)->values();
+        $falling = $velocityRows->filter(fn($r) => $r['delta_pct'] < 0)->sortBy('delta_pct')->take(3)->values();
+
+        return response()->json([
+            'daily_history'  => $dailyHistory,
+            'top_pages'      => $topPages,
+            'top_referrers'  => $topReferrers,
+            'trend_velocity' => ['rising' => $rising, 'falling' => $falling],
+            'summary'        => [
+                'today_hits'     => $todayHits,
+                'yesterday_hits' => $yesterdayHits,
+                'today_delta'    => $todayDelta,
+                'last7_hits'     => $last7,
+                'prev7_hits'     => $prev7,
+                'week_delta'     => $weekDelta,
+            ],
+        ]);
+    }
+
     // -------------------------------------------------------------------------
     // Private helpers
     // -------------------------------------------------------------------------
