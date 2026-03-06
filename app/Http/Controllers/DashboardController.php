@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\Schema;
 use App\Models\SchemaType;
+use App\Models\SiteConfig;
 use Inertia\Inertia;
 
 class DashboardController extends Controller
@@ -66,5 +67,12 @@ class DashboardController extends Controller
             'recentInsights' => $recentInsights,
             'organizationName' => $organization->name
         ]);
+    }
+
+
+    public function loadBrandLogo(){
+        $fetchLogo = SiteConfig::first();
+
+        
     }
 }

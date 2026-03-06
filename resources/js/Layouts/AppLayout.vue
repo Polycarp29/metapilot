@@ -9,16 +9,7 @@
       <div class="max-w-[1440px] mx-auto px-6">
         <div class="flex justify-between items-center h-20">
           <!-- Brand/Logo -->
-          <div class="flex items-center space-x-3 group">
-            <div class="w-10 h-10 bg-gradient-to-br from-blue-600 to-indigo-700 rounded-xl flex items-center justify-center shadow-lg group-hover:scale-105 transition-standard">
-              <svg class="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4" />
-              </svg>
-            </div>
-            <Link href="/" class="text-xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-slate-900 to-slate-700 tracking-tight">
-              MetaPilot
-            </Link>
-          </div>
+          <BrandLogo></BrandLogo>
 
           <!-- Navigation Links -->
           <div class="hidden md:flex items-center space-x-1 lg:space-x-4 bg-slate-100/50 p-1.5 rounded-2xl border border-slate-200/30">
@@ -128,10 +119,16 @@ import { Link, usePage, Head } from '@inertiajs/vue3'
 import Toaster from '../Components/Toaster.vue'
 import WorkspaceLoader from '../Components/WorkspaceLoader.vue'
 import UserDropdown from '../Components/UserDropdown.vue'
+import BrandLogo from '../Components/BrandLogo.vue'
 
 const props = defineProps({
   title: String,
 })
+
+
+// const props = definrPros({
+//   logo : String
+// });
 
 const toaster = ref(null)
 const isLoading = ref(false)
