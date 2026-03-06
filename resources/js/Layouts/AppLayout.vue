@@ -85,7 +85,7 @@
 
           <!-- Actions -->
           <div class="flex items-center space-x-4">
-            <Link
+            <!-- <Link
               href="/schemas/create"
               class="hidden sm:flex items-center space-x-2 bg-slate-900 hover:bg-slate-800 text-white px-6 py-2.5 rounded-xl text-sm font-bold transition-standard shadow-lg shadow-slate-200 active:scale-95"
             >
@@ -93,7 +93,7 @@
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
               </svg>
               <span>New Schema</span>
-            </Link>
+            </Link> -->
             
             <div class="h-8 w-px bg-slate-200 mx-2 hidden sm:block"></div>
             
