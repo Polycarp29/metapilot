@@ -143,4 +143,20 @@ class Organization extends Model
     {
         return $this->hasMany(AdTrackEvent::class);
     }
+
+    /**
+     * Get the blog posts for the organization.
+     */
+    public function blogPosts()
+    {
+        return $this->hasMany(BlogPost::class);
+    }
+
+    /**
+     * Get the blog categories for the organization.
+     */
+    public function blogCategories()
+    {
+        return $this->hasMany(BlogCategory::class);
+    }
 }

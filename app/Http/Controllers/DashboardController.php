@@ -12,6 +12,11 @@ class DashboardController extends Controller
     public function index()
     {
         $organization = auth()->user()->currentOrganization();
+        
+        if (!$organization) {
+            return redirect()->route('organizations.select');
+        }
+
         $sitemapIds = $organization->sitemaps()->pluck('id');
 
         // 1. Basic Schema Stats

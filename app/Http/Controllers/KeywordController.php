@@ -21,8 +21,14 @@ class KeywordController extends Controller
      */
     public function trending()
     {
+        $organization = auth()->user()->currentOrganization();
+        
+        if (!$organization) {
+            return redirect()->route('organizations.select');
+        }
+
         return Inertia::render('Keywords/Trending', [
-            'organization' => auth()->user()->currentOrganization()
+            'organization' => $organization
         ]);
     }
 
@@ -35,10 +41,15 @@ class KeywordController extends Controller
         $gl = $request->input('gl', 'ke');
         $hl = $request->input('hl', 'en');
 
+        $organization = auth()->user()->currentOrganization();
+        if (!$organization) {
+            return redirect()->route('organizations.select');
+        }
+
         $data = null;
         if ($query) {
             $data = $this->keywordService->research(
-                auth()->user()->currentOrganization(),
+                $organization,
                 $query,
                 $gl,
                 $hl
@@ -49,7 +60,7 @@ class KeywordController extends Controller
                 'location' => $gl,
                 'language' => $hl,
                 'cached' => $data['cached'] ?? false
-            ], auth()->user()->currentOrganization()->id);
+            ], $organization->id);
         }
 
         return Inertia::render('Keywords/Research', [
@@ -73,8 +84,14 @@ class KeywordController extends Controller
      */
     public function intelligence()
     {
+        $organization = auth()->user()->currentOrganization();
+        
+        if (!$organization) {
+            return redirect()->route('organizations.select');
+        }
+
         return Inertia::render('Keywords/Intelligence', [
-            'organization' => auth()->user()->currentOrganization(),
+            'organization' => $organization,
             'industries' => \App\Models\Industry::orderBy('name')->get(['name', 'slug']),
         ]);
     }

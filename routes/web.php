@@ -7,6 +7,10 @@ use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\SchemaController;
 use App\Http\Controllers\SitemapController;
 use App\Http\Controllers\WelcomeController;
+use App\Http\Controllers\BlogPostController;
+use App\Http\Controllers\ContentHumanizerController;
+use App\Http\Controllers\ContentAuditController;
+use App\Http\Controllers\BlogTopicController;
 use Illuminate\Support\Facades\Route;
 use Inertia\Inertia;
 
@@ -58,6 +62,19 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::get('validate', [SchemaController::class, 'validate'])->name('validate');
         Route::get('test-google', [SchemaController::class, 'testWithGoogle'])->name('test-google');
         Route::post('fields/bulk', [SchemaController::class, 'bulkUpdateFields'])->name('fields.bulk');
+    });
+
+    // Content Hub
+    Route::get('/content', [BlogPostController::class, 'index'])->name('content.index');
+    
+    Route::prefix('api/content')->name('api.content.')->group(function () {
+        Route::apiResource('posts', BlogPostController::class)->except(['index', 'create', 'edit']);
+        Route::post('posts/{post}/analyze', [BlogPostController::class, 'analyze'])->name('posts.analyze');
+        Route::post('generate-outline', [BlogPostController::class, 'generateOutline'])->name('generate-outline');
+        Route::post('humanize', [ContentHumanizerController::class, 'humanize'])->name('humanize');
+        Route::post('detect-ai', [ContentHumanizerController::class, 'detectAi'])->name('detect-ai');
+        Route::post('audit', [ContentAuditController::class, 'audit'])->name('audit');
+        Route::get('topics', [BlogTopicController::class, 'index'])->name('topics.index');
     });
 
     // Sitemap management

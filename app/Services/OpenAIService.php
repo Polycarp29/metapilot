@@ -394,4 +394,207 @@ class OpenAIService
             return null;
         }
     }
+
+    /**
+     * Generate a professional blog outline based on a topic and keywords.
+     */
+    public function generateBlogOutline(string $topic, array $keywords): ?array
+    {
+        if (empty($this->apiKey) || !$this->hasModel()) {
+            return null;
+        }
+
+        try {
+            $response = Http::withToken($this->apiKey)
+                ->timeout(30)
+                ->post('https://api.openai.com/v1/chat/completions', [
+                'model' => $this->model,
+                'messages' => [
+                    [
+                        'role' => 'system',
+                        'content' => 'You are a Senior SEO Content Strategist. Your goal is to create a high-impact blog outline.
+                        
+                        Return a JSON object with this structure:
+                        {
+                            "title": "Suggested SEO Title",
+                            "meta_description": "Suggested Meta Description",
+                            "outline": [
+                                {"heading": "Introduction", "subsections": ["..."]},
+                                {"heading": "...", "subsections": ["..."]}
+                            ],
+                            "target_audience": "...",
+                            "estimated_reading_time": "..."
+                        }
+                        
+                        Strictly return JSON only.'
+                    ],
+                    [
+                        'role' => 'user',
+                        'content' => "Create an outline for: '$topic'. \nTarget Keywords: " . implode(', ', $keywords)
+                    ]
+                ],
+                'temperature' => 0.7,
+                'response_format' => ['type' => 'json_object']
+            ]);
+
+            if ($response->successful()) {
+                return json_decode($response->json()['choices'][0]['message']['content'], true);
+            }
+            return null;
+        } catch (\Exception $e) {
+            Log::error("OpenAI Outline Gen Exception: " . $e->getMessage());
+            return null;
+        }
+    }
+
+    /**
+     * Analyze content for AI probability and robotic patterns.
+     */
+    public function analyzeContentForAi(string $content): ?array
+    {
+        if (empty($this->apiKey) || !$this->hasModel()) {
+            return null;
+        }
+
+        try {
+            $response = Http::withToken($this->apiKey)
+                ->timeout(30)
+                ->post('https://api.openai.com/v1/chat/completions', [
+                'model' => $this->model,
+                'messages' => [
+                    [
+                        'role' => 'system',
+                        'content' => 'You are an AI Content Detector. Analyze the following text for robotic patterns.
+                        
+                        Return a JSON object with:
+                        {
+                            "ai_probability": 0-100,
+                            "reasoning": "Brief explanation",
+                            "flags": ["Flag 1", "Flag 2"],
+                            "human_score": 0-100
+                        }
+                        
+                        Strictly return JSON only.'
+                    ],
+                    [
+                        'role' => 'user',
+                        'content' => "Analyze this text: \n\n" . mb_substr($content, 0, 10000)
+                    ]
+                ],
+                'temperature' => 0.2,
+                'response_format' => ['type' => 'json_object']
+            ]);
+
+            if ($response->successful()) {
+                return json_decode($response->json()['choices'][0]['message']['content'], true);
+            }
+            return null;
+        } catch (\Exception $e) {
+            Log::error("OpenAI AI Detection Exception: " . $e->getMessage());
+            return null;
+        }
+    }
+
+    /**
+     * Humanize AI-generated content.
+     */
+    public function humanizeContent(string $text, string $style = 'professional'): ?array
+    {
+        if (empty($this->apiKey) || !$this->hasModel()) {
+            return null;
+        }
+
+        try {
+            $response = Http::withToken($this->apiKey)
+                ->timeout(60)
+                ->post('https://api.openai.com/v1/chat/completions', [
+                'model' => $this->model,
+                'messages' => [
+                    [
+                        'role' => 'system',
+                        'content' => "You are a Content Humanizer. Your goal is to rewrite AI-generated text to sound like it was written by a human. 
+                        Style: $style.
+                        
+                        Rules:
+                        1. Vary sentence length and structure.
+                        2. Use active voice and natural contractions.
+                        3. Introduce subtle human nuances (e.g. slight conversational shifts).
+                        4. Maintain the same core information and SEO keywords.
+                        
+                        Return a JSON object with:
+                        {
+                            \"text\": \"The humanized text\",
+                            \"changes\": [\"List of major changes made\"]
+                        }
+                        
+                        Strictly return JSON only."
+                    ],
+                    [
+                        'role' => 'user',
+                        'content' => "Humanize this: \n\n" . mb_substr($text, 0, 10000)
+                    ]
+                ],
+                'temperature' => 0.8,
+                'response_format' => ['type' => 'json_object']
+            ]);
+
+            if ($response->successful()) {
+                return json_decode($response->json()['choices'][0]['message']['content'], true);
+            }
+            return null;
+        } catch (\Exception $e) {
+            Log::error("OpenAI Humanizer Exception: " . $e->getMessage());
+            return null;
+        }
+    }
+
+    /**
+     * Audit existing content or a URL for SEO gaps.
+     */
+    public function auditContentForSeo(string $content, array $targetKeywords): ?array
+    {
+        if (empty($this->apiKey) || !$this->hasModel()) {
+            return null;
+        }
+
+        try {
+            $response = Http::withToken($this->apiKey)
+                ->timeout(45)
+                ->post('https://api.openai.com/v1/chat/completions', [
+                'model' => $this->model,
+                'messages' => [
+                    [
+                        'role' => 'system',
+                        'content' => 'You are a Technical SEO Auditor. Analyze the content against the target keywords.
+                        
+                        Return a JSON object with:
+                        {
+                            "seo_score": 0-100,
+                            "summary": "Overall health summary",
+                            "keyword_gaps": ["Missing keywords", "Low density keywords"],
+                            "optimization_tips": ["Tip 1", "Tip 2"],
+                            "readability_analysis": "...",
+                            "fix_priorities": ["High: ...", "Medium: ..."]
+                        }
+                        
+                        Strictly return JSON only.'
+                    ],
+                    [
+                        'role' => 'user',
+                        'content' => "Analyze this content against: " . implode(', ', $targetKeywords) . "\n\nContent:\n" . mb_substr($content, 0, 12000)
+                    ]
+                ],
+                'temperature' => 0.3,
+                'response_format' => ['type' => 'json_object']
+            ]);
+
+            if ($response->successful()) {
+                return json_decode($response->json()['choices'][0]['message']['content'], true);
+            }
+            return null;
+        } catch (\Exception $e) {
+            Log::error("OpenAI Audit Exception: " . $e->getMessage());
+            return null;
+        }
+    }
 }
