@@ -70,9 +70,11 @@ class DashboardController extends Controller
     }
 
 
-    public function loadBrandLogo(){
-        $fetchLogo = SiteConfig::first();
-
-        
+    public function loadBrandLogo()
+    {
+        return response()->json([
+            'logo_url'  => SiteConfig::get('brand_logo_url'),
+            'site_name' => SiteConfig::get('site_name', 'MetaPilot'),
+        ]);
     }
 }

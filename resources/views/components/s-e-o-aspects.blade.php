@@ -17,8 +17,15 @@
 @if ($seoService->getFaviconUrl())
     <link rel="icon" type="{{ $seoService->getFaviconType() }}" href="{{ $seoService->getFaviconUrl() }}">
 @else
-    {{-- Default favicon --}}
-    <link rel="icon" type="image/x-icon" href="{{ asset('assets/default.jpg') }}">
+    @php $brandLogoUrl = \App\Models\SiteConfig::get('brand_logo_url'); @endphp
+    @if ($brandLogoUrl)
+        {{-- Use the site brand logo as favicon fallback --}}
+        <link rel="icon" type="image/png" href="{{ $brandLogoUrl }}">
+        <link rel="apple-touch-icon" href="{{ $brandLogoUrl }}">
+    @else
+        {{-- Default favicon --}}
+        <link rel="icon" type="image/x-icon" href="{{ asset('assets/default.jpg') }}">
+    @endif
 @endif
 
 {{-- Canonical URL --}}

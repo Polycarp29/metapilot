@@ -4,6 +4,7 @@ namespace App\Http\Middleware;
 
 use Illuminate\Http\Request;
 use Inertia\Middleware;
+use App\Models\SiteConfig;
 
 class HandleInertiaRequests extends Middleware
 {
@@ -44,6 +45,10 @@ class HandleInertiaRequests extends Middleware
                 'error' => fn () => $request->session()->get('error'),
             ],
             'csrf_token' => csrf_token(),
+            'branding' => [
+                'logo_url'  => SiteConfig::get('brand_logo_url'),
+                'site_name' => SiteConfig::get('site_name', 'MetaPilot'),
+            ],
         ]);
     }
 }
