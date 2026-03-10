@@ -46,7 +46,7 @@ class HandleInertiaRequests extends Middleware
             ],
             'csrf_token' => csrf_token(),
             'branding' => [
-                'logo_url'  => SiteConfig::get('brand_logo_url'),
+                'logo_url'  => SiteConfig::get('site_logo') ?? SiteConfig::get('brand_logo_url'),
                 'site_name' => SiteConfig::get('site_name', 'MetaPilot'),
             ],
         ]);

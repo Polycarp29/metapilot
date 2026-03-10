@@ -8,6 +8,9 @@
     <div class="relative z-10 w-full max-w-2xl mx-auto px-6">
       <!-- Header -->
       <div class="text-center mb-10">
+        <div class="flex flex-col items-center justify-center mb-6">
+          <BrandLogo />
+        </div>
         <h1 class="text-4xl font-extrabold tracking-tight text-slate-900 mb-2">Select Workspace</h1>
         <p class="text-slate-500 font-medium">Which workspace would you like to access today?</p>
       </div>
@@ -48,6 +51,7 @@
 
 <script setup>
 import { router } from '@inertiajs/vue3';
+import BrandLogo from '../../Components/BrandLogo.vue';
 
 defineProps({
   organizations: Array,

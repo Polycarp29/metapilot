@@ -597,4 +597,82 @@ class OpenAIService
             return null;
         }
     }
+
+    /**
+     * Generate a professional introduction for a blog post.
+     */
+    public function generateIntroduction(string $title, string $focusKeyword): ?string
+    {
+        if (empty($this->apiKey) || !$this->hasModel()) {
+            return null;
+        }
+
+        try {
+            $response = Http::withToken($this->apiKey)
+                ->timeout(30)
+                ->post('https://api.openai.com/v1/chat/completions', [
+                'model' => $this->model,
+                'messages' => [
+                    [
+                        'role' => 'system',
+                        'content' => 'You are a professional copywriter. Write a compelling introduction for a blog post. 
+                        Keep it between 100-150 words. Use a hook to engage the reader.
+                        Return only the plain text of the introduction.'
+                    ],
+                    [
+                        'role' => 'user',
+                        'content' => "Write an introduction for a blog post titled: '$title'. \nFocus Keyword: '$focusKeyword'"
+                    ]
+                ],
+                'temperature' => 0.7,
+            ]);
+
+            if ($response->successful()) {
+                return trim($response->json()['choices'][0]['message']['content']);
+            }
+            return null;
+        } catch (\Exception $e) {
+            Log::error("OpenAI Intro Gen Exception: " . $e->getMessage());
+            return null;
+        }
+    }
+
+    /**
+     * Refine or rewrite a piece of content based on specific instructions.
+     */
+    public function refineContent(string $text, string $instruction): ?string
+    {
+        if (empty($this->apiKey) || !$this->hasModel()) {
+            return null;
+        }
+
+        try {
+            $response = Http::withToken($this->apiKey)
+                ->timeout(45)
+                ->post('https://api.openai.com/v1/chat/completions', [
+                'model' => $this->model,
+                'messages' => [
+                    [
+                        'role' => 'system',
+                        'content' => 'You are an expert editor. Rewrite or refine the provided text according to the user instruction.
+                        Maintain the original meaning but improve flow, tone, or clarity as requested.
+                        Return only the refined text.'
+                    ],
+                    [
+                        'role' => 'user',
+                        'content' => "Text to refine: \n\n\"$text\" \n\nInstruction: $instruction"
+                    ]
+                ],
+                'temperature' => 0.6,
+            ]);
+
+            if ($response->successful()) {
+                return trim($response->json()['choices'][0]['message']['content']);
+            }
+            return null;
+        } catch (\Exception $e) {
+            Log::error("OpenAI Refine Gen Exception: " . $e->getMessage());
+            return null;
+        }
+    }
 }

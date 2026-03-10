@@ -9,7 +9,7 @@
       <div class="max-w-[1440px] mx-auto px-6">
         <div class="flex justify-between items-center h-20">
           <!-- Brand/Logo -->
-          <BrandLogo></BrandLogo>
+          <BrandLogo ></BrandLogo>
 
           <!-- Navigation Links -->
           <div class="hidden md:flex items-center space-x-1 lg:space-x-4 bg-slate-100/50 p-1.5 rounded-2xl border border-slate-200/30">
@@ -112,7 +112,7 @@
     <!-- Footer -->
     <footer class="mt-auto border-t border-slate-200/50 py-10 px-6">
       <div class="max-w-[1440px] mx-auto flex flex-col md:flex-row justify-between items-center gap-6">
-        <p class="text-slate-500 text-sm">© 2026 MetaPilot • AI-Powered SEO Management</p>
+        <p class="text-slate-500 text-sm font-medium">© 2026 {{ $page.props.branding?.site_name || 'MetaPilot' }} • AI-Powered SEO Management</p>
         <div class="flex items-center space-x-6">
           <Link :href="route('privacy')" class="text-slate-400 hover:text-blue-600 text-xs font-medium transition-colors uppercase tracking-widest">Privacy</Link>
           <Link :href="route('terms')" class="text-slate-400 hover:text-blue-600 text-xs font-medium transition-colors uppercase tracking-widest">Terms</Link>

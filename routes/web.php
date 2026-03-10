@@ -71,6 +71,8 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::apiResource('posts', BlogPostController::class)->except(['index', 'create', 'edit']);
         Route::post('posts/{post}/analyze', [BlogPostController::class, 'analyze'])->name('posts.analyze');
         Route::post('generate-outline', [BlogPostController::class, 'generateOutline'])->name('generate-outline');
+        Route::post('generate-intro', [BlogPostController::class, 'generateIntro'])->name('generate-intro');
+        Route::post('refine-content', [BlogPostController::class, 'refineContent'])->name('refine-content');
         Route::post('humanize', [ContentHumanizerController::class, 'humanize'])->name('humanize');
         Route::post('detect-ai', [ContentHumanizerController::class, 'detectAi'])->name('detect-ai');
         Route::post('audit', [ContentAuditController::class, 'audit'])->name('audit');

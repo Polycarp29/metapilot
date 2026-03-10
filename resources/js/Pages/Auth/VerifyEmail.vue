@@ -11,15 +11,10 @@
       <div class="relative z-10 w-full max-w-md mx-auto px-6">
         <!-- Logo/Brand -->
         <div class="text-center mb-10">
-          <div class="inline-flex items-center justify-center p-4 bg-white rounded-2xl shadow-premium mb-4">
-            <svg class="w-10 h-10 text-primary" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-              <path d="M12 22C17.5228 22 22 17.5228 22 12C22 6.47715 17.5228 2 12 2C6.47715 2 2 6.47715 2 12C2 17.5228 6.47715 22 12 22Z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-              <path d="M2 12H22" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-              <path d="M12 2C14.5013 4.73835 15.9228 8.29203 16 12C15.9228 15.708 14.5013 19.2616 12 22C9.49872 19.2616 8.07725 15.708 8 12C8.07725 8.29203 9.49872 4.73835 12 2V2Z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-            </svg>
+          <div class="flex flex-col items-center justify-center mb-4">
+            <BrandLogo />
           </div>
-          <h1 class="text-4xl font-extrabold tracking-tight text-slate-900 mb-2">Verify Email</h1>
-          <p class="text-slate-500 font-medium">Thanks for signing up! Please verify your email address to get started.</p>
+          <p class="text-slate-500 font-medium mt-4">Thanks for signing up! Please verify your email address to get started.</p>
         </div>
 
         <!-- Verification Card -->
@@ -63,7 +58,7 @@
     <!-- Persistent Legal Footer -->
     <footer class="relative z-10 py-10 border-t border-slate-200/50 bg-white/30 backdrop-blur-sm mt-auto">
       <div class="max-w-[1440px] mx-auto px-6 flex flex-col md:flex-row justify-between items-center gap-6">
-        <p class="text-slate-500 text-sm font-medium">© 2026 MetaPilot • AI-Powered SEO Management</p>
+        <p class="text-slate-500 text-sm font-medium">© 2026 {{ $page.props.branding?.site_name || 'MetaPilot' }} • AI-Powered SEO Management</p>
         <div class="flex items-center space-x-8 text-sm font-bold uppercase tracking-widest">
           <a :href="route('privacy')" class="text-slate-400 hover:text-primary transition-colors">Privacy</a>
           <a :href="route('terms')" class="text-slate-400 hover:text-primary transition-colors">Terms</a>
@@ -77,6 +72,7 @@
 <script setup>
 import { computed } from 'vue';
 import { useForm, router } from '@inertiajs/vue3';
+import BrandLogo from '../../Components/BrandLogo.vue';
 import { useToastStore } from '@/stores/useToastStore';
 import Toaster from '@/Components/Toaster.vue';
 

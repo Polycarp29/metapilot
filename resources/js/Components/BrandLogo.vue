@@ -1,10 +1,16 @@
 <script setup>
-import { computed } from 'vue';
+import { computed, onMounted } from 'vue';
 import { Link, usePage } from '@inertiajs/vue3';
 
 const branding = computed(() => usePage().props.branding ?? {});
 const logoUrl  = computed(() => branding.value.logo_url  || null);
 const siteName = computed(() => branding.value.site_name || 'MetaPilot');
+
+
+onMounted(() => {
+    console.log('Branding:', branding.value);
+    console.log('Logo URL:', logoUrl.value);
+});
 </script>
 
 <template>

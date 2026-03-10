@@ -223,7 +223,8 @@ defineProps({
   recentSchemas: Array,
   sitemaps: Array,
   recentInsights: Array,
-  organizationName: String
+  organizationName: String,
+  // branding: Array,
 })
 
 const formatNumber = (num) => {

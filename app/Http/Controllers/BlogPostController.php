@@ -63,6 +63,8 @@ class BlogPostController extends Controller
             'content' => 'nullable|string',
             'blog_category_id' => 'nullable|exists:blog_categories,id',
             'focus_keyword' => 'nullable|string|max:100',
+            'meta_title' => 'nullable|string|max:255',
+            'meta_description' => 'nullable|string',
             'secondary_keywords' => 'nullable|array',
             'long_tail_keywords' => 'nullable|array',
             'status' => 'required|in:draft,review,published,archived',
@@ -85,6 +87,8 @@ class BlogPostController extends Controller
             'content' => 'nullable|string',
             'blog_category_id' => 'nullable|exists:blog_categories,id',
             'focus_keyword' => 'nullable|string|max:100',
+            'meta_title' => 'nullable|string|max:255',
+            'meta_description' => 'nullable|string',
             'secondary_keywords' => 'nullable|array',
             'long_tail_keywords' => 'nullable|array',
             'status' => 'sometimes|required|in:draft,review,published,archived',
@@ -136,6 +140,30 @@ class BlogPostController extends Controller
         $outline = $this->openAi->generateBlogOutline($request->topic, $request->keywords ?? []);
 
         return response()->json($outline);
+    }
+
+    public function generateIntro(Request $request)
+    {
+        $request->validate([
+            'title' => 'required|string|max:255',
+            'focus_keyword' => 'required|string|max:100'
+        ]);
+
+        $intro = $this->openAi->generateIntroduction($request->title, $request->focus_keyword);
+
+        return response()->json(['intro' => $intro]);
+    }
+
+    public function refineContent(Request $request)
+    {
+        $request->validate([
+            'content' => 'required|string',
+            'instruction' => 'required|string|max:500'
+        ]);
+
+        $refined = $this->openAi->refineContent($request->content, $request->instruction);
+
+        return response()->json(['refined' => $refined]);
     }
 
     public function destroy(BlogPost $post)

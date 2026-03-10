@@ -70,6 +70,7 @@ class DashboardController extends Controller
             'recentSchemas' => $recentSchemas,
             'sitemaps' => $sitemaps,
             'recentInsights' => $recentInsights,
+            // 'branding' => $this->loadBrandLogo(),
             'organizationName' => $organization->name
         ]);
     }

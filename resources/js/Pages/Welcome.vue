@@ -6,14 +6,7 @@
     <nav class="fixed top-0 w-full z-50 bg-white/70 backdrop-blur-xl border-b border-slate-100">
       <div class="max-w-7xl mx-auto px-6 h-20 flex items-center justify-between">
         <div class="flex items-center gap-10">
-          <Link href="/" class="flex items-center gap-2 group">
-            <div class="w-10 h-10 bg-blue-600 rounded-xl flex items-center justify-center text-white shadow-lg shadow-blue-500/20 group-hover:scale-105 transition-standard">
-              <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z" />
-              </svg>
-            </div>
-            <span class="text-xl font-black tracking-tight text-slate-900">METAPILOT</span>
-          </Link>
+          <BrandLogo />
 
           <div class="hidden md:flex items-center gap-8">
             <a href="#solutions" class="text-sm font-semibold text-slate-600 hover:text-blue-600 transition-colors">Solutions</a>
@@ -176,10 +169,9 @@
       <div class="max-w-7xl mx-auto px-6">
         <div class="grid md:grid-cols-4 gap-12">
           <div class="col-span-2">
-            <Link href="/" class="flex items-center gap-2 mb-8">
-              <div class="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center text-white font-bold">M</div>
-              <span class="text-xl font-black text-slate-900 tracking-tight">METAPILOT</span>
-            </Link>
+            <div class="mb-8">
+               <BrandLogo />
+            </div>
             <p class="text-slate-500 max-w-sm mb-8 leading-relaxed">
               Empowering digital teams with the most advanced SEO automation and analytics platform. Build for speed, optimized for search.
             </p>
@@ -208,7 +200,7 @@
           </div>
         </div>
         <div class="mt-20 pt-8 border-t border-slate-200 flex flex-col md:flex-row justify-between items-center gap-4 text-slate-400 text-xs font-bold uppercase tracking-widest">
-          <p>© 2026 Metapilot SEO. All rights reserved.</p>
+          <p>© 2026 {{ $page.props.branding?.site_name || 'MetaPilot' }} SEO. All rights reserved.</p>
           <div class="flex gap-8">
             <span>Status: Healthy</span>
             <span>Region: Global</span>
@@ -222,6 +214,7 @@
 <script setup>
 import { ref, defineAsyncComponent } from 'vue'
 import { Head, Link } from '@inertiajs/vue3'
+import BrandLogo from '../Components/BrandLogo.vue'
 
 defineProps({
   canLogin: Boolean,

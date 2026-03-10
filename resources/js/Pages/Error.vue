@@ -9,6 +9,9 @@
       <div class="relative z-10 w-full max-w-lg mx-auto px-6">
         <!-- Error Content -->
         <div class="text-center">
+            <div class="flex flex-col items-center justify-center mb-12">
+                <BrandLogo />
+            </div>
             <div class="inline-flex items-center justify-center p-6 bg-white rounded-3xl shadow-premium mb-8 animate-bounce-subtle">
                 <span class="text-7xl font-black bg-clip-text text-transparent bg-gradient-to-br from-primary to-blue-600">
                     {{ status }}
@@ -41,7 +44,7 @@
     <!-- Persistent Legal Footer -->
     <footer class="relative z-10 py-10 border-t border-slate-200/50 bg-white/30 backdrop-blur-sm mt-auto">
       <div class="max-w-[1440px] mx-auto px-6 flex flex-col md:flex-row justify-between items-center gap-6">
-        <p class="text-slate-500 text-sm font-medium">© 2026 MetaPilot • AI-Powered SEO Management</p>
+        <p class="text-slate-500 text-sm font-medium">© 2026 {{ $page.props.branding?.site_name || 'MetaPilot' }} • AI-Powered SEO Management</p>
         <div class="flex items-center space-x-8 text-sm font-bold uppercase tracking-widest">
           <a href="/privacy" class="text-slate-400 hover:text-primary transition-colors">Privacy</a>
           <a href="/terms" class="text-slate-400 hover:text-primary transition-colors">Terms</a>
@@ -54,6 +57,7 @@
 
 <script setup>
 import { computed } from 'vue';
+import BrandLogo from '../Components/BrandLogo.vue';
 
 const props = defineProps({
   status: {
