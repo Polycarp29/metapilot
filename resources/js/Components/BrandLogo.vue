@@ -7,10 +7,7 @@ const logoUrl  = computed(() => branding.value.logo_url  || null);
 const siteName = computed(() => branding.value.site_name || 'MetaPilot');
 
 
-onMounted(() => {
-    console.log('Branding:', branding.value);
-    console.log('Logo URL:', logoUrl.value);
-});
+
 </script>
 
 <template>
