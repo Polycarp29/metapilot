@@ -21,6 +21,7 @@ Route::get('cookies', [\App\Http\Controllers\LegalController::class, 'cookies'])
 
 // Landing Page
 Route::get('/', [WelcomeController::class, 'index'])->name('welcome');
+Route::get('/sitemap.xml', [\App\Http\Controllers\SiteSitemapController::class, 'index']);
 
 // Guest routes (Login & Register)
 Route::middleware('guest')->group(function () {

@@ -1,81 +1,138 @@
 <template>
-  <Head title="Welcome" />
+  <Head>
+    <title>Metapilot | Next-Gen AI SEO Automation & Structured Data</title>
+    <meta name="description" content="Metapilot is the most advanced AI SEO platform. Automate JSON-LD structured data, monitor sitemaps, and get AI-driven insights to dominate search engine results." />
+    <meta property="og:title" content="Metapilot | AI-Powered SEO Automation" />
+    <meta property="og:description" content="Automate your technical SEO with Metapilot. Structured data, sitemaps, and intelligence insights driven by AI." />
+    <meta property="og:type" content="website" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <link rel="canonical" href="/" />
+    <script type="application/ld+json">
+      {
+        "@context": "https://schema.org",
+        "@type": "SoftwareApplication",
+        "name": "Metapilot",
+        "operatingSystem": "Web",
+        "applicationCategory": "SEO Software",
+        "offers": {
+          "@type": "Offer",
+          "price": "0",
+          "priceCurrency": "USD"
+        },
+        "description": "Metapilot is an AI-powered SEO automation platform that handles structured data, sitemaps, and technical SEO health."
+      }
+    </script>
+  </Head>
 
-  <div class="min-h-screen bg-[hsl(var(--color-background))] font-sans antialiased text-slate-900 selection:bg-blue-100 selection:text-blue-900">
+  <div class="min-h-screen bg-[hsl(var(--color-background))] font-sans antialiased text-slate-900 selection:bg-blue-100 selection:text-blue-900 overflow-x-hidden">
     <!-- Navigation -->
-    <nav class="fixed top-0 w-full z-50 bg-white/70 backdrop-blur-xl border-b border-slate-100">
-      <div class="max-w-7xl mx-auto px-6 h-20 flex items-center justify-between">
-        <div class="flex items-center gap-10">
+    <nav 
+      class="fixed top-0 w-full z-50 transition-all duration-500 border-b"
+      :class="[scrolled ? 'bg-white/90 backdrop-blur-xl border-slate-200/60 py-4 shadow-lg shadow-slate-900/5' : 'bg-transparent border-transparent py-6']"
+    >
+      <div class="max-w-7xl mx-auto px-6 flex items-center justify-between">
+        <div class="flex items-center gap-12">
           <BrandLogo />
 
-          <div class="hidden md:flex items-center gap-8">
-            <a href="#solutions" class="text-sm font-semibold text-slate-600 hover:text-blue-600 transition-colors">Solutions</a>
-            <a href="#features" class="text-sm font-semibold text-slate-600 hover:text-blue-600 transition-colors">Features</a>
-            <a href="/terms" class="text-sm font-semibold text-slate-600 hover:text-blue-600 transition-colors">Enterprise</a>
+          <div class="hidden lg:flex items-center gap-10">
+            <a href="#solutions" class="text-sm font-bold text-slate-500 hover:text-blue-600 transition-all duration-300">Solutions</a>
+            <a href="#features" class="text-sm font-bold text-slate-500 hover:text-blue-600 transition-all duration-300">Features</a>
+            <a href="/terms" class="text-sm font-bold text-slate-500 hover:text-blue-600 transition-all duration-300">Enterprise</a>
           </div>
         </div>
 
-        <div class="flex items-center gap-4">
+        <div class="flex items-center gap-6">
           <Link
             v-if="canLogin"
             :href="route('login')"
-            class="hidden sm:block text-sm font-bold text-slate-600 hover:text-blue-600 transition-colors px-4 py-2"
+            class="hidden sm:block text-sm font-bold text-slate-600 hover:text-blue-600 transition-colors"
           >
-            Login
+            Sign In
           </Link>
           <Link
             v-if="canRegister"
             :href="route('register')"
-            class="bg-slate-900 hover:bg-slate-800 text-white px-6 py-2.5 rounded-xl text-sm font-bold shadow-lg shadow-slate-900/10 transition-standard active:scale-95"
+            class="bg-slate-900 hover:bg-slate-800 text-white px-7 py-3 rounded-2xl text-sm font-bold shadow-2xl shadow-slate-900/10 transition-all duration-300 active:scale-95 hover:shadow-slate-900/20"
           >
-            Start Free
+            Get Started Free
           </Link>
         </div>
       </div>
     </nav>
 
     <!-- Hero Section -->
-    <section class="pt-40 pb-24 px-6">
-      <div class="max-w-7xl mx-auto">
-        <div class="relative overflow-hidden bg-slate-900 rounded-[3rem] p-12 md:p-24 shadow-2xl">
-          <!-- Background Orbs -->
-          <div class="absolute -top-24 -right-24 w-[500px] h-[500px] bg-blue-600/20 rounded-full blur-[120px] animate-pulse"></div>
-          <div class="absolute -bottom-24 -left-24 w-[400px] h-[400px] bg-indigo-600/20 rounded-full blur-[100px] animate-pulse" style="animation-delay: 2s"></div>
-          
-          <div class="relative z-10 max-w-3xl">
-            <span class="inline-block px-4 py-1.5 rounded-full bg-blue-500/10 border border-blue-400/20 text-blue-400 text-sm font-bold uppercase tracking-widest mb-8">
-              The Next Gen SEO Engine
-            </span>
-            <h1 class="text-5xl md:text-7xl font-extrabold text-white tracking-tight mb-8 leading-[1.05]">
-              Master Your Search <span class="bg-clip-text text-transparent bg-gradient-to-r from-blue-400 to-indigo-300">Visibility</span> with AI
+    <section class="relative pt-48 pb-32 px-6 overflow-hidden">
+      <!-- Ambient Background -->
+      <div class="absolute top-0 left-1/2 -translate-x-1/2 w-full h-full max-w-7xl">
+        <div class="absolute top-0 right-0 w-[600px] h-[600px] bg-blue-400/10 rounded-full blur-[160px] animate-blob"></div>
+        <div class="absolute bottom-0 left-0 w-[500px] h-[500px] bg-indigo-400/10 rounded-full blur-[140px] animate-blob animation-delay-2000"></div>
+      </div>
+
+      <div class="max-w-7xl mx-auto relative z-10">
+        <div class="grid lg:grid-cols-12 gap-16 items-center">
+          <div class="lg:col-span-7 space-y-10">
+            <div class="inline-flex items-center gap-3 px-5 py-2 rounded-full bg-blue-50 border border-blue-100/50 text-blue-600 text-xs font-black uppercase tracking-[0.2em] animate-fade-in">
+              <span class="relative flex h-2 w-2">
+                <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-blue-400 opacity-75"></span>
+                <span class="relative inline-flex rounded-full h-2 w-2 bg-blue-600"></span>
+              </span>
+              v2.0: The AI SEO Evolution
+            </div>
+            
+            <h1 class="text-6xl lg:text-[5.5rem] font-black text-slate-900 tracking-tight leading-[0.95] animate-slide-up">
+              Own the First Page with <span class="bg-clip-text text-transparent bg-gradient-to-br from-blue-600 to-indigo-500">Autonomous</span> SEO.
             </h1>
-            <p class="text-xl text-slate-400 leading-relaxed mb-12 max-w-2xl">
-              Metapilot automates structured data, monitors your technical SEO health, and provides AI-driven insights to dominate search results.
+            
+            <p class="text-2xl text-slate-500 font-medium leading-relaxed max-w-2xl animate-slide-up animation-delay-300">
+              Metapilot automates complex technical SEO, structured data, and content intelligence so you can focus on scale, not maintenance.
             </p>
-            <div class="flex flex-wrap gap-6">
+
+            <div class="flex flex-wrap gap-6 animate-slide-up animation-delay-500">
               <Link
                 :href="route('register')"
-                class="bg-blue-600 hover:bg-blue-500 text-white px-10 py-5 rounded-2xl font-bold text-lg transition-standard shadow-xl shadow-blue-900/40 active:scale-95 flex items-center gap-3"
+                class="group bg-blue-600 hover:bg-blue-700 text-white px-10 py-6 rounded-[2rem] font-black text-xl transition-all duration-300 shadow-2xl shadow-blue-500/30 active:scale-95 flex items-center gap-4"
               >
-                Get Started for Free
-                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 8l4 4m0 0l-4 4m4-4H3" />
+                Launch Your Campaign
+                <svg class="w-6 h-6 group-hover:translate-x-2 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M17 8l4 4m0 0l-4 4m4-4H3" />
                 </svg>
               </Link>
               <a
                 href="#solutions"
-                class="bg-white/5 hover:bg-white/10 text-white backdrop-blur-md px-10 py-5 rounded-2xl font-bold text-lg transition-standard border border-white/10 active:scale-95"
+                class="glass hover:bg-white text-slate-700 px-10 py-6 rounded-[2rem] font-bold text-xl transition-all duration-300 border-slate-200 border-2 active:scale-95"
               >
-                Explore Solutions
+                See it in Action
               </a>
             </div>
-            
-            <div class="mt-16 flex items-center gap-8 grayscale opacity-50 contrast-125">
-              <span class="text-xs font-bold text-slate-500 uppercase tracking-widest">Trusted by builders at</span>
-              <div class="flex gap-8 items-center">
-                <div class="w-24 h-6 bg-slate-700 rounded-md"></div>
-                <div class="w-20 h-6 bg-slate-700 rounded-md"></div>
-                <div class="w-28 h-6 bg-slate-700 rounded-md"></div>
+
+            <div class="pt-12 flex flex-col gap-6 animate-fade-in animation-delay-700">
+              <p class="text-xs font-black text-slate-400 uppercase tracking-widest">Integrated with the ecosystems you trust</p>
+              <div class="flex flex-wrap gap-10 items-center grayscale opacity-60">
+                <div class="h-8 w-24 bg-slate-200 rounded-lg"></div>
+                <div class="h-8 w-28 bg-slate-200 rounded-lg"></div>
+                <div class="h-8 w-20 bg-slate-200 rounded-lg"></div>
+                <div class="h-8 w-32 bg-slate-200 rounded-lg"></div>
+              </div>
+            </div>
+          </div>
+
+          <div class="lg:col-span-5 relative animate-float">
+            <div class="relative bg-slate-900 rounded-[3.5rem] p-4 shadow-4xl aspect-[4/5] overflow-hidden border-[12px] border-slate-800/50 group">
+              <div class="absolute inset-0 bg-gradient-to-tr from-blue-600/20 to-transparent z-10 pointer-events-none"></div>
+              <div class="relative h-full w-full rounded-[2.5rem] bg-slate-950 p-8 flex flex-col justify-between overflow-hidden shadow-inner">
+                <div class="absolute inset-0 bg-blue-600/5 group-hover:bg-blue-600/0 transition-colors duration-500"></div>
+                <img 
+                  src="/images/dashboard-mockup.png" 
+                  alt="Metapilot Analytics Dashboard"
+                  class="w-full h-auto rounded-xl shadow-2xl group-hover:scale-[1.02] transition-transform duration-700 z-10"
+                />
+                
+                <!-- Floating Badge remains as a dynamic element -->
+                <div class="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-64 h-64 bg-blue-600 rounded-full blur-[100px] opacity-20"></div>
+                <div class="self-end bg-white/10 backdrop-blur-md p-6 rounded-[2rem] border border-white/10 space-y-2 animate-bounce-slow z-20 mt-4">
+                   <div class="text-3xl font-black text-white tracking-tighter cursor-default">98.2</div>
+                   <div class="text-[10px] font-black text-blue-200 uppercase tracking-widest">Visibility Score</div>
+                </div>
               </div>
             </div>
           </div>
@@ -83,127 +140,100 @@
       </div>
     </section>
 
-    <!-- Solutions Section (Tabbed) -->
-    <section id="solutions" class="py-24 px-6 bg-white">
+    <!-- Solutions Section -->
+    <section id="solutions" class="py-32 px-6 bg-white overflow-hidden relative">
       <div class="max-w-7xl mx-auto">
-        <div class="text-center max-w-3xl mx-auto mb-20">
-          <h2 class="text-4xl md:text-5xl font-black text-slate-900 tracking-tight mb-6">Innovative Solutions for Modern SEO</h2>
-          <p class="text-lg text-slate-500 leading-relaxed">Everything you need to scale your organic presence without the manual grind.</p>
+        <div class="grid lg:grid-cols-2 gap-24 items-end mb-20">
+          <div class="space-y-6">
+            <h2 class="text-5xl lg:text-6xl font-black text-slate-900 tracking-tight leading-tight">
+              One Platform. <br/>Infinite <span class="bg-clip-text text-transparent bg-gradient-to-r from-blue-600 to-indigo-600">Organic Growth</span>.
+            </h2>
+            <p class="text-xl text-slate-500 font-medium leading-relaxed max-w-xl">
+              We've automated the tedious parts of SEO so you can focus on building products people love.
+            </p>
+          </div>
         </div>
 
-        <!-- Tab Controls -->
-        <div class="flex flex-wrap justify-center gap-2 mb-12">
-          <button 
-            v-for="(tab, index) in solutions" 
-            :key="index"
-            @click="activeTab = index"
-            class="px-8 py-4 rounded-2xl font-bold transition-standard text-sm flex items-center gap-2 border-2"
-            :class="activeTab === index 
-              ? 'bg-blue-50 border-blue-600 text-blue-600 shadow-lg shadow-blue-600/5' 
-              : 'bg-white border-transparent text-slate-500 hover:bg-slate-50 hover:text-slate-900'"
+        <!-- Solutions Grid -->
+        <div class="grid md:grid-cols-2 gap-10">
+          <div 
+            v-for="(sol, idx) in solutions" 
+            :key="idx"
+            class="group p-1 bg-slate-50 hover:bg-gradient-to-br hover:from-blue-600 hover:to-indigo-600 rounded-[3rem] transition-all duration-500 cursor-default"
           >
-            <component :is="tab.icon" class="w-5 h-5" />
-            {{ tab.name }}
-          </button>
-        </div>
-
-        <!-- Tab Content -->
-        <div class="relative min-h-[500px]">
-          <transition 
-            enter-active-class="transition ease-out duration-300"
-            enter-from-class="opacity-0 translate-y-4"
-            enter-to-class="opacity-100 translate-y-0"
-            leave-active-class="transition ease-in duration-200"
-            leave-from-class="opacity-100 translate-y-0"
-            leave-to-class="opacity-0 -translate-y-4"
-          >
-            <div :key="activeTab" class="grid lg:grid-cols-2 gap-12 items-center">
-              <div class="space-y-8">
-                <div class="inline-flex items-center gap-2 px-4 py-2 bg-blue-50 text-blue-600 rounded-xl font-bold text-xs uppercase tracking-widest">
-                  <component :is="solutions[activeTab].icon" class="w-4 h-4" />
-                  {{ solutions[activeTab].badge }}
-                </div>
-                <h3 class="text-4xl font-extrabold text-slate-900 leading-tight">
-                  {{ solutions[activeTab].title }}
-                </h3>
-                <p class="text-xl text-slate-500 leading-relaxed">
-                  {{ solutions[activeTab].description }}
-                </p>
-                <ul class="space-y-4">
-                  <li v-for="feature in solutions[activeTab].features" :key="feature" class="flex items-center gap-3 text-slate-700 font-medium">
-                    <div class="w-6 h-6 bg-emerald-100 text-emerald-600 rounded-lg flex items-center justify-center">
-                      <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M5 13l4 4L19 7" /></svg>
-                    </div>
-                    {{ feature }}
-                  </li>
-                </ul>
-                <Link 
-                  :href="route('register')"
-                  class="inline-flex items-center gap-2 text-blue-600 font-bold hover:gap-4 transition-all"
-                >
-                  Start using this feature 
-                  <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14 5l7 7-7 7" /></svg>
-                </Link>
+            <div class="bg-white p-12 rounded-[2.8rem] h-full flex flex-col justify-between items-start space-y-8 group-hover:bg-white/95 transition-colors">
+              <div class="w-16 h-16 bg-slate-50 rounded-[1.5rem] flex items-center justify-center text-blue-600 group-hover:scale-110 group-hover:bg-blue-600 group-hover:text-white transition-all duration-500 shadow-sm">
+                <component :is="Icons[sol.icon]" class="w-8 h-8" />
               </div>
-
-              <div class="relative group">
-                <div class="absolute inset-0 bg-blue-600/10 rounded-[2.5rem] blur-3xl group-hover:bg-blue-600/20 transition-standard"></div>
-                <div class="relative bg-slate-900 rounded-[2.5rem] p-8 aspect-square flex items-center justify-center overflow-hidden border border-slate-800 shadow-2xl">
-                  <!-- Abstract Visualization -->
-                  <div class="grid grid-cols-2 gap-4 w-full h-full opacity-40">
-                    <div v-for="i in 4" :key="i" class="bg-blue-500/20 rounded-2xl animate-pulse" :style="{ animationDelay: `${i * 0.5}s` }"></div>
-                  </div>
-                  <div class="absolute inset-0 flex items-center justify-center">
-                    <component :is="solutions[activeTab].icon" class="w-32 h-32 text-blue-500 drop-shadow-[0_0_50px_rgba(59,130,246,0.5)]" />
-                  </div>
-                </div>
+              <div class="space-y-4">
+                <h3 class="text-3xl font-black text-slate-900 tracking-tight group-hover:text-blue-600 transition-colors">{{ sol.name }}</h3>
+                <p class="text-slate-500 font-medium leading-relaxed text-lg">{{ sol.description }}</p>
               </div>
+              <ul class="space-y-3 w-full">
+                <li v-for="feat in sol.features" :key="feat" class="flex items-center gap-3 text-sm font-bold text-slate-600">
+                  <div class="w-5 h-5 bg-blue-50 text-blue-600 rounded-md flex items-center justify-center">
+                    <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M5 13l4 4L19 7" /></svg>
+                  </div>
+                  {{ feat }}
+                </li>
+              </ul>
             </div>
-          </transition>
+          </div>
         </div>
       </div>
     </section>
 
     <!-- Footer -->
-    <footer class="bg-slate-50 py-20 border-t border-slate-200">
-      <div class="max-w-7xl mx-auto px-6">
-        <div class="grid md:grid-cols-4 gap-12">
-          <div class="col-span-2">
-            <div class="mb-8">
-               <BrandLogo />
-            </div>
-            <p class="text-slate-500 max-w-sm mb-8 leading-relaxed">
-              Empowering digital teams with the most advanced SEO automation and analytics platform. Build for speed, optimized for search.
+    <footer class="bg-slate-950 py-32 text-slate-400 relative overflow-hidden">
+      <!-- Glow effect -->
+      <div class="absolute bottom-0 left-1/2 -translate-x-1/2 w-full h-[500px] bg-blue-600/5 blur-[120px]"></div>
+      
+      <div class="max-w-7xl mx-auto px-6 relative z-10">
+        <div class="grid md:grid-cols-12 gap-16 mb-24">
+          <div class="md:col-span-5 space-y-8">
+             <BrandLogo />
+            <p class="text-xl leading-relaxed font-medium">
+              Join the new era of search. We're building the infrastructure that powers the most visible sites on the internet.
             </p>
             <div class="flex gap-4">
-              <a href="#" class="w-10 h-10 bg-white border border-slate-200 rounded-xl flex items-center justify-center text-slate-400 hover:text-blue-600 transition-standard"><svg class="w-5 h-5" fill="currentColor" viewBox="0 0 24 24"><path d="M24 4.557c-.883.392-1.832.656-2.828.775 1.017-.609 1.798-1.574 2.165-2.724-.951.564-2.005.974-3.127 1.195-.897-.957-2.178-1.555-3.594-1.555-3.179 0-5.515 2.966-4.797 6.045-4.091-.205-7.719-2.165-10.148-5.144-1.29 2.213-.669 5.108 1.523 6.574-.806-.026-1.566-.247-2.229-.616-.054 2.281 1.581 4.415 3.949 4.89-.693.188-1.452.232-2.224.084.626 1.956 2.444 3.379 4.6 3.419-2.07 1.623-4.678 2.348-7.29 2.04 2.179 1.397 4.768 2.212 7.548 2.212 9.142 0 14.307-7.721 13.995-14.646.962-.695 1.797-1.562 2.457-2.549z"/></svg></a>
-              <a href="#" class="w-10 h-10 bg-white border border-slate-200 rounded-xl flex items-center justify-center text-slate-400 hover:text-blue-600 transition-standard"><svg class="w-5 h-5" fill="currentColor" viewBox="0 0 24 24"><path d="M12 2.163c3.204 0 3.584.012 4.85.07 1.166.054 1.8.249 2.223.414.562.217.96.477 1.382.896.419.42.679.819.896 1.381.164.422.36 1.057.413 2.223.058 1.266.07 1.646.07 4.85s-.012 3.584-.07 4.85c-.054 1.166-.249 1.8-.413 2.223-.217.562-.477.96-.896 1.382-.42.419-.819.679-1.381.896-.422.164-1.057.36-2.223.413-1.266.058-1.646.07-4.85.07s-3.584-.012-4.85-.07c-1.166-.054-1.8-.249-2.223-.414-.562-.217-.96-.477-1.382-.896-.419-.42-.679-.819-.896-1.381-.164-.422-.36-1.057-.413-2.223-.058-1.266-.07-1.646-.07-4.85s.012-3.584.07-4.85c.054-1.166.249-1.8.414-2.223.217-.562.477-.96.896-1.382.42-.419.819-.679 1.381-.896.422-.164 1.057-.36 2.223-.413 1.266-.058 1.646-.07 4.85-.07zm0-2.163c-3.259 0-3.667.014-4.947.072-1.303.058-2.193.265-2.972.568-.806.313-1.488.733-2.169 1.413-.68.681-1.1 1.363-1.413 2.169-.304.779-.51 1.669-.569 2.972-.058 1.28-.072 1.688-.072 4.947s.014 3.667.072 4.947c.059 1.303.265 2.193.569 2.972.313.806.733 1.488 1.413 2.169.681.68 1.363 1.1 2.169 1.413.779.304 1.669.51 2.972.569 1.28.058 1.688.072 4.947.072s3.667-.014 4.947-.072c1.303-.059 2.193-.265 2.972-.569.806-.313 1.488-.733 2.169-1.413.68-.681 1.1-1.363 1.413-2.169.304-.779.51-1.669.569-2.972.058-1.28.072-1.688.072-4.947s-.014-3.667-.072-4.947c-.059-1.303-.265-2.193-.569-2.972-.313-.806-.733-1.488-1.413-2.169-.681-.68-1.363-1.1-2.169-1.413-.779-.304-1.669-.51-2.972-.569-1.28-.058-1.688-.072-4.947-.072z"/><path d="M12 5.838c-3.403 0-6.162 2.759-6.162 6.162s2.759 6.162 6.162 6.162 6.162-2.759 6.162-6.162-2.759-6.162-6.162-6.162zm0 10.162c-2.209 0-4-1.791-4-4s1.791-4 4-4 4 1.791 4 4-1.791 4-4 4zm6.406-11.845c-.796 0-1.441.645-1.441 1.44s.645 1.44 1.441 1.44c.795 0 1.439-.645 1.439-1.44s-.644-1.44-1.439-1.44z"/></svg></a>
+              <a href="#" class="w-12 h-12 rounded-2xl bg-white/5 flex items-center justify-center hover:bg-blue-600 hover:text-white transition-all duration-300">X</a>
+              <a href="#" class="w-12 h-12 rounded-2xl bg-white/5 flex items-center justify-center hover:bg-blue-600 hover:text-white transition-all duration-300">In</a>
             </div>
           </div>
-          <div>
-            <h4 class="font-bold text-slate-900 mb-6">Product</h4>
-            <ul class="space-y-4 text-sm font-medium text-slate-500">
-              <li><a href="#solutions" class="hover:text-blue-600 transition-colors">Solutions</a></li>
-              <li><a href="#" class="hover:text-blue-600 transition-colors">Pricing</a></li>
-              <li><a href="#" class="hover:text-blue-600 transition-colors">Integrations</a></li>
-              <li><a href="#" class="hover:text-blue-600 transition-colors">Roadmap</a></li>
-            </ul>
-          </div>
-          <div>
-            <h4 class="font-bold text-slate-900 mb-6">Resources</h4>
-            <ul class="space-y-4 text-sm font-medium text-slate-500">
-              <li><a href="/privacy" class="hover:text-blue-600 transition-colors">Privacy Policy</a></li>
-              <li><a href="/terms" class="hover:text-blue-600 transition-colors">Terms of Service</a></li>
-              <li><a href="/cookies" class="hover:text-blue-600 transition-colors">Cookie Policy</a></li>
-              <li><a href="#" class="hover:text-blue-600 transition-colors">Contact Support</a></li>
-            </ul>
+          
+          <div class="md:col-span-7 grid grid-cols-2 md:grid-cols-3 gap-12">
+            <div class="space-y-6">
+              <h4 class="text-white font-black uppercase tracking-widest text-xs">Product</h4>
+              <ul class="space-y-4 text-sm font-bold">
+                <li><a href="#" class="hover:text-blue-500 transition-colors">Solutions</a></li>
+                <li><a href="#" class="hover:text-blue-500 transition-colors">Pricing</a></li>
+                <li><a href="#" class="hover:text-blue-500 transition-colors">Documentation</a></li>
+              </ul>
+            </div>
+            <div class="space-y-6">
+              <h4 class="text-white font-black uppercase tracking-widest text-xs">Company</h4>
+              <ul class="space-y-4 text-sm font-bold">
+                <li><a href="#" class="hover:text-blue-500 transition-colors">About Us</a></li>
+                <li><a href="#" class="hover:text-blue-500 transition-colors">Blog</a></li>
+                <li><a href="#" class="hover:text-blue-500 transition-colors">Careers</a></li>
+              </ul>
+            </div>
+            <div class="space-y-6">
+              <h4 class="text-white font-black uppercase tracking-widest text-xs">Legal</h4>
+              <ul class="space-y-4 text-sm font-bold">
+                <li><a href="/privacy" class="hover:text-blue-500 transition-colors">Privacy</a></li>
+                <li><a href="/terms" class="hover:text-blue-500 transition-colors">Terms</a></li>
+                <li><a href="/cookies" class="hover:text-blue-500 transition-colors">Cookies</a></li>
+              </ul>
+            </div>
           </div>
         </div>
-        <div class="mt-20 pt-8 border-t border-slate-200 flex flex-col md:flex-row justify-between items-center gap-4 text-slate-400 text-xs font-bold uppercase tracking-widest">
-          <p>© 2026 {{ $page.props.branding?.site_name || 'MetaPilot' }} SEO. All rights reserved.</p>
-          <div class="flex gap-8">
-            <span>Status: Healthy</span>
-            <span>Region: Global</span>
+
+        <div class="pt-12 border-t border-white/10 flex flex-col md:flex-row justify-between items-center gap-8 text-[11px] font-black uppercase tracking-[0.2em]">
+          <p>© 2026 Metapilot. Built for the future of search.</p>
+          <div class="flex gap-10">
+             <span>System Status: <span class="text-emerald-500">Operational</span></span>
+             <span>Network: Global Edge</span>
           </div>
         </div>
       </div>
@@ -212,18 +242,28 @@
 </template>
 
 <script setup>
-import { ref, defineAsyncComponent } from 'vue'
+import { ref, onMounted, onUnmounted, defineAsyncComponent } from 'vue'
 import { Head, Link } from '@inertiajs/vue3'
-import BrandLogo from '../Components/BrandLogo.vue'
+import BrandLogo from '@/Components/BrandLogo.vue'
 
 defineProps({
   canLogin: Boolean,
   canRegister: Boolean,
-  laravelVersion: String,
-  phpVersion: String,
 })
 
-const activeTab = ref(0)
+const scrolled = ref(false)
+
+const handleScroll = () => {
+  scrolled.value = window.scrollY > 20
+}
+
+onMounted(() => {
+  window.addEventListener('scroll', handleScroll)
+})
+
+onUnmounted(() => {
+  window.removeEventListener('scroll', handleScroll)
+})
 
 const Icons = {
   Code: defineAsyncComponent(() => import('./Icons/Code.vue')),
@@ -234,42 +274,87 @@ const Icons = {
 
 const solutions = [
   {
-    name: 'Automated JSON-LD',
-    badge: 'Automation',
+    name: 'Autonomous JSON-LD',
     icon: 'Code',
-    title: 'Zero-Code Structured Data Implementation',
-    description: 'Stop manually writing schema. Our crawler identifies content types and automatically generates perfectly valid JSON-LD for your entire site.',
-    features: ['Auto-generation for 80+ types', 'Google Schema Validator sync', 'Real-time drift detection']
+    description: 'Stop manually writing schema. Our AI identifies content types and automatically generates perfectly valid JSON-LD for your entire site.',
+    features: ['Auto-generation for 80+ types', 'Real-time drift detection', 'Validator sync']
   },
   {
-    name: 'Sitemap Monitoring',
-    badge: 'Monitoring',
+    name: 'Sitemap Intelligence',
     icon: 'Search',
-    title: 'Proactive Sitemap & Indexing Health',
-    description: 'Monitor your sitemap in real-time. Get alerted before indexing issues affect your traffic or rankings.',
-    features: ['Dynamic sitemap generation', 'Broken link identification', 'Coverage trend analysis']
+    description: 'Monitor your sitemap in real-time. Get active alerts before indexing issues affect your traffic or rankings.',
+    features: ['Dynamic generation', 'Broken link identification', 'Coverage trend analysis']
   },
   {
-    name: 'AI Strategy Insights',
-    badge: 'Intelligence',
+    name: 'AI Strategy Engine',
     icon: 'Cpu',
-    title: 'Data-Driven Actionable SEO Strategy',
-    description: 'Our AI analyzes your GA4 and GSC data to propose high-impact keywords and content optimizations tailored to your domain.',
-    features: ['Keyword opportunity scoring', 'Competitor gap analysis', 'Automated campaign proposals']
+    description: 'Our AI analyzes your search console data to propose high-impact keywords and content optimizations.',
+    features: ['Keyword opportunity scoring', 'Competitor gap analysis', 'Campaign proposals']
   },
   {
-    name: 'Keyword Analysis',
-    badge: 'Research',
+    name: 'Real-time Keyword Lab',
     icon: 'Zap',
-    title: 'Lightning Fast Keyword Research',
     description: 'Discover what your audience is searching for with real-time trending data and comprehensive research tools.',
-    features: ['Global search volume', 'Difficulty scoring', 'Trending topic identification']
+    features: ['Global search volume', 'Difficulty scoring', 'Trending topic ID']
   }
 ]
 </script>
 
-<style scoped>
-.transition-standard {
-  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+<style>
+@keyframes blob {
+  0% { transform: translate(0, 0) scale(1); }
+  33% { transform: translate(30px, -50px) scale(1.1); }
+  66% { transform: translate(-20px, 20px) scale(0.9); }
+  100% { transform: translate(0, 0) scale(1); }
+}
+
+@keyframes float {
+  0% { transform: translateY(0px); }
+  50% { transform: translateY(-20px); }
+  100% { transform: translateY(0px); }
+}
+
+@keyframes fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes slide-up {
+  from { opacity: 0; transform: translateY(30px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes bounce-slow {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-10px); }
+}
+
+.animate-blob {
+  animation: blob 7s infinite;
+}
+
+.animate-float {
+  animation: float 6s ease-in-out infinite;
+}
+
+.animate-fade-in {
+  animation: fade-in 1s ease-out forwards;
+}
+
+.animate-slide-up {
+  animation: slide-up 0.8s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+.animate-bounce-slow {
+  animation: bounce-slow 4s ease-in-out infinite;
+}
+
+.animation-delay-2000 { animation-delay: 2s; }
+.animation-delay-300 { animation-delay: 0.3s; }
+.animation-delay-500 { animation-delay: 0.5s; }
+.animation-delay-700 { animation-delay: 0.7s; }
+
+.shadow-4xl {
+  box-shadow: 0 50px 100px -20px rgba(0, 0, 0, 0.25);
 }
 </style>
