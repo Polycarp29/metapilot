@@ -1127,6 +1127,7 @@ class CdnTrackingController extends Controller
                 'user_id'    => $request->user()->id,
                 'name'       => 'CDN Discovery — ' . ($pixelSite->allowed_domain ?? $pixelSite->label),
                 'site_url'   => $pixelSite->allowed_domain ? 'https://' . $pixelSite->allowed_domain : null,
+                'filename'   => 'cdn-discovery-' . $organization->id . '.xml',
                 'crawl_mode' => 'cdn',
                 'is_index'   => false,
             ]
@@ -1201,6 +1202,7 @@ class CdnTrackingController extends Controller
                 'user_id'    => $organization->users()->first()?->id,
                 'name'       => 'CDN Discovery — ' . ($pixelSite->allowed_domain ?? $pixelSite->label),
                 'site_url'   => $pixelSite->allowed_domain ? 'https://' . $pixelSite->allowed_domain : null,
+                'filename'   => 'cdn-discovery-' . $organization->id . '.xml',
                 'crawl_mode' => 'cdn',   // default: silent; user can switch to aggressive in settings
                 'is_index'   => false,
             ]
