@@ -46,18 +46,18 @@
     "/build/assets/LegalLayout-CrwjPA-c.css"
   ],
   "resources/js/Pages/Analytics/Dashboard.vue": [
-    "/build/assets/Dashboard-DDRMmh11.js",
-    "/build/assets/Dashboard-Dayu2Hiv.css"
+    "/build/assets/Dashboard-DgxEcAS3.js",
+    "/build/assets/Dashboard-Dut2R05e.css"
   ],
-  "resources/js/Pages/Analytics/Dashboard.vue?vue&type=style&index=0&scoped=76fd2dc0&lang.css": [
-    "/build/assets/Dashboard-DDRMmh11.js",
-    "/build/assets/Dashboard-Dayu2Hiv.css"
+  "resources/js/Pages/Analytics/Dashboard.vue?vue&type=style&index=0&scoped=ab30f42b&lang.css": [
+    "/build/assets/Dashboard-DgxEcAS3.js",
+    "/build/assets/Dashboard-Dut2R05e.css"
   ],
   "resources/js/Pages/Analytics/Partials/AdPredictionsCard.vue": [
     "/build/assets/AdPredictionsCard-MdOBVO9n.js"
   ],
   "resources/js/Pages/Analytics/Partials/DevelopersTab.vue": [
-    "/build/assets/DevelopersTab-C9TUTUmA.js"
+    "/build/assets/DevelopersTab-Bw9kYLwj.js"
   ],
   "resources/js/Pages/Analytics/Partials/PredictionsTab.vue": [
     "/build/assets/PredictionsTab-B6PRzrRH.js",
@@ -66,6 +66,14 @@
   "resources/js/Pages/Analytics/Partials/PredictionsTab.vue?vue&type=style&index=0&scoped=b76f6281&lang.css": [
     "/build/assets/PredictionsTab-B6PRzrRH.js",
     "/build/assets/PredictionsTab-D2eNkLru.css"
+  ],
+  "resources/js/Pages/Analytics/Partials/WebAnalysisTab.vue": [
+    "/build/assets/WebAnalysisTab-Cub5XKTf.js",
+    "/build/assets/WebAnalysisTab-DUL11ERf.css"
+  ],
+  "resources/js/Pages/Analytics/Partials/WebAnalysisTab.vue?vue&type=style&index=0&scoped=f0cf4575&lang.css": [
+    "/build/assets/WebAnalysisTab-Cub5XKTf.js",
+    "/build/assets/WebAnalysisTab-DUL11ERf.css"
   ],
   "resources/js/Pages/Auth/AcceptInvitation.vue": [
     "/build/assets/AcceptInvitation-e9PnTVGo.js",

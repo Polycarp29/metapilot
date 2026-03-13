@@ -906,6 +906,114 @@ class CdnTrackingController extends Controller
     }
 
     /**
+     * Get aggregated web analysis data for the Developers "Web Analysis" tab.
+     */
+    public function webAnalysis(Request $request)
+    {
+        $organization = $request->user()->currentOrganization();
+        if (!$organization) return response()->json(['error' => 'Organization not found'], 404);
+
+        $pixelSiteId = $request->input('pixel_site_id');
+        $pixelSite = $pixelSiteId ? PixelSite::where('organization_id', $organization->id)->find($pixelSiteId) : null;
+
+        // 1. Sitemaps Status
+        $sitemaps = $organization->sitemaps()
+            ->withCount('links')
+            ->get()
+            ->map(function($s) {
+                return [
+                    'id' => $s->id,
+                    'name' => $s->name,
+                    'site_url' => $s->site_url,
+                    'links_count' => $s->links_count,
+                    'last_crawl_status' => $s->last_crawl_status,
+                    'last_generated_at' => $s->last_generated_at ? $s->last_generated_at->diffForHumans() : 'Never',
+                ];
+            });
+
+        // 2. SEO & AI Analysis Links
+        // We pick top analysis links for the selected site or organization
+        $analysisLinksQuery = SitemapLink::whereHas('sitemap', function($q) use ($organization) {
+            $q->where('organization_id', $organization->id);
+        });
+
+        if ($pixelSite && $pixelSite->allowed_domain) {
+            $domain = preg_replace('/^www\./', '', $pixelSite->allowed_domain);
+            $analysisLinksQuery->where('url', 'like', "%$domain%");
+        }
+
+        $analysisLinks = $analysisLinksQuery->whereNotNull('seo_audit')
+            ->orderByDesc('cdn_engagement_score')
+            ->limit(10)
+            ->get()
+            ->map(function($link) {
+                return [
+                    'id' => $link->id,
+                    'url' => $link->url,
+                    'seo_score' => $link->cdn_insight['seo_score'],
+                    'unified_score' => $link->cdn_insight['unified_score'],
+                    'is_ad_ready' => $link->cdn_insight['is_ad_ready'],
+                    'seo_bottlenecks' => $link->seo_bottlenecks,
+                    'schema_suggestions' => $link->schema_suggestions,
+                ];
+            });
+
+        // 3. JS Error Summary
+        $errorSummary = CdnError::where('organization_id', $organization->id)
+            ->when($pixelSiteId, fn($q) => $q->where('pixel_site_id', $pixelSiteId))
+            ->where('created_at', '>=', now()->subDays(7))
+            ->selectRaw("COUNT(*) as total, 
+                COUNT(DISTINCT url) as unique_urls,
+                COUNT(DISTINCT message) as unique_messages")
+            ->first();
+
+        // 4. AI Schema Status
+        $schemaStats = CdnPageSchema::where('pixel_site_id', $pixelSiteId ?: 0) // Filter by site if selected
+            ->when(!$pixelSiteId, function($q) use ($organization) {
+                $q->whereHas('pixelSite', fn($site) => $site->where('organization_id', $organization->id));
+            })
+            ->selectRaw("COUNT(*) as total_schemas, 
+                SUM(injected_count) as total_injections,
+                SUM(CASE WHEN has_conflict = 1 THEN 1 ELSE 0 END) as conflicts")
+            ->first();
+
+        // 5. 7-Day Trend Analytics
+        $days = collect(range(6, 0))->map(fn($d) => now()->subDays($d)->format('Y-m-d'));
+        
+        $errorTrend = CdnError::where('organization_id', $organization->id)
+            ->when($pixelSiteId, fn($q) => $q->where('pixel_site_id', $pixelSiteId))
+            ->where('created_at', '>=', now()->subDays(7))
+            ->selectRaw("DATE(created_at) as date, COUNT(*) as count")
+            ->groupBy('date')
+            ->get()
+            ->pluck('count', 'date');
+
+        $injectionTrend = CdnPageSchema::where('pixel_site_id', $pixelSiteId ?: 0)
+            ->when(!$pixelSiteId, function($q) use ($organization) {
+                $q->whereHas('pixelSite', fn($site) => $site->where('organization_id', $organization->id));
+            })
+            ->where('last_injected_at', '>=', now()->subDays(7))
+            ->selectRaw("DATE(last_injected_at) as date, SUM(injected_count) as count")
+            ->groupBy('date')
+            ->get()
+            ->pluck('count', 'date');
+
+        $trends = [
+            'labels' => $days->values(),
+            'errors' => $days->map(fn($d) => $errorTrend->get($d, 0))->values(),
+            'injections' => $days->map(fn($d) => $injectionTrend->get($d, 0))->values(),
+        ];
+
+        return response()->json([
+            'sitemaps' => $sitemaps,
+            'analysis_links' => $analysisLinks,
+            'error_summary' => $errorSummary,
+            'schema_stats' => $schemaStats,
+            'trends' => $trends,
+        ]);
+    }
+
+    /**
      * Get paginated client-side errors for the organization.
      */
     public function errors(Request $request)

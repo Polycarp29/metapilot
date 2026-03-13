@@ -40,7 +40,7 @@ const analyticsData      = ref(null)
 const isLoadingAnalytics = ref(false)
 const pathFilter         = ref('')  // filter log by clicking a path row
 
-const activeTab          = ref('signals') // signals, health
+const activeTab          = ref('signals')
 const errorResponse      = ref({ data: [], current_page: 1, last_page: 1, total: 0 })
 const isLoadingErrors    = ref(false)
 const errorFilters       = ref({
@@ -405,6 +405,7 @@ const prevPage = () => {
     }
 }
 
+
 const fetchErrors = async () => {
     if (!selectedSiteId.value) return
     isLoadingErrors.value = true
@@ -555,6 +556,7 @@ onMounted(() => {
     fetchEvents()
     fetchConnectionStatus()
     fetchAnalytics()
+    fetchWebAnalysis()
     eventsInterval    = setInterval(fetchEvents, 60000)
     connInterval      = setInterval(fetchConnectionStatus, 30000)
     analyticsInterval = setInterval(fetchAnalytics, 300000) // every 5 min
@@ -573,10 +575,9 @@ watch([selectedPropId, selectedCampaignId, selectedSiteId, selectedModules], () 
     }
 }, { deep: true })
 watch(selectedSiteId, () => {
-    fetchSignals()
     fetchEvents()
     fetchAnalytics()
-    if (activeTab.value === 'health') fetchErrors()
+    fetchAnalytics()
 })
 watch(pathFilter, () => { if (!pathFilter.value) fetchEvents() })
 </script>
@@ -1095,19 +1096,8 @@ watch(pathFilter, () => { if (!pathFilter.value) fetchEvents() })
         <div id="intel-log" class="space-y-8">
             <div class="flex items-end justify-between gap-8">
                 <div class="flex-1">
-                    <div class="flex items-center gap-6 mb-2">
-                        <button @click="activeTab = 'signals'" 
-                            class="text-3xl font-black tracking-tight transition-all"
-                            :class="activeTab === 'signals' ? 'text-slate-900 border-b-4 border-indigo-600 pb-1' : 'text-slate-300 hover:text-slate-500'">
-                            Intelligence Log
-                        </button>
-                        <button @click="activeTab = 'health'" 
-                            class="text-3xl font-black tracking-tight transition-all"
-                            :class="activeTab === 'health' ? 'text-slate-900 border-b-4 border-indigo-600 pb-1' : 'text-slate-300 hover:text-slate-500'">
-                            Web Health
-                        </button>
-                    </div>
-                    <p class="text-slate-500 font-medium">{{ activeTab === 'signals' ? 'Real-time attribution and behavioral forensics' : 'Field errors and JavaScript runtime health' }}</p>
+                    <h3 class="text-3xl font-black text-slate-900 tracking-tight">Intelligence Log</h3>
+                    <p class="text-slate-500 font-medium">Real-time attribution and behavioral forensics</p>
                 </div>
                 <div class="flex items-center gap-3">
                     <button v-if="activeTab === 'signals'" @click="downloadCsv" class="px-6 py-4 bg-white border border-slate-200 text-slate-600 rounded-2xl text-[10px] font-black uppercase tracking-widest hover:bg-slate-50 transition-all flex items-center gap-3">
@@ -1122,12 +1112,6 @@ watch(pathFilter, () => { if (!pathFilter.value) fetchEvents() })
                             type="text" 
                             v-model="searchQuery" 
                             placeholder="Search sessions, URLs, cities..." 
-                            class="w-full bg-white border-slate-200 rounded-[2rem] text-[11px] font-bold text-slate-700 py-4 pl-14 pr-6 focus:ring-4 focus:ring-indigo-50 transition-all" />
-                        <input v-else
-                            type="text" 
-                            v-model="errorFilters.search" 
-                            @input="fetchErrors()"
-                            placeholder="Search errors, stacks, or URLs..." 
                             class="w-full bg-white border-slate-200 rounded-[2rem] text-[11px] font-bold text-slate-700 py-4 pl-14 pr-6 focus:ring-4 focus:ring-indigo-50 transition-all" />
                     </div>
                 </div>
@@ -1288,92 +1272,7 @@ watch(pathFilter, () => { if (!pathFilter.value) fetchEvents() })
             </div>
         </div>
 
-        <!-- ── Web Health Monitor ──────────────────────────────────────── -->
-        <div v-show="activeTab === 'health'" class="space-y-8">
-            <div class="bg-white shadow-premium rounded-[3.5rem] border border-slate-100/50 overflow-hidden">
-                <div class="overflow-x-auto">
-                    <table class="w-full text-left border-collapse min-w-[1000px]">
-                        <thead>
-                            <tr class="bg-slate-50/50">
-                                <th class="py-10 px-10 text-[10px] font-black text-slate-400 uppercase tracking-widest border-b border-slate-100">Error Discovery</th>
-                                <th class="py-10 px-6 text-[10px] font-black text-slate-400 uppercase tracking-widest border-b border-slate-100">Origin / File</th>
-                                <th class="py-10 px-6 text-[10px] font-black text-slate-400 uppercase tracking-widest border-b border-slate-100">Environment</th>
-                                <th class="py-10 px-10 text-[10px] font-black text-slate-400 uppercase tracking-widest border-b border-slate-100 text-right">Timestamp</th>
-                            </tr>
-                        </thead>
-                        <tbody class="divide-y divide-slate-50">
-                            <tr v-for="err in errorResponse.data" :key="err.id" class="group hover:bg-rose-50/30 transition-all">
-                                <td class="py-8 px-10">
-                                    <div class="flex items-center gap-5">
-                                        <div class="w-12 h-12 rounded-2xl border-2 border-slate-100 bg-white flex items-center justify-center text-rose-500 shadow-sm">
-                                            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/></svg>
-                                        </div>
-                                        <div class="max-w-md">
-                                            <p class="text-xs font-black text-slate-900 line-clamp-2" :title="err.message">{{ err.message }}</p>
-                                            <p class="text-[9px] text-slate-400 font-black uppercase tracking-tight mt-1 truncate">{{ err.url }}</p>
-                                        </div>
-                                    </div>
-                                </td>
-                                <td class="py-8 px-6">
-                                    <div>
-                                        <p class="text-xs font-black text-slate-800">{{ err.filename ? err.filename.split('/').pop() : 'Unknown Source' }}</p>
-                                        <p v-if="err.line" class="text-[9px] text-slate-400 font-black uppercase tracking-widest">Line {{ err.line }}:{{ err.col }}</p>
-                                        <span class="px-2 py-0.5 bg-slate-100 text-[8px] font-black text-slate-500 rounded-md uppercase tracking-wider mt-1 inline-block">{{ err.source }}</span>
-                                    </div>
-                                </td>
-                                <td class="py-8 px-6">
-                                    <div class="flex items-center gap-3">
-                                        <div class="text-[9px] font-black text-slate-500 uppercase">
-                                            {{ err.user_agent ? (err.user_agent.includes('Chrome') ? 'Chrome' : err.user_agent.includes('Firefox') ? 'Firefox' : 'Other') : 'Unknown' }}
-                                        </div>
-                                        <div class="w-1.5 h-1.5 bg-slate-200 rounded-full"></div>
-                                        <div class="text-[9px] font-black text-slate-400 uppercase line-clamp-1 max-w-[100px]">{{ err.user_agent }}</div>
-                                    </div>
-                                </td>
-                                <td class="py-8 px-10 text-right">
-                                    <p class="text-xs font-black text-slate-900">{{ new Date(err.created_at).toLocaleTimeString() }}</p>
-                                    <p class="text-[9px] text-slate-400 font-black uppercase mt-1">{{ err.created_at.split('T')[0] }}</p>
-                                </td>
-                            </tr>
-                        </tbody>
-                    </table>
-                </div>
-
-                <!-- Pagination -->
-                <div class="px-10 py-8 bg-slate-50/50 border-t border-slate-100 flex items-center justify-between">
-                    <p class="text-[10px] font-black text-slate-400 uppercase tracking-widest">
-                        Showing <span class="text-slate-900">{{ errorResponse.from || 0 }}-{{ errorResponse.to || 0 }}</span> of <span class="text-slate-900">{{ errorResponse.total }}</span> health signals
-                    </p>
-                    <div class="flex items-center gap-3">
-                        <button 
-                            @click="errorFilters.page--; fetchErrors()" 
-                            :disabled="errorFilters.page === 1 || isLoadingErrors"
-                            class="px-5 py-2.5 bg-white border border-slate-200 rounded-xl text-[10px] font-black uppercase tracking-widest disabled:opacity-30 disabled:cursor-not-allowed hover:bg-slate-50 transition-all"
-                        >
-                            Prev
-                        </button>
-                        <div class="flex items-center gap-2">
-                            <span class="text-[10px] font-black text-slate-900">Page {{ errorFilters.page }} of {{ errorResponse.last_page }}</span>
-                        </div>
-                        <button 
-                            @click="errorFilters.page++; fetchErrors()" 
-                            :disabled="errorFilters.page === errorResponse.last_page || isLoadingErrors"
-                            class="px-5 py-2.5 bg-white border border-slate-200 rounded-xl text-[10px] font-black uppercase tracking-widest disabled:opacity-30 disabled:cursor-not-allowed hover:bg-slate-50 transition-all"
-                        >
-                            Next
-                        </button>
-                    </div>
-                </div>
-
-                <div v-if="errorResponse.data.length === 0" class="p-32 text-center">
-                    <div class="w-24 h-24 bg-emerald-50 rounded-[3rem] flex items-center justify-center mx-auto mb-10">
-                        <svg class="w-10 h-10 text-emerald-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 13l4 4L19 7"/></svg>
-                    </div>
-                    <h4 class="text-3xl font-black text-slate-900 mb-4 tracking-tighter uppercase italic">Optimal Health</h4>
-                    <p class="text-slate-500 max-w-sm mx-auto font-medium">No client-side JavaScript errors or promise rejections captured in the field. Your frontend is running smoothly.</p>
-                </div>
-            </div>
-        </div>
+            <!-- Signal Logic continued -->
     </div>
 
     <!-- ── Session Detail Modal ─────────────────────────────────────── -->

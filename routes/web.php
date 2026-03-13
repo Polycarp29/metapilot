@@ -167,6 +167,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
 
         // Path intelligence & trend analytics
         Route::get('/analytics', [\App\Http\Controllers\CdnTrackingController::class, 'analytics'])->name('analytics');
+        Route::get('/web-analysis', [\App\Http\Controllers\CdnTrackingController::class, 'webAnalysis'])->name('web-analysis');
 
         // Multi-Site Pixel Management
         Route::apiResource('pixel-sites', \App\Http\Controllers\PixelSiteController::class);
