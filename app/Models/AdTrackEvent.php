@@ -29,6 +29,11 @@ class AdTrackEvent extends Model
         'utm_medium',
         'utm_campaign',
         'ip_hash',
+        'metadata',
+    ];
+
+    protected $casts = [
+        'metadata' => 'json',
     ];
 
     public function organization(): BelongsTo

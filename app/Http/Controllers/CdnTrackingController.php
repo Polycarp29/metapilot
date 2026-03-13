@@ -3,8 +3,11 @@
 namespace App\Http\Controllers;
 
 use App\Models\AdTrackEvent;
+use App\Models\CdnPageSchema;
 use App\Models\Organization;
 use App\Models\PixelSite;
+use App\Models\Schema;
+use App\Models\SitemapLink;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\File;
@@ -138,8 +141,19 @@ class CdnTrackingController extends Controller
         $deviceData = $this->parseUserAgent($ua);
         $geo        = $this->getGeoData($request->ip());
 
+        // Normalize URL for consistent hashing
+        $rawUrl = $request->page_url;
+        if ($rawUrl) {
+            $parsed = parse_url($rawUrl);
+            $normalizedUrl = ($parsed['host'] ?? '') . ($parsed['path'] ?? '');
+            $normalizedUrl = strtolower(rtrim($normalizedUrl, '/'));
+            $urlHash = hash('sha256', $normalizedUrl);
+        } else {
+            $urlHash = null;
+        }
+
         // --- Upsert the hit ---
-        AdTrackEvent::updateOrCreate(
+        $hit = AdTrackEvent::updateOrCreate(
             ['page_view_id' => $request->page_view_id],
             [
                 'organization_id'    => $organization->id,
@@ -162,8 +176,39 @@ class CdnTrackingController extends Controller
                 'utm_medium'         => $request->utm_medium,
                 'utm_campaign'       => $request->utm_campaign,
                 'ip_hash'            => hash('sha256', $request->ip()),
+                'metadata'           => $request->metadata, // Casted to JSON in model? Need to check.
             ]
         );
+
+        // --- Intelligence Platform Integration ---
+        if ($urlHash) {
+            // 1. Link to SitemapLink
+            $sitemapLink = SitemapLink::whereHas('sitemap', function($q) use ($organization) {
+                $q->where('organization_id', $organization->id);
+            })->where('url_hash', $urlHash)->first();
+
+            if ($sitemapLink) {
+                $sitemapLink->increment('cdn_hit_count');
+                $sitemapLink->update([
+                    'cdn_active' => true,
+                    'cdn_last_seen_at' => now(),
+                ]);
+            }
+
+            // 2. Auto-Generate Schema if requested and missing
+            $modules = $request->input('modules', []);
+            if (is_string($modules)) $modules = explode(',', $modules);
+
+            if (in_array('schema', $modules) && $request->metadata) {
+                $exists = CdnPageSchema::where('pixel_site_id', $pixelSite->id)
+                    ->where('url_hash', $urlHash)
+                    ->exists();
+                
+                if (!$exists) {
+                    $this->generateSchemaForPage($pixelSite, $request->page_url, $request->metadata);
+                }
+            }
+        }
 
         // --- Mark pixel as verified on first domain-confirmed hit ---
         if (!$pixelSite->pixel_verified_at) {
@@ -212,11 +257,40 @@ class CdnTrackingController extends Controller
             $domainVerified = $checkDomain($origin) || $checkDomain($referer);
         }
 
+        // --- Intelligence Platform Modules ---
+        $modules = $request->input('modules', []);
+        if (is_string($modules)) {
+            $modules = explode(',', $modules);
+        }
+
+        $schemaJson = null;
+        if (in_array('schema', $modules)) {
+            $url = $request->header('Referer');
+            if ($url) {
+                $parsed = parse_url($url);
+                $normalizedUrl = ($parsed['host'] ?? '') . ($parsed['path'] ?? '');
+                $normalizedUrl = strtolower(rtrim($normalizedUrl, '/'));
+                $urlHash = hash('sha256', $normalizedUrl);
+
+                $cachedSchema = CdnPageSchema::where('pixel_site_id', $pixelSite->id)
+                    ->where('url_hash', $urlHash)
+                    ->first();
+                
+                if ($cachedSchema) {
+                    $schemaJson = $cachedSchema->schema_json;
+                    $cachedSchema->increment('injected_count');
+                    $cachedSchema->update(['last_injected_at' => now()]);
+                }
+            }
+        }
+
         return response()->json([
             'ok'              => true,
             'echo'            => $request->challenge,
             'server_time'     => now()->toIso8601String(),
             'domain_verified' => $domainVerified,
+            'schema_json'     => $schemaJson,
+            'modules_active'  => $modules,
         ])->withHeaders($this->corsHeaders());
     }
 
@@ -522,7 +596,10 @@ class CdnTrackingController extends Controller
             ->get()
             ->groupBy('page_url');
 
-        $topPages = $topPageRows->map(function ($row) use ($sparklineRaw) {
+        // ── 4. Keyword ↔ Page Intent Linkage ──────────────────────────────
+        $keywords = KeywordResearch::where('organization_id', $orgId)->get();
+
+        $topPages = $topPageRows->map(function ($row) use ($sparklineRaw, $keywords) {
             $todayC     = (int) $row->today_count;
             $yesterdayC = (int) $row->yesterday_count;
             $deltaPct   = $yesterdayC > 0
@@ -551,6 +628,23 @@ class CdnTrackingController extends Controller
                 $series[] = (int) ($seriesMap[$d]->cnt ?? 0);
             }
 
+            // Keyword Matching logic
+            $path = strtolower(parse_url($row->page_url, PHP_URL_PATH) ?: '');
+            $pathNormalized = str_replace(['-', '_', '/'], ' ', $path);
+            
+            $matchedKeywords = $keywords->filter(function($k) use ($pathNormalized) {
+                return str_contains($pathNormalized, strtolower($k->query));
+            })->map(function($k) {
+                return [
+                    'query' => $k->query,
+                    'intent' => $k->intent,
+                    'is_primary' => false 
+                ];
+            })->values();
+
+            // Detect top intent
+            $topIntent = $matchedKeywords->countBy('intent')->sortDesc()->keys()->first();
+
             return [
                 'page_url'         => $row->page_url,
                 'total_hits'       => (int) $row->total_hits,
@@ -563,6 +657,8 @@ class CdnTrackingController extends Controller
                 'yesterday_count'  => $yesterdayC,
                 'delta_pct'        => $deltaPct,
                 'sparkline'        => $series,
+                'matched_keywords' => $matchedKeywords,
+                'top_intent'       => $topIntent,
             ];
         })->values();
 
@@ -672,5 +768,50 @@ class CdnTrackingController extends Controller
             }
             return null;
         });
+    }
+
+    /**
+     * Generate and cache a JSON-LD schema for a specific page hit.
+     */
+    private function generateSchemaForPage(PixelSite $site, string $url, array $metadata)
+    {
+        $urlHash = hash('sha256', $url);
+        
+        // Detect schema type from metadata or URL
+        $type = $metadata['content_type'] ?? 'website';
+        if ($type === 'article') {
+            $schema = [
+                '@context' => 'https://schema.org',
+                '@type' => 'Article',
+                'headline' => $metadata['title'] ?? $metadata['h1'],
+                'description' => $metadata['description'],
+                'url' => $url,
+                'image' => $metadata['og_image'],
+                'author' => [
+                    '@type' => 'Organization',
+                    'name' => $site->label
+                ]
+            ];
+        } else {
+            $schema = [
+                '@context' => 'https://schema.org',
+                '@type' => 'WebPage',
+                'name' => $metadata['title'] ?? $metadata['h1'],
+                'description' => $metadata['description'],
+                'url' => $url,
+                'primaryImageOfPage' => $metadata['og_image']
+            ];
+        }
+
+        return CdnPageSchema::updateOrCreate(
+            ['pixel_site_id' => $site->id, 'url_hash' => $urlHash],
+            [
+                'url' => $url,
+                'schema_type' => $type,
+                'schema_json' => $schema,
+                'is_auto_generated' => true,
+                'last_injected_at' => now()
+            ]
+        );
     }
 }

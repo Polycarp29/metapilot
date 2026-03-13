@@ -17,11 +17,13 @@ class PixelSite extends Model
         'label',
         'ads_site_token',
         'allowed_domain',
+        'enabled_modules',
         'pixel_verified_at',
     ];
 
     protected $casts = [
         'pixel_verified_at' => 'datetime',
+        'enabled_modules' => 'json',
     ];
 
     protected static function booted()

@@ -46,18 +46,18 @@
     "/build/assets/LegalLayout-CrwjPA-c.css"
   ],
   "resources/js/Pages/Analytics/Dashboard.vue": [
-    "/build/assets/Dashboard-CwgMpoDO.js",
+    "/build/assets/Dashboard-Db_Qbc7b.js",
     "/build/assets/Dashboard-Dayu2Hiv.css"
   ],
   "resources/js/Pages/Analytics/Dashboard.vue?vue&type=style&index=0&scoped=76fd2dc0&lang.css": [
-    "/build/assets/Dashboard-CwgMpoDO.js",
+    "/build/assets/Dashboard-Db_Qbc7b.js",
     "/build/assets/Dashboard-Dayu2Hiv.css"
   ],
   "resources/js/Pages/Analytics/Partials/AdPredictionsCard.vue": [
     "/build/assets/AdPredictionsCard-MdOBVO9n.js"
   ],
   "resources/js/Pages/Analytics/Partials/DevelopersTab.vue": [
-    "/build/assets/DevelopersTab-DKdeKtb5.js"
+    "/build/assets/DevelopersTab-D1OYuEc2.js"
   ],
   "resources/js/Pages/Analytics/Partials/PredictionsTab.vue": [
     "/build/assets/PredictionsTab-B6PRzrRH.js",
@@ -257,12 +257,12 @@
     "/build/assets/Index-DDpbthgT.css"
   ],
   "resources/js/Pages/Sitemaps/Manager.vue": [
-    "/build/assets/Manager-KBz5sgd9.js",
-    "/build/assets/Manager-CczOQxIC.css"
+    "/build/assets/Manager-DslYGmoE.js",
+    "/build/assets/Manager-D1FGKeBy.css"
   ],
-  "resources/js/Pages/Sitemaps/Manager.vue?vue&type=style&index=0&scoped=18b5b6e1&lang.css": [
-    "/build/assets/Manager-KBz5sgd9.js",
-    "/build/assets/Manager-CczOQxIC.css"
+  "resources/js/Pages/Sitemaps/Manager.vue?vue&type=style&index=0&scoped=c16c4aea&lang.css": [
+    "/build/assets/Manager-DslYGmoE.js",
+    "/build/assets/Manager-D1FGKeBy.css"
   ],
   "resources/js/Pages/Sitemaps/Schedules.vue": [
     "/build/assets/Schedules-BBgBV-GT.js",

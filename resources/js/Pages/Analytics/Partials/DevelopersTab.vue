@@ -46,6 +46,7 @@ const selectedSiteId     = ref(null)
 const isCreatingSite     = ref(false)
 const showNewSiteModal   = ref(false)
 const newSite            = ref({ label: '', allowed_domain: '' })
+const selectedModules    = ref(['click', 'schema'])
 
 // Filters
 const filters = ref({
@@ -454,7 +455,8 @@ const updateSnippet = () => {
     }
     const base = window.location.origin
     const camp = selectedCampaignId.value ? ` data-campaign="${selectedCampaignId.value}"` : ''
-    snippet.value = `<script src="${base}/cdn/ads-tracker.js" data-token="${selectedSite.value.ads_site_token}"${camp} async><\/script>`
+    const mods = selectedModules.value.length ? ` data-modules="${selectedModules.value.join(',')}"` : ''
+    snippet.value = `<script src="${base}/cdn/ads-tracker.js" data-token="${selectedSite.value.ads_site_token}"${camp}${mods} async><\/script>`
 }
 
 const regenerateToken = async () => {
@@ -529,12 +531,12 @@ onUnmounted(() => {
     clearInterval(analyticsInterval)
 })
 
-watch([selectedPropId, selectedCampaignId, selectedSiteId], () => {
+watch([selectedPropId, selectedCampaignId, selectedSiteId, selectedModules], () => {
     updateSnippet()
     if (selectedSite.value) {
         allowedDomainInput.value = selectedSite.value.allowed_domain || ''
     }
-})
+}, { deep: true })
 watch(selectedSiteId, () => {
     fetchEvents()
     fetchAnalytics()
@@ -752,9 +754,20 @@ watch(pathFilter, () => { if (!pathFilter.value) fetchEvents() })
                                             <p class="text-xs font-black text-slate-900 truncate max-w-xs" :title="page.page_url">
                                                 {{ safePathLabel(page.page_url) }}
                                             </p>
-                                            <span v-if="page.is_ad_ready" class="px-2 py-0.5 bg-emerald-500 text-white text-[8px] font-black rounded-lg uppercase tracking-tighter">Ad Ready</span>
+                                            <span v-if="page.is_ad_ready" class="px-2 py-0.5 bg-emerald-500 text-white text-[8px] font-black rounded-lg uppercase tracking-tighter shadow-sm shadow-emerald-100">Ad Ready</span>
+                                            <span v-if="page.top_intent" 
+                                                class="px-2 py-0.5 text-[8px] font-black rounded-lg uppercase tracking-tighter border shadow-sm"
+                                                :class="{
+                                                    'bg-indigo-50 text-indigo-600 border-indigo-100': page.top_intent === 'Transactional',
+                                                    'bg-blue-50 text-blue-600 border-blue-100': page.top_intent === 'Commercial',
+                                                    'bg-slate-50 text-slate-500 border-slate-100': page.top_intent === 'Informational',
+                                                }"
+                                            >{{ page.top_intent }} Intent</span>
                                         </div>
-                                        <p class="text-[9px] text-slate-400 font-bold truncate max-w-xs">{{ safeHostname(page.page_url) }}</p>
+                                        <div class="flex items-center gap-2">
+                                            <span v-for="k in page.matched_keywords.slice(0, 3)" :key="k.query" class="text-[8px] font-bold text-slate-400">#{{ k.query.replace(/\s+/g, '') }}</span>
+                                            <span v-if="!page.matched_keywords.length" class="text-[9px] text-slate-300 font-bold truncate max-w-xs">{{ safeHostname(page.page_url) }}</span>
+                                        </div>
                                     </div>
                                 </div>
                             </td>
@@ -923,6 +936,31 @@ watch(pathFilter, () => { if (!pathFilter.value) fetchEvents() })
                     </div>
                 </div>
 
+                <!-- Module Selection -->
+                <div class="mb-10">
+                    <label class="block text-[10px] font-black text-slate-500 uppercase tracking-widest ml-1 mb-4">Active Modules</label>
+                    <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+                        <div v-for="mod in [
+                            { id: 'click', label: 'Click Stream', desc: 'Ad attribution' },
+                            { id: 'schema', label: 'AI Schema', desc: 'JSON-LD Injection' },
+                            { id: 'seo', label: 'SEO Audit', desc: 'Page diagnostics' },
+                            { id: 'behavior', label: 'Behavior', desc: 'Dwell & scroll' }
+                        ]" :key="mod.id" 
+                            @click="selectedModules.includes(mod.id) ? selectedModules = selectedModules.filter(m => m !== mod.id) : selectedModules.push(mod.id)"
+                            class="p-4 rounded-2xl border-2 cursor-pointer transition-all select-none"
+                            :class="selectedModules.includes(mod.id) ? 'bg-indigo-600 border-indigo-400' : 'bg-white/5 border-white/5 hover:border-white/10'">
+                            <div class="flex items-center gap-3">
+                                <div class="w-4 h-4 rounded border flex items-center justify-center transition-colors"
+                                    :class="selectedModules.includes(mod.id) ? 'bg-white border-white' : 'border-white/20 bg-transparent'">
+                                    <svg v-if="selectedModules.includes(mod.id)" class="w-3 h-3 text-indigo-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M5 13l4 4L19 7"/></svg>
+                                </div>
+                                <span class="text-[11px] font-black uppercase tracking-tight" :class="selectedModules.includes(mod.id) ? 'text-white' : 'text-slate-400'">{{ mod.label }}</span>
+                            </div>
+                            <p class="text-[9px] font-medium mt-1 ml-7" :class="selectedModules.includes(mod.id) ? 'text-white/60' : 'text-slate-500'">{{ mod.desc }}</p>
+                        </div>
+                    </div>
+                </div>
+
                 <div class="bg-black/40 rounded-3xl p-8 border border-white/5 shadow-inner relative group">
                     <pre class="text-indigo-300 text-[13px] font-mono overflow-x-auto leading-relaxed">{{ snippet }}</pre>
                     <button @click="copySnippet" class="absolute top-4 right-4 p-3 bg-white/5 hover:bg-white/10 text-white rounded-xl transition-all border border-white/10 opacity-0 group-hover:opacity-100">
@@ -930,11 +968,27 @@ watch(pathFilter, () => { if (!pathFilter.value) fetchEvents() })
                     </button>
                 </div>
                 
-                <div class="mt-8 pt-8 border-t border-white/5 flex items-center justify-between">
-                    <div class="flex items-center gap-4 text-slate-400">
-                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
-                        <p class="text-[10px] font-medium leading-relaxed max-w-md">Every hit from this pixel will be permanently attributed to <span class="text-indigo-400 font-black">{{ selectedCampaignId || 'Default' }}</span> for campaign isolation.</p>
+                <div class="mt-8 pt-8 border-t border-white/5 grid grid-cols-1 md:grid-cols-2 gap-8">
+                    <div class="flex items-start gap-4 text-slate-400">
+                        <svg class="w-5 h-5 mt-1 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+                        <div class="space-y-1">
+                            <p class="text-[10px] font-black text-white uppercase tracking-widest">Attribution Settings</p>
+                            <p class="text-[10px] font-medium leading-relaxed">Every hit from this pixel will be permanently attributed to <span class="text-indigo-400 font-black">{{ selectedCampaignId || 'Default' }}</span> for campaign isolation.</p>
+                        </div>
                     </div>
+                    <div class="flex items-start gap-4 text-slate-400">
+                        <svg class="w-5 h-5 mt-1 shrink-0 text-amber-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"/></svg>
+                        <div class="space-y-1" v-if="selectedModules.includes('schema')">
+                            <p class="text-[10px] font-black text-white uppercase tracking-widest">AI Schema Active</p>
+                            <p class="text-[10px] font-medium leading-relaxed">MetaPilot will extract DOM metadata and inject optimized JSON-LD automatically. Conflict detection included.</p>
+                        </div>
+                        <div class="space-y-1" v-else>
+                            <p class="text-[10px] font-black text-slate-500 uppercase tracking-widest">Standard Mode</p>
+                            <p class="text-[10px] font-medium leading-relaxed">Only click events are tracked. Toggle "AI Schema" to enable automated SEO injections.</p>
+                        </div>
+                    </div>
+                </div>
+                <div class="mt-6 flex justify-end">
                     <button @click="showRegenModal = true" class="text-[10px] font-black text-rose-500 hover:text-white transition-colors uppercase tracking-widest">Regenerate Secret</button>
                 </div>
             </div>

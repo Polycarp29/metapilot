@@ -15,6 +15,7 @@
     const script = document.currentScript;
     const siteToken = script ? script.getAttribute('data-token') : null;
     const campaignId = script ? script.getAttribute('data-campaign') : null;
+    const requestedModules = script ? (script.getAttribute('data-modules') || 'click').split(',') : ['click'];
 
     if (!siteToken) {
         console.warn('[MetaPilot] Missing data-token on script tag.');
@@ -28,17 +29,37 @@
 
     // ─── Public debug object ──────────────────────────────────────────────────
     window.MetaPilot = {
-        version: '3.0',
+        version: '3.1',
         token: siteToken,
+        modules: requestedModules,
         status: 'initialising',
         connected: false,
         hitCount: 0,
         lastHit: null,
         retryQueue: [],
+        schemaInjected: false,
     };
 
     // ─── Helpers ──────────────────────────────────────────────────────────────
     const getParam = (p) => new URLSearchParams(window.location.search).get(p);
+
+    const getMetadata = () => {
+        const meta = (name) => {
+            const el = document.querySelector(`meta[name="${name}"], meta[property="${name}"], meta[property="og:${name}"]`);
+            return el ? el.getAttribute('content') : null;
+        };
+
+        const h1 = document.querySelector('h1');
+
+        return {
+            title: document.title,
+            description: meta('description'),
+            h1: h1 ? h1.innerText.trim() : null,
+            og_image: meta('image'),
+            canonical: document.querySelector('link[rel="canonical"]')?.getAttribute('href'),
+            content_type: meta('type') || (window.location.pathname.includes('/blog/') ? 'article' : 'website'),
+        };
+    };
 
     const getSessionId = () => {
         let sid = sessionStorage.getItem('mp_sid');
@@ -87,6 +108,7 @@
     // ─── Hit sender ──────────────────────────────────────────────────────────
     const buildPayload = (ts) => ({
         token: siteToken,
+        modules: requestedModules,
         page_view_id: pageViewId,
         campaign_id: campaignId,
         page_url: window.location.href,
@@ -95,6 +117,7 @@
         screen_resolution: `${window.screen.width}x${window.screen.height}`,
         duration_seconds: Math.floor((Date.now() - startTime) / 1000),
         click_count: clicks,
+        metadata: getMetadata(),
         gclid: getParam('gclid'),
         utm_source: getParam('utm_source'),
         utm_medium: getParam('utm_medium'),
@@ -185,6 +208,17 @@
                     window.MetaPilot.domainVerified = data.domain_verified;
                     window.MetaPilot.serverTime = data.server_time;
                     window.MetaPilot.status = 'active';
+
+                    // Handle Auto-Schema Injection
+                    if (requestedModules.includes('schema') && data.schema_json && !window.MetaPilot.schemaInjected) {
+                        const script = document.createElement('script');
+                        script.type = 'application/ld+json';
+                        script.text = JSON.stringify(data.schema_json);
+                        document.head.appendChild(script);
+                        window.MetaPilot.schemaInjected = true;
+                        console.log('[MetaPilot] Schema injected successfully.');
+                    }
+
                     verifyRetryCount = 0; // reset
                     return;
                 }

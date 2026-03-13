@@ -14,7 +14,8 @@ class SitemapLink extends Model
         'request_analysis', 'extracted_json_ld',
         'seo_bottlenecks', 'url_slug_quality', 'depth_from_root',
         'internal_links_in', 'internal_links_out',
-        'http_status', 'effective_url', 'ai_schema_data'
+        'http_status', 'effective_url', 'ai_schema_data',
+        'cdn_hit_count', 'cdn_engagement_score', 'cdn_last_seen_at', 'cdn_active'
     ];
 
     protected $casts = [
@@ -33,10 +34,39 @@ class SitemapLink extends Model
         'internal_links_out' => 'integer',
         'http_status' => 'integer',
         'ai_schema_data' => 'json',
+        'cdn_hit_count' => 'integer',
+        'cdn_engagement_score' => 'float',
+        'cdn_last_seen_at' => 'datetime',
+        'cdn_active' => 'boolean',
     ];
 
     public function sitemap()
     {
         return $this->belongsTo(Sitemap::class);
+    }
+
+    protected $appends = ['cdn_insight'];
+
+    public function getCdnInsightAttribute()
+    {
+        $sitemapService = app(SitemapService::class);
+        $seoScore = $sitemapService->calculateSeoScore($this);
+        $engagementWeight = 0.5; // 50% SEO, 50% Engagement if active
+        
+        $unifiedScore = $seoScore;
+        if ($this->cdn_active) {
+            $unifiedScore = ($seoScore * (1 - $engagementWeight)) + ($this->cdn_engagement_score * $engagementWeight);
+        }
+
+        return [
+            'active' => $this->cdn_active,
+            'hit_count' => $this->cdn_hit_count,
+            'last_seen_at' => $this->cdn_last_seen_at ? $this->cdn_last_seen_at->diffForHumans() : null,
+            'engagement_score' => $this->cdn_engagement_score,
+            'seo_score' => $seoScore,
+            'unified_score' => (int) $unifiedScore,
+            'is_orphan' => !$this->cdn_active && $this->http_status === 200,
+            'is_ad_ready' => $this->cdn_engagement_score >= 70,
+        ];
     }
 }

@@ -268,17 +268,16 @@
                <table class="w-full text-left border-collapse">
                  <thead class="sticky top-0 z-10 bg-slate-50 shadow-sm">
                    <tr class="bg-slate-50 border-b border-slate-100">
-                     <th class="px-8 py-6 text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">Live URL Intelligence</th>
-                     <th class="px-8 py-6 text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] text-center">Audit Score</th>
+                     <th class="px-8 py-6 text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">URL Intelligence & CDN Path</th>
+                     <th class="px-8 py-6 text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] text-center">Unified Score</th>
                      <th class="px-8 py-6 text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] text-center">SEO Health</th>
-                     <th class="px-8 py-6 text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] text-center">Freq</th>
-                     <th class="px-8 py-6 text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] text-center">Priority</th>
+                     <th class="px-8 py-6 text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] text-center">Traffic Hits</th>
                      <th class="px-8 py-6 text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] text-right">Actions</th>
                    </tr>
                  </thead>
                  <tbody class="divide-y divide-slate-50">
                     <tr v-if="filteredLinks.length === 0" class="bg-white">
-                      <td colspan="6" class="px-8 py-20 text-center">
+                      <td colspan="5" class="px-8 py-20 text-center">
                         <div class="space-y-4">
                            <div class="w-16 h-16 bg-slate-50 rounded-full flex items-center justify-center mx-auto text-slate-300">
                               <svg class="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -290,11 +289,12 @@
                         </div>
                       </td>
                     </tr>
-                   <tr v-for="link in filteredLinks" :key="link.id" class="group hover:bg-slate-50/50 transition-colors">
-                     <td class="px-8 py-5">
+                    <tr v-for="link in filteredLinks" :key="link.id" class="group hover:bg-slate-50/50 transition-colors">
+                      <td class="px-8 py-5">
                        <div class="flex items-center gap-3">
                          <div :class="[
                            'w-2 h-2 rounded-full flex-shrink-0',
+                           link.cdn_insight.active ? 'bg-sky-500 shadow-[0_0_8px_rgba(14,165,233,0.5)]' :
                            link.status === 'completed' ? 'bg-emerald-500' : 
                            link.status === 'crawling' ? 'bg-blue-500 animate-pulse' :
                            link.status === 'discovered' ? 'bg-amber-400 animate-pulse' : 'bg-slate-300'
@@ -303,24 +303,24 @@
                            <span class="text-sm font-bold text-slate-900 tracking-tight truncate">{{ link.url }}</span>
                            <div class="flex items-center gap-2">
                              <span v-if="link.title" class="text-[9px] font-medium text-slate-400 line-clamp-1">{{ link.title }}</span>
+                             <span v-if="link.cdn_insight.active" class="text-[8px] font-black text-sky-600 bg-sky-50 px-2 py-0.5 rounded-full uppercase">CDN Live</span>
+                             <span v-if="link.cdn_insight.is_ad_ready" class="text-[8px] font-black text-pink-600 bg-pink-50 px-2 py-0.5 rounded-full uppercase">Ad Ready</span>
                              <span v-if="link.status === 'discovered'" class="text-[8px] font-black text-amber-600 bg-amber-50 px-2 py-0.5 rounded-full uppercase">Discovered</span>
                              <span v-if="link.is_canonical === false && link.status === 'completed'" class="text-[8px] font-black text-rose-600 bg-rose-50 px-2 py-0.5 rounded-full uppercase" :title="'Points to: ' + link.canonical_url">Non-Canonical</span>
-                             <span v-if="link.http_status && link.http_status >= 300" class="text-[8px] font-black text-amber-600 bg-amber-50 px-2 py-0.5 rounded-full uppercase">Redirect {{ link.http_status }}</span>
-                             <span v-if="link.depth_from_root > 0" class="text-[8px] font-bold text-slate-400">Depth {{ link.depth_from_root }}</span>
                            </div>
                          </div>
                        </div>
                      </td>
                      <td class="px-8 py-5 text-center">
-                       <div v-if="link.seo_audit" :class="[
-                         'inline-flex items-center justify-center w-10 h-10 rounded-full text-[11px] font-black border-4',
-                         link.seo_audit.score >= 90 ? 'text-emerald-600 bg-emerald-50 border-emerald-100' :
-                         link.seo_audit.score >= 70 ? 'text-amber-600 bg-amber-50 border-amber-100' :
-                         'text-red-600 bg-red-50 border-red-100'
-                       ]">
-                         {{ link.seo_audit.score }}
+                       <div :class="[
+                         'inline-flex items-center justify-center w-12 h-12 rounded-[1.25rem] text-[13px] font-black border-4 shadow-sm transition-all',
+                         link.cdn_insight.active ? 'hover:scale-110 cursor-pointer' : '',
+                         link.cdn_insight.unified_score >= 90 ? 'text-emerald-700 bg-emerald-50 border-emerald-100' :
+                         link.cdn_insight.unified_score >= 70 ? 'text-blue-700 bg-blue-50 border-blue-100' :
+                         'text-amber-700 bg-amber-50 border-amber-100'
+                       ]" :title="'SEO: ' + link.cdn_insight.seo_score + ' | CDN: ' + link.cdn_insight.engagement_score">
+                         {{ link.cdn_insight.unified_score }}
                        </div>
-                       <span v-else class="text-[10px] font-bold text-slate-300">--</span>
                      </td>
                      <td class="px-8 py-5 text-center">
                        <div v-if="link.url_slug_quality" class="flex flex-col items-center gap-1">
@@ -334,23 +334,14 @@
                            link.url_slug_quality === 'good' ? 'text-emerald-600' :
                            link.url_slug_quality === 'warning' ? 'text-amber-600' : 'text-red-600'
                          ]">{{ link.url_slug_quality }}</span>
-                         <div v-if="link.seo_bottlenecks && link.seo_bottlenecks.length" class="group/tip relative">
-                           <span class="text-[8px] font-bold text-slate-400 cursor-help underline decoration-dotted">{{ link.seo_bottlenecks.length }} issue{{ link.seo_bottlenecks.length > 1 ? 's' : '' }}</span>
-                           <div class="hidden group-hover/tip:block absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-56 bg-slate-900 text-white p-3 rounded-xl text-[9px] font-medium z-50 shadow-xl">
-                             <div v-for="(b, bi) in link.seo_bottlenecks" :key="bi" class="py-1 border-b border-slate-700 last:border-0">
-                               {{ b.message }}
-                             </div>
-                           </div>
-                         </div>
                        </div>
                        <span v-else class="text-[10px] font-bold text-slate-300">--</span>
                      </td>
                      <td class="px-8 py-5 text-center">
-                       <span class="text-[10px] font-black text-blue-600 bg-blue-50 px-3 py-1 rounded-full uppercase tracking-widest">{{ link.changefreq }}</span>
-                     </td>
-                     <td class="px-8 py-5 text-center">
-                        <div class="w-12 mx-auto bg-slate-100 rounded-lg py-1 text-[11px] font-bold text-slate-600">
-                          {{ link.priority }}
+                        <div class="flex flex-col items-center">
+                           <span class="text-[11px] font-black text-slate-900">{{ link.cdn_insight.hit_count }}</span>
+                           <span v-if="link.cdn_insight.last_seen_at" class="text-[8px] font-medium text-slate-400 italic">{{ link.cdn_insight.last_seen_at }}</span>
+                           <span v-else class="text-[8px] font-medium text-slate-300 italic">Never seen</span>
                         </div>
                      </td>
                      <td class="px-8 py-5 text-right">
