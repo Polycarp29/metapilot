@@ -1,5 +1,6 @@
 <script setup>
 import { ref, onMounted, onUnmounted, computed, watch } from 'vue'
+import { Link } from '@inertiajs/vue3'
 import axios from 'axios'
 import { useToastStore } from '@/stores/useToastStore'
 import {
@@ -36,6 +37,24 @@ const webAnalysisResponse = ref({
 })
 const isLoadingWebAnalysis = ref(false)
 let refreshInterval = null
+
+// Schema debug
+const schemaDebugItems   = ref([])
+const isLoadingSchemaDbg = ref(false)
+const expandedSchema     = ref(null)
+
+// CDN Discovery
+const cdnDiscovery = ref({
+    enabled: false,
+    loading: false,
+    sitemap_id: null,
+    discovered_count: 0,
+    pixel_domain: null,
+    errorMsg: null,
+})
+const discoveredPages    = ref([])
+const isLoadingDiscovered = ref(false)
+const totalDiscovered     = ref(0)
 
 // ─── Computed ─────────────────────────────────────────────────────────────────
 const selectedSite = computed(() =>
@@ -160,6 +179,61 @@ const fetchWebAnalysis = async (isManual = false) => {
     }
 }
 
+const fetchSchemaDebug = async () => {
+    isLoadingSchemaDbg.value = true
+    try {
+        const { data } = await axios.get(route('google-ads.schema-debug'))
+        schemaDebugItems.value = data.schemas || []
+    } catch (e) { /* silent */ } finally {
+        isLoadingSchemaDbg.value = false
+    }
+}
+
+// Helper: is CDN pixel connected for the selected site?
+const cdnConnected = computed(() => {
+    const site = selectedSite.value
+    return site && (site.status === 'verified_active' || site.status === 'connected_inactive')
+})
+
+const enableCdnDiscovery = async () => {
+    cdnDiscovery.value.loading = true
+    cdnDiscovery.value.errorMsg = null
+    try {
+        const { data } = await axios.post(route('google-ads.enable-cdn-discovery'), {
+            pixel_site_id: selectedSiteId.value || null
+        })
+        cdnDiscovery.value.enabled        = true
+        cdnDiscovery.value.sitemap_id     = data.sitemap_id
+        cdnDiscovery.value.discovered_count = data.discovered_count
+        cdnDiscovery.value.pixel_domain   = data.pixel_domain
+        toast.add('CDN Silent Discovery activated! Pages will appear as users visit them.', 'success')
+        fetchDiscoveredPages()
+        fetchWebAnalysis()
+    } catch (e) {
+        const msg = e.response?.data?.error || 'Failed to enable CDN discovery'
+        cdnDiscovery.value.errorMsg = msg
+        toast.add(msg, 'error')
+    } finally {
+        cdnDiscovery.value.loading = false
+    }
+}
+
+const fetchDiscoveredPages = async () => {
+    isLoadingDiscovered.value = true
+    try {
+        const { data } = await axios.get(route('google-ads.discovered-pages'))
+        discoveredPages.value  = data.pages || []
+        totalDiscovered.value  = data.total  || 0
+        if (data.sitemap_id) {
+            cdnDiscovery.value.sitemap_id = data.sitemap_id
+            cdnDiscovery.value.enabled    = data.crawl_mode === 'cdn'
+            cdnDiscovery.value.discovered_count = data.total
+        }
+    } catch (e) { /* silent */ } finally {
+        isLoadingDiscovered.value = false
+    }
+}
+
 const safeHostname = (url) => {
     if (!url) return ''
     try {
@@ -177,6 +251,8 @@ const safePath = (url) => {
 onMounted(() => {
     fetchConnectionStatus()
     fetchWebAnalysis()
+    fetchSchemaDebug()
+    fetchDiscoveredPages()
     refreshInterval = setInterval(fetchWebAnalysis, 60000)
 })
 
@@ -459,7 +535,161 @@ watch(selectedSiteId, () => fetchWebAnalysis())
         </div>
 
         <!-- ─── SECTION: Sitemaps ──────────────────────────────────────────── -->
-        <div v-show="activeSection === 'sitemaps'" class="space-y-5">
+        <div v-show="activeSection === 'sitemaps'" class="space-y-6">
+
+            <!-- ─── CDN Discovery CTA Panel ─── -->
+            <div class="relative overflow-hidden rounded-[2rem] p-8 md:p-10"
+                :class="cdnDiscovery.enabled
+                    ? 'bg-teal-900'
+                    : cdnConnected ? 'bg-slate-900' : 'bg-slate-800 opacity-80'">
+                <!-- Glow blobs -->
+                <div class="absolute -top-20 -right-20 w-72 h-72 rounded-full blur-[100px] pointer-events-none"
+                    :class="cdnDiscovery.enabled ? 'bg-teal-500/20' : 'bg-indigo-500/15'"></div>
+                <div class="absolute -bottom-16 -left-16 w-56 h-56 rounded-full blur-[80px] pointer-events-none"
+                    :class="cdnDiscovery.enabled ? 'bg-emerald-400/10' : 'bg-violet-500/10'"></div>
+
+                <div class="relative flex flex-col md:flex-row items-start md:items-center gap-6 justify-between">
+                    <!-- Left info -->
+                    <div class="flex items-start gap-5">
+                        <!-- Icon -->
+                        <div class="flex-shrink-0 w-14 h-14 rounded-2xl flex items-center justify-center"
+                            :class="cdnDiscovery.enabled ? 'bg-teal-500/20 border border-teal-500/30' : 'bg-white/10 border border-white/15'">
+                            <svg class="w-7 h-7" :class="cdnDiscovery.enabled ? 'text-teal-300' : 'text-slate-300'" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8.111 16.404a5.5 5.5 0 017.778 0M12 20h.01m-7.08-7.071c3.904-3.905 10.236-3.905 14.14 0M1.394 9.393c5.857-5.857 15.355-5.857 21.213 0"/>
+                            </svg>
+                        </div>
+                        <div>
+                            <div class="flex items-center gap-2.5 mb-1.5">
+                                <h3 class="text-white font-black text-base tracking-tight">Silent CDN Discovery</h3>
+                                <!-- Status pill -->
+                                <span v-if="cdnDiscovery.enabled"
+                                    class="flex items-center gap-1.5 px-2.5 py-0.5 bg-teal-500/20 border border-teal-500/30 rounded-full text-[9px] font-black text-teal-300 uppercase tracking-widest">
+                                    <span class="w-1.5 h-1.5 bg-teal-400 rounded-full animate-pulse"></span>Active
+                                </span>
+                                <span v-else-if="cdnConnected"
+                                    class="flex items-center gap-1.5 px-2.5 py-0.5 bg-white/10 border border-white/15 rounded-full text-[9px] font-black text-slate-300 uppercase tracking-widest">
+                                    <span class="w-1.5 h-1.5 bg-slate-400 rounded-full"></span>Ready
+                                </span>
+                                <span v-else
+                                    class="flex items-center gap-1.5 px-2.5 py-0.5 bg-amber-500/20 border border-amber-500/30 rounded-full text-[9px] font-black text-amber-300 uppercase tracking-widest">
+                                    <span class="w-1.5 h-1.5 bg-amber-400 rounded-full"></span>Pixel Needed
+                                </span>
+                            </div>
+                            <p v-if="cdnDiscovery.enabled" class="text-sm text-teal-200/80 font-medium max-w-lg">
+                                Your CDN pixel is silently watching traffic on
+                                <span class="font-black text-white">{{ cdnDiscovery.pixel_domain }}</span>.
+                                <span class="ml-2 text-teal-300 font-black">{{ totalDiscovered }} pages discovered so far.</span>
+                            </p>
+                            <p v-else-if="cdnConnected" class="text-sm text-slate-300 font-medium max-w-lg">
+                                Automatically log every page visited on your site via the CDN pixel &mdash; no crawler needed.
+                                Pages appear here the moment they receive traffic.
+                            </p>
+                            <p v-else class="text-sm text-amber-200/70 font-medium max-w-lg">
+                                Install the CDN tracking pixel on your site first. Once connected, silent discovery will start automatically on activation.
+                            </p>
+                            <!-- Error -->
+                            <p v-if="cdnDiscovery.errorMsg" class="mt-2 text-[11px] font-black text-rose-300">{{ cdnDiscovery.errorMsg }}</p>
+                        </div>
+                    </div>
+
+                    <!-- Right: Action -->
+                    <div class="flex-shrink-0">
+                        <!-- Already enabled: link to sitemap -->
+                        <div v-if="cdnDiscovery.enabled" class="flex items-center gap-3">
+                            <Link v-if="cdnDiscovery.sitemap_id"
+                                :href="route('sitemaps.show', cdnDiscovery.sitemap_id)"
+                                class="inline-flex items-center gap-2 px-5 py-3 bg-teal-500 hover:bg-teal-400 text-white text-[11px] font-black rounded-2xl transition-all shadow-lg shadow-teal-900/40">
+                                <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"/></svg>
+                                View Discovery Sitemap
+                            </Link>
+                        </div>
+                        <!-- Not yet enabled: activate button -->
+                        <button v-else
+                            @click="enableCdnDiscovery"
+                            :disabled="cdnDiscovery.loading || !cdnConnected"
+                            class="inline-flex items-center gap-2.5 px-6 py-3.5 font-black text-[11px] uppercase tracking-tight rounded-2xl transition-all shadow-lg"
+                            :class="cdnConnected
+                                ? 'bg-teal-500 hover:bg-teal-400 text-white shadow-teal-900/40 cursor-pointer'
+                                : 'bg-white/10 text-slate-400 cursor-not-allowed shadow-none'">
+                            <!-- Spinner -->
+                            <svg v-if="cdnDiscovery.loading" class="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
+                                <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/>
+                                <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z"/>
+                            </svg>
+                            <svg v-else class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M8.111 16.404a5.5 5.5 0 017.778 0M12 20h.01m-7.08-7.071c3.904-3.905 10.236-3.905 14.14 0M1.394 9.393c5.857-5.857 15.355-5.857 21.213 0"/>
+                            </svg>
+                            {{ cdnDiscovery.loading ? 'Activating…' : 'Enable Silent Discovery' }}
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- ─── Discovered Pages List (when active) ─── -->
+            <div v-if="cdnDiscovery.enabled || discoveredPages.length" class="bg-white border border-slate-100 rounded-[2rem] overflow-hidden shadow-sm">
+                <div class="flex items-center justify-between px-8 py-5 border-b border-slate-50">
+                    <div class="flex items-center gap-3">
+                        <span class="w-1.5 h-6 bg-teal-500 rounded-full"></span>
+                        <h3 class="text-sm font-black text-slate-900 uppercase tracking-tight">Discovered Pages</h3>
+                        <span class="text-[9px] font-black text-teal-600 bg-teal-50 border border-teal-200 px-2 py-0.5 rounded-lg">
+                            {{ totalDiscovered }} total
+                        </span>
+                    </div>
+                    <button @click="fetchDiscoveredPages"
+                        class="w-8 h-8 flex items-center justify-center bg-slate-50 hover:bg-slate-100 border border-slate-200 rounded-xl transition-all text-slate-500"
+                        :class="{ 'opacity-50': isLoadingDiscovered }">
+                        <svg class="w-3.5 h-3.5" :class="{ 'animate-spin': isLoadingDiscovered }" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
+                    </button>
+                </div>
+
+                <!-- Loading -->
+                <div v-if="isLoadingDiscovered" class="p-8 space-y-3">
+                    <div v-for="n in 5" :key="n" class="h-11 bg-slate-50 rounded-2xl animate-pulse"></div>
+                </div>
+
+                <!-- Empty -->
+                <div v-else-if="!discoveredPages.length" class="flex flex-col items-center py-16">
+                    <div class="w-12 h-12 bg-teal-50 rounded-2xl flex items-center justify-center mb-4 border border-teal-100">
+                        <svg class="w-5 h-5 text-teal-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/></svg>
+                    </div>
+                    <p class="text-xs font-black text-slate-600 uppercase tracking-tight mb-1">Waiting for traffic…</p>
+                    <p class="text-[10px] text-slate-400">Pages appear here as soon as a user visits them on your site.</p>
+                </div>
+
+                <!-- Page rows -->
+                <div v-else class="divide-y divide-slate-50">
+                    <div v-for="page in discoveredPages" :key="page.id"
+                        class="flex items-center gap-4 px-8 py-4 hover:bg-slate-50/70 transition-all group">
+                        <!-- Hit count pill -->
+                        <span class="flex-shrink-0 min-w-[2.5rem] h-8 flex items-center justify-center bg-teal-50 border border-teal-100 rounded-xl text-[10px] font-black text-teal-700">
+                            {{ page.cdn_hit_count }}
+                        </span>
+                        <!-- URL + title -->
+                        <div class="flex-1 min-w-0">
+                            <p class="text-[11px] font-black text-slate-800 truncate">{{ page.title || safePath(page.url) }}</p>
+                            <p class="text-[9px] text-slate-400 font-mono truncate mt-0.5">{{ page.url }}</p>
+                        </div>
+                        <!-- SEO score -->
+                        <div v-if="page.seo_score != null"
+                            class="flex-shrink-0 w-9 h-9 rounded-xl flex items-center justify-center font-black text-[11px] border-2"
+                            :class="page.seo_score >= 80 ? 'border-emerald-400 bg-emerald-50 text-emerald-700' :
+                                    page.seo_score >= 50 ? 'border-amber-400 bg-amber-50 text-amber-700' :
+                                                           'border-rose-400 bg-rose-50 text-rose-700'">
+                            {{ page.seo_score }}
+                        </div>
+                        <!-- Last seen -->
+                        <span class="flex-shrink-0 text-[9px] font-black text-slate-400 hidden md:block">{{ page.cdn_last_seen_at }}</span>
+                        <!-- View on sitemap -->
+                        <Link v-if="cdnDiscovery.sitemap_id"
+                            :href="route('sitemaps.show', cdnDiscovery.sitemap_id)"
+                            class="flex-shrink-0 w-8 h-8 flex items-center justify-center bg-slate-100 hover:bg-indigo-50 hover:text-indigo-600 text-slate-400 rounded-xl transition-all opacity-0 group-hover:opacity-100">
+                            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"/></svg>
+                        </Link>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Existing sitemaps grid -->
             <div v-if="!webAnalysisResponse.sitemaps?.length" class="flex flex-col items-center justify-center py-32 bg-white rounded-[2rem] border border-slate-100 shadow-sm text-center">
                 <div class="w-16 h-16 bg-slate-50 rounded-2xl flex items-center justify-center mb-5 border border-dashed border-slate-200">
                     <svg class="w-7 h-7 text-slate-300" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
@@ -475,11 +705,39 @@ watch(selectedSiteId, () => fetchWebAnalysis())
                         <div class="w-12 h-12 bg-indigo-50 rounded-2xl flex items-center justify-center text-indigo-600 group-hover:scale-110 transition-transform">
                             <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
                         </div>
-                        <span class="px-3 py-1 bg-indigo-50 text-indigo-600 text-[9px] font-black rounded-full uppercase tracking-tighter">
-                            {{ sitemap.links_count || 0 }} URLs
-                        </span>
+                        <!-- Badges -->
+                        <div class="flex flex-wrap items-center gap-1.5 justify-end">
+                            <!-- URL count -->
+                            <span class="px-3 py-1 bg-indigo-50 text-indigo-600 text-[9px] font-black rounded-full uppercase tracking-tighter">
+                                {{ sitemap.links_count || 0 }} URLs
+                            </span>
+                            <!-- Crawl mode badge -->
+                            <!-- Silent Crawl only show if CDN is connected for selected site -->
+                            <span v-if="sitemap.crawl_mode === 'cdn' && cdnConnected"
+                                class="px-2.5 py-1 bg-teal-50 text-teal-700 text-[9px] font-black rounded-full border border-teal-200 flex items-center gap-1">
+                                <span class="w-1.5 h-1.5 bg-teal-400 rounded-full animate-pulse"></span>Silent Crawl
+                            </span>
+                            <span v-else-if="sitemap.crawl_mode === 'cdn' && !cdnConnected"
+                                class="px-2.5 py-1 bg-slate-100 text-slate-400 text-[9px] font-black rounded-full border border-slate-200 flex items-center gap-1"
+                                title="CDN pixel not connected — silent crawl inactive">
+                                <span class="w-1.5 h-1.5 bg-slate-400 rounded-full"></span>Silent Crawl
+                            </span>
+                            <span v-else
+                                class="px-2.5 py-1 bg-violet-50 text-violet-700 text-[9px] font-black rounded-full border border-violet-200 flex items-center gap-1">
+                                <span class="w-1.5 h-1.5 bg-violet-400 rounded-full"></span>Aggressive Crawl
+                            </span>
+                            <!-- Discovery badge -->
+                            <span v-if="sitemap.is_discovery"
+                                class="px-2.5 py-1 bg-amber-50 text-amber-700 text-[9px] font-black rounded-full border border-amber-200">
+                                🔍 Discovered
+                            </span>
+                        </div>
                     </div>
-                    <h4 class="text-sm font-black text-slate-900 mb-1">{{ sitemap.name }}</h4>
+                    <!-- Clickable name → sitemaps.show -->
+                    <Link :href="route('sitemaps.show', sitemap.id)"
+                        class="block text-sm font-black text-slate-900 mb-1 hover:text-indigo-600 transition-colors underline-offset-2 hover:underline">
+                        {{ sitemap.name }}
+                    </Link>
                     <p class="text-[10px] text-slate-400 font-mono truncate mb-4">{{ sitemap.site_url }}</p>
                     <div class="flex items-center gap-2 text-[9px] font-black text-slate-400 uppercase tracking-widest">
                         <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
@@ -490,7 +748,7 @@ watch(selectedSiteId, () => fetchWebAnalysis())
         </div>
 
         <!-- ─── SECTION: Health ────────────────────────────────────────────── -->
-        <div v-show="activeSection === 'health'" class="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <div v-show="activeSection === 'health'" class="space-y-6 grid grid-cols-1 md:grid-cols-2 gap-6">
 
             <!-- Field Health Panel -->
             <div class="bg-slate-900 rounded-[2rem] p-10 text-white relative overflow-hidden shadow-xl">
@@ -561,6 +819,67 @@ watch(selectedSiteId, () => fetchWebAnalysis())
                     <p class="text-[10px] font-black text-slate-400 uppercase tracking-widest">AI Schema Engine Running</p>
                 </div>
             </div>
+
+            <!-- ─── Schema Debug Panel ─── -->
+            <div class="md:col-span-2 bg-white border border-slate-100 rounded-[2rem] overflow-hidden shadow-sm">
+                <div class="flex items-center justify-between px-8 py-6 border-b border-slate-50">
+                    <div class="flex items-center gap-3">
+                        <span class="w-1.5 h-6 bg-violet-500 rounded-full"></span>
+                        <h3 class="text-sm font-black text-slate-900 uppercase tracking-tight">Schema Debug</h3>
+                        <span class="text-[9px] font-black text-slate-400 uppercase tracking-wider bg-slate-50 border border-slate-200 px-2 py-0.5 rounded-lg">Last 20 Auto-Generated</span>
+                    </div>
+                    <button @click="fetchSchemaDebug"
+                        class="w-9 h-9 flex items-center justify-center bg-slate-50 hover:bg-slate-100 border border-slate-200 rounded-xl transition-all text-slate-500"
+                        :class="{ 'opacity-50': isLoadingSchemaDbg }">
+                        <svg class="w-3.5 h-3.5" :class="{ 'animate-spin': isLoadingSchemaDbg }" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
+                    </button>
+                </div>
+
+                <!-- Loading -->
+                <div v-if="isLoadingSchemaDbg" class="p-8 space-y-3">
+                    <div v-for="n in 4" :key="n" class="h-12 bg-slate-50 rounded-2xl animate-pulse"></div>
+                </div>
+
+                <!-- Empty -->
+                <div v-else-if="!schemaDebugItems.length" class="flex flex-col items-center py-16 text-center">
+                    <div class="w-12 h-12 bg-violet-50 rounded-2xl flex items-center justify-center mb-4 border border-violet-100">
+                        <svg class="w-5 h-5 text-violet-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4"/></svg>
+                    </div>
+                    <p class="text-xs font-black text-slate-600 uppercase tracking-tight mb-1">No schemas generated yet</p>
+                    <p class="text-[10px] text-slate-400 max-w-xs">Auto-generated schemas appear here once the CDN pixel fires with the <code class="bg-slate-100 px-1 rounded">schema</code> module enabled.</p>
+                </div>
+
+                <!-- Schema list -->
+                <div v-else class="divide-y divide-slate-50">
+                    <div v-for="s in schemaDebugItems" :key="s.id"
+                        @click="expandedSchema = expandedSchema === s.id ? null : s.id"
+                        class="px-8 py-4 hover:bg-slate-50/70 cursor-pointer transition-all group">
+                        <div class="flex items-center justify-between">
+                            <div class="flex items-center gap-3 min-w-0">
+                                <span class="px-2 py-0.5 text-[8px] font-black rounded-md uppercase"
+                                    :class="s.schema_type === 'article' ? 'bg-amber-50 text-amber-700 border border-amber-200' :
+                                            s.schema_type === 'website' ? 'bg-blue-50 text-blue-700 border border-blue-200' :
+                                            'bg-violet-50 text-violet-700 border border-violet-200'">
+                                    {{ s.schema_type }}
+                                </span>
+                                <p class="text-[11px] font-semibold text-slate-700 truncate max-w-md font-mono">{{ s.url }}</p>
+                            </div>
+                            <div class="flex items-center gap-3 flex-shrink-0">
+                                <span class="text-[9px] font-black text-slate-400 uppercase">{{ s.injected_count }} injections</span>
+                                <span class="text-[9px] text-slate-400">{{ s.last_injected_at }}</span>
+                                <svg class="w-3 h-3 text-slate-300 group-hover:text-slate-500 transition-all"
+                                    :class="{ 'rotate-90': expandedSchema === s.id }"
+                                    fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M9 5l7 7-7 7"/></svg>
+                            </div>
+                        </div>
+                        <!-- Expanded JSON preview -->
+                        <div v-if="expandedSchema === s.id" class="mt-4 animate-fade-in">
+                            <pre class="text-[10px] bg-slate-900 text-emerald-300 rounded-2xl p-5 overflow-x-auto max-h-64 font-mono leading-relaxed">{{ s.schema_preview }}</pre>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
         </div>
 
     </div>

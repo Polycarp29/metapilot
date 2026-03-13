@@ -9,6 +9,7 @@ use App\Models\KeywordResearch;
 use App\Models\Organization;
 use App\Models\PixelSite;
 use App\Models\Schema;
+use App\Models\Sitemap;
 use App\Models\SitemapLink;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Cache;
@@ -220,20 +221,40 @@ class CdnTrackingController extends Controller
             $pixelSite->update(['pixel_verified_at' => now()]);
         }
 
-        // --- Active Crawling for New URLs ---
-        if ($urlHash) {
+        // --- Live Page Discovery ---
+        if ($urlHash && $request->page_url) {
             $isNewPage = !AdTrackEvent::where('pixel_site_id', $pixelSite->id)
                 ->where('page_view_id', '!=', $request->page_view_id)
                 ->where('page_url', $request->page_url)
                 ->exists();
 
             if ($isNewPage) {
-                app(\App\Services\Crawler\CrawlerManager::class)->dispatch(
-                    null, // No sitemap required for passive discovery
-                    $request->page_url,
-                    0, // Just this page
-                    ['job_id' => 'cdn-discovery-' . $urlHash, 'render_js' => true]
-                );
+                $discoverySitemap = $this->resolveDiscoverySitemap($organization, $pixelSite);
+                $crawlMode = $discoverySitemap->crawl_mode;
+
+                if ($crawlMode === 'cdn') {
+                    // ── Silent CDN Discovery: record URL directly from pixel metadata ──
+                    $meta = is_array($request->metadata) ? $request->metadata : [];
+                    SitemapLink::firstOrCreate(
+                        ['sitemap_id' => $discoverySitemap->id, 'url_hash' => $urlHash],
+                        [
+                            'url'          => $request->page_url,
+                            'title'        => $meta['title'] ?? null,
+                            'status_code'  => 200,
+                            'cdn_active'   => true,
+                            'cdn_hit_count'    => 1,
+                            'cdn_last_seen_at' => now(),
+                        ]
+                    );
+                } else {
+                    // ── Aggressive Crawl: dispatch Scrapy spider for full extraction ──
+                    app(\App\Services\Crawler\CrawlerManager::class)->dispatch(
+                        $discoverySitemap->id,
+                        $request->page_url,
+                        0,
+                        ['job_id' => 'cdn-discovery-' . $urlHash, 'render_js' => true]
+                    );
+                }
             }
         }
 
@@ -922,12 +943,14 @@ class CdnTrackingController extends Controller
             ->get()
             ->map(function($s) {
                 return [
-                    'id' => $s->id,
-                    'name' => $s->name,
-                    'site_url' => $s->site_url,
-                    'links_count' => $s->links_count,
+                    'id'                => $s->id,
+                    'name'              => $s->name,
+                    'site_url'          => $s->site_url,
+                    'links_count'       => $s->links_count,
                     'last_crawl_status' => $s->last_crawl_status,
                     'last_generated_at' => $s->last_generated_at ? $s->last_generated_at->diffForHumans() : 'Never',
+                    'is_discovery'      => (bool) $s->is_discovery,
+                    'crawl_mode'        => $s->crawl_mode ?? 'python',
                 ];
             });
 
@@ -1005,12 +1028,38 @@ class CdnTrackingController extends Controller
         ];
 
         return response()->json([
-            'sitemaps' => $sitemaps,
+            'sitemaps'       => $sitemaps,
             'analysis_links' => $analysisLinks,
-            'error_summary' => $errorSummary,
-            'schema_stats' => $schemaStats,
-            'trends' => $trends,
+            'error_summary'  => $errorSummary,
+            'schema_stats'   => $schemaStats,
+            'trends'         => $trends,
         ]);
+    }
+
+    /**
+     * Return the last 20 auto-generated CDN schemas for the authenticated org.
+     * Used by the Schema Debug panel in the Web Analysis > Health tab.
+     */
+    public function schemaDebug(Request $request)
+    {
+        $organization = $request->user()->currentOrganization();
+        if (!$organization) return response()->json(['error' => 'Organization not found'], 404);
+
+        $schemas = CdnPageSchema::whereHas('pixelSite', fn($q) => $q->where('organization_id', $organization->id))
+            ->where('is_auto_generated', true)
+            ->orderByDesc('last_injected_at')
+            ->limit(20)
+            ->get()
+            ->map(fn($s) => [
+                'id'               => $s->id,
+                'url'              => $s->url,
+                'schema_type'      => $s->schema_type,
+                'injected_count'   => $s->injected_count,
+                'last_injected_at' => $s->last_injected_at?->diffForHumans(),
+                'schema_preview'   => json_encode($s->schema_json, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE),
+            ]);
+
+        return response()->json(['schemas' => $schemas]);
     }
 
     /**
@@ -1040,5 +1089,121 @@ class CdnTrackingController extends Controller
         $errors = $query->with('pixelSite:id,label')->orderBy('created_at', 'desc')->paginate($perPage);
 
         return response()->json($errors);
+    }
+
+    // -------------------------------------------------------------------------
+    // Discovery Helpers
+    // -------------------------------------------------------------------------
+
+    /**
+     * Enable CDN Silent Discovery for the organisation.
+     *
+     * Creates or updates the discovery sitemap to crawl_mode=cdn,
+     * then returns the sitemap's current state + how many pages discovered so far.
+     * The CDN pixel will start populating SitemapLinks passively on each page hit.
+     */
+    public function enableCdnDiscovery(Request $request)
+    {
+        $organization = $request->user()->currentOrganization();
+        if (!$organization) return response()->json(['error' => 'Organization not found'], 404);
+
+        // Require an active pixel site for the selected site or any connected site
+        $pixelSiteId = $request->input('pixel_site_id');
+        $pixelSite = $pixelSiteId
+            ? PixelSite::where('organization_id', $organization->id)->find($pixelSiteId)
+            : PixelSite::where('organization_id', $organization->id)->whereNotNull('pixel_verified_at')->first();
+
+        if (!$pixelSite) {
+            return response()->json([
+                'error'   => 'No verified CDN pixel found. Install the tracking pixel on your site first.',
+                'success' => false,
+            ], 422);
+        }
+
+        // Upsert discovery sitemap with CDN mode
+        $sitemap = Sitemap::updateOrCreate(
+            ['organization_id' => $organization->id, 'is_discovery' => true],
+            [
+                'user_id'    => $request->user()->id,
+                'name'       => 'CDN Discovery — ' . ($pixelSite->allowed_domain ?? $pixelSite->label),
+                'site_url'   => $pixelSite->allowed_domain ? 'https://' . $pixelSite->allowed_domain : null,
+                'crawl_mode' => 'cdn',
+                'is_index'   => false,
+            ]
+        );
+
+        $discoveredCount = $sitemap->links()->count();
+
+        return response()->json([
+            'success'          => true,
+            'message'          => 'Silent CDN discovery is now active. Pages will appear automatically as users visit them.',
+            'sitemap_id'       => $sitemap->id,
+            'discovered_count' => $discoveredCount,
+            'pixel_domain'     => $pixelSite->allowed_domain ?? $pixelSite->label,
+        ]);
+    }
+
+    /**
+     * Return paginated list of CDN-discovered pages for the organisation.
+     * Shows most recently seen pages first, with CDN hit counts.
+     */
+    public function discoveredPages(Request $request)
+    {
+        $organization = $request->user()->currentOrganization();
+        if (!$organization) return response()->json(['error' => 'Organization not found'], 404);
+
+        $discoverySitemap = Sitemap::where('organization_id', $organization->id)
+            ->where('is_discovery', true)
+            ->first();
+
+        if (!$discoverySitemap) {
+            return response()->json(['pages' => [], 'total' => 0, 'sitemap_id' => null]);
+        }
+
+        $pages = $discoverySitemap->links()
+            ->orderByDesc('cdn_last_seen_at')
+            ->limit(50)
+            ->get()
+            ->map(fn($link) => [
+                'id'              => $link->id,
+                'url'             => $link->url,
+                'title'           => $link->title,
+                'cdn_hit_count'   => $link->cdn_hit_count,
+                'cdn_last_seen_at'=> $link->cdn_last_seen_at?->diffForHumans(),
+                'seo_score'       => $link->cdn_insight['seo_score'] ?? null,
+                'status_code'     => $link->status_code,
+            ]);
+
+        return response()->json([
+            'pages'      => $pages,
+            'total'      => $discoverySitemap->links()->count(),
+            'sitemap_id' => $discoverySitemap->id,
+            'crawl_mode' => $discoverySitemap->crawl_mode,
+        ]);
+    }
+
+
+    /**
+     * Find or auto-create the organisation's CDN discovery sitemap.
+     *
+     * The discovery sitemap is a special sitemap used as the landing zone for
+     * pages found passively (CDN) or aggressively (Scrapy) via pixel traffic.
+     * It is created once and reused for all subsequent discoveries.
+     */
+    private function resolveDiscoverySitemap(Organization $organization, PixelSite $pixelSite): Sitemap
+    {
+        return Sitemap::firstOrCreate(
+            [
+                'organization_id' => $organization->id,
+                'is_discovery'    => true,
+            ],
+            [
+                'user_id'    => $organization->users()->first()?->id,
+                'name'       => 'CDN Discovery — ' . ($pixelSite->allowed_domain ?? $pixelSite->label),
+                'site_url'   => $pixelSite->allowed_domain ? 'https://' . $pixelSite->allowed_domain : null,
+                'crawl_mode' => 'cdn',   // default: silent; user can switch to aggressive in settings
+                'is_index'   => false,
+            ]
+        );
     }
 }
