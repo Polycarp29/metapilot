@@ -33,12 +33,19 @@ const selectedCampaignId = ref('')
 const selectedSession    = ref(null)
 const searchQuery        = ref('')
 const connectionStatus   = ref(null)
-const allowedDomainInput = ref(props.organization?.allowed_domain || '')
+const allowedDomainInput = ref('')
 const domainSavedMsg     = ref('')
 const showRegenModal     = ref(false)
 const analyticsData      = ref(null)
 const isLoadingAnalytics = ref(false)
 const pathFilter         = ref('')  // filter log by clicking a path row
+
+// Multi-site state
+const pixelSites         = ref([])
+const selectedSiteId     = ref(null)
+const isCreatingSite     = ref(false)
+const showNewSiteModal   = ref(false)
+const newSite            = ref({ label: '', allowed_domain: '' })
 
 // Filters
 const filters = ref({
@@ -61,6 +68,10 @@ const siteToken = computed(() => props.organization?.ads_site_token)
 
 const selectedProperty = computed(() =>
     props.properties?.find(p => p.id == selectedPropId.value)
+)
+
+const selectedSite = computed(() => 
+    pixelSites.value.find(s => s.id === selectedSiteId.value)
 )
 
 const filteredEvents = computed(() => {
@@ -275,16 +286,13 @@ const sparklinePath = (series) => {
 }
 
 const pixelStatusBadge = computed(() => {
-    const cs = connectionStatus.value
-    if (cs) {
-        if (cs.status === 'verified_active')   return { label: 'Verified & Active',   color: 'emerald', icon: '✓' }
-        if (cs.status === 'connected_inactive') return { label: 'Connected – Inactive', color: 'amber',   icon: '○' }
+    const site = selectedSite.value
+    if (site) {
+        if (site.status === 'verified_active')   return { label: 'Verified & Active',   color: 'emerald', icon: '✓' }
+        if (site.status === 'connected_inactive') return { label: 'Connected – Inactive', color: 'amber',   icon: '○' }
         return { label: 'Not Detected', color: 'rose', icon: '✕' }
     }
-    const recent = chartEvents.value.some(e => new Date(e.created_at) > new Date(Date.now() - 86400000))
-    if (recent) return { label: 'Connected & Active', color: 'emerald', icon: '✓' }
-    if (logResponse.value.total > 0) return { label: 'Connected – Inactive', color: 'amber', icon: '○' }
-    return { label: 'Not Detected', color: 'rose', icon: '✕' }
+    return { label: 'No Site Selected', color: 'slate', icon: '○' }
 })
 
 const mainChartOptions = {
@@ -324,7 +332,8 @@ const fetchEvents = async () => {
         const params = {
             ...filters.value,
             search: pathFilter.value || searchQuery.value,
-            campaign_id: filters.value.campaign_id
+            campaign_id: filters.value.campaign_id,
+            pixel_site_id: selectedSiteId.value
         }
         const r = await axios.get(route('google-ads.pixel-events'), { params })
         logResponse.value = r.data
@@ -345,7 +354,9 @@ const fetchEvents = async () => {
 const fetchAnalytics = async () => {
     isLoadingAnalytics.value = true
     try {
-        const r = await axios.get(route('google-ads.analytics'))
+        const r = await axios.get(route('google-ads.analytics'), {
+            params: { pixel_site_id: selectedSiteId.value }
+        })
         analyticsData.value = r.data
     } catch (e) {
         console.error('Failed to fetch analytics', e)
@@ -392,27 +403,37 @@ const downloadCsv = () => {
 const fetchConnectionStatus = async () => {
     try {
         const r = await axios.get(route('google-ads.connection-status'))
-        connectionStatus.value = r.data
+        pixelSites.value = r.data.pixel_sites || []
+        
+        // Default selection if none
+        if (!selectedSiteId.value && pixelSites.value.length > 0) {
+            selectedSiteId.value = pixelSites.value[0].id
+        }
+        
+        if (selectedSite.value) {
+            allowedDomainInput.value = selectedSite.value.allowed_domain || ''
+        }
     } catch (e) { /* silent */ }
 }
 
 const runConnectionTest = async () => {
     isTestingConn.value = true
     try {
-        const r = await axios.get(route('google-ads.connection-status'))
-        connectionStatus.value = r.data
+        await fetchConnectionStatus()
     } catch (e) {
-        connectionStatus.value = { status: 'not_detected', connected: false }
+        // silent
     } finally {
         isTestingConn.value = false
     }
 }
 
 const saveAllowedDomain = async () => {
+    if (!selectedSiteId.value) return
     isSavingDomain.value = true
     domainSavedMsg.value = ''
     try {
         const r = await axios.put(route('google-ads.allowed-domain'), {
+            pixel_site_id: selectedSiteId.value,
             allowed_domain: allowedDomainInput.value
         })
         domainSavedMsg.value = r.data.message
@@ -427,23 +448,44 @@ const saveAllowedDomain = async () => {
 }
 
 const updateSnippet = () => {
+    if (!selectedSite.value) {
+        snippet.value = 'Select a site to generate snippet'
+        return
+    }
     const base = window.location.origin
     const camp = selectedCampaignId.value ? ` data-campaign="${selectedCampaignId.value}"` : ''
-    snippet.value = `<script src="${base}/cdn/ads-tracker.js" data-token="${siteToken.value}"${camp} async><\/script>`
+    snippet.value = `<script src="${base}/cdn/ads-tracker.js" data-token="${selectedSite.value.ads_site_token}"${camp} async><\/script>`
 }
 
 const regenerateToken = async () => {
+    if (!selectedSiteId.value) return
     showRegenModal.value = false
     isRegenerating.value = true
     try {
-        await axios.post(route('google-ads.regenerate-token'))
+        const r = await axios.post(route('google-ads.pixel-sites.regenerate-token', { pixel_site: selectedSiteId.value }))
         toast.success('Site token regenerated successfully')
-        window.location.reload()
+        fetchConnectionStatus()
     } catch (e) {
         console.error('Failed to regenerate token', e)
         toast.error('Failed to regenerate site token')
     } finally {
         isRegenerating.value = false
+    }
+}
+
+const createSite = async () => {
+    isCreatingSite.value = true
+    try {
+        const r = await axios.post(route('google-ads.pixel-sites.store'), newSite.value)
+        toast.success('New pixel site created')
+        showNewSiteModal.value = false
+        newSite.value = { label: '', allowed_domain: '' }
+        await fetchConnectionStatus()
+        selectedSiteId.value = r.data.pixel_site.id
+    } catch (e) {
+        toast.error('Failed to create pixel site')
+    } finally {
+        isCreatingSite.value = false
     }
 }
 
@@ -487,7 +529,16 @@ onUnmounted(() => {
     clearInterval(analyticsInterval)
 })
 
-watch([selectedPropId, selectedCampaignId, siteToken], updateSnippet)
+watch([selectedPropId, selectedCampaignId, selectedSiteId], () => {
+    updateSnippet()
+    if (selectedSite.value) {
+        allowedDomainInput.value = selectedSite.value.allowed_domain || ''
+    }
+})
+watch(selectedSiteId, () => {
+    fetchEvents()
+    fetchAnalytics()
+})
 watch(pathFilter, () => { if (!pathFilter.value) fetchEvents() })
 </script>
 
@@ -502,7 +553,25 @@ watch(pathFilter, () => { if (!pathFilter.value) fetchEvents() })
                 </h2>
                 <p class="text-slate-500 font-medium mt-2 max-w-xl leading-relaxed">Secure pixel tracking with agency attribution monitoring & real-time signal intelligence.</p>
             </div>
-            <div class="flex items-center gap-2 px-5 py-3 rounded-2xl border font-black text-[11px] uppercase tracking-widest transition-all"
+            <div class="flex items-center gap-4">
+                <div class="flex items-center gap-1.5 p-1.5 bg-slate-100 rounded-2xl overflow-x-auto max-w-md no-scrollbar">
+                    <button v-for="site in pixelSites" :key="site.id"
+                        @click="selectedSiteId = site.id"
+                        class="px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-tight transition-all whitespace-nowrap flex items-center gap-2"
+                        :class="selectedSiteId === site.id ? 'bg-white text-indigo-600 shadow-sm border border-slate-200' : 'text-slate-400 hover:text-slate-600'">
+                        {{ site.label }}
+                        <span class="w-1.5 h-1.5 rounded-full" :class="{
+                            'bg-emerald-500': site.status === 'verified_active',
+                            'bg-amber-400': site.status === 'connected_inactive',
+                            'bg-slate-300': site.status === 'not_detected',
+                        }"></span>
+                    </button>
+                    <button @click="showNewSiteModal = true" class="px-4 py-2 text-slate-400 hover:text-white hover:bg-slate-900 rounded-xl transition-all">
+                        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M12 4v16m8-8H4"/></svg>
+                    </button>
+                </div>
+
+                <div v-if="selectedSite" class="flex items-center gap-2 px-5 py-3 rounded-2xl border font-black text-[11px] uppercase tracking-widest transition-all"
                 :class="{
                     'bg-emerald-50 border-emerald-200 text-emerald-700': pixelStatusBadge.color === 'emerald',
                     'bg-amber-50 border-amber-200 text-amber-700': pixelStatusBadge.color === 'amber',
@@ -527,7 +596,7 @@ watch(pathFilter, () => { if (!pathFilter.value) fetchEvents() })
                     <p class="text-[11px] font-black text-slate-400 uppercase tracking-widest mb-1">Total Signals</p>
                     <h4 class="text-4xl font-black text-slate-900 tracking-tight">{{ logResponse.total }}</h4>
                     <div class="mt-3 flex items-center justify-between">
-                        <span class="text-[10px] font-black text-slate-400">{{ connectionStatus?.hits_last_24h ?? '—' }} in last 24h</span>
+                        <span class="text-[10px] font-black text-slate-400">{{ selectedSite?.hits_last_24h ?? '—' }} in last 24h</span>
                         <span v-if="todayDelta !== null" class="text-[10px] font-black px-2 py-0.5 rounded-lg"
                             :class="deltaBadgeClass(todayDelta)">
                             {{ deltaIcon(todayDelta) }} today
@@ -562,10 +631,11 @@ watch(pathFilter, () => { if (!pathFilter.value) fetchEvents() })
                         {{ isTestingConn ? 'Testing...' : 'Test Now' }}
                     </button>
                 </div>
-                <div class="space-y-4">
+                <div v-if="selectedSite" class="space-y-4">
                     <div class="relative">
+                        <label class="text-[8px] font-black text-slate-400 uppercase tracking-widest ml-1 mb-1 block">Traffic Domain Pinning</label>
                         <input v-model="allowedDomainInput" placeholder="diaminyaesthetics.com" class="w-full bg-slate-50 border-slate-100 focus:border-indigo-500 focus:ring-0 rounded-xl text-[11px] font-bold text-slate-800 py-3 px-4 pr-16" />
-                        <button @click="saveAllowedDomain" class="absolute right-2 top-1/2 -translate-y-1/2 bg-slate-900 text-white text-[9px] font-black px-3 py-1.5 rounded-lg">Save</button>
+                        <button @click="saveAllowedDomain" class="absolute right-2 bottom-2 bg-slate-900 text-white text-[9px] font-black px-3 py-1.5 rounded-lg active:scale-95 transition-transform">Save</button>
                     </div>
                     <div class="flex items-center justify-between p-3 bg-slate-50/50 rounded-xl">
                         <span class="text-[9px] font-black text-slate-400 uppercase">Subdomain Pinning</span>
@@ -818,7 +888,7 @@ watch(pathFilter, () => { if (!pathFilter.value) fetchEvents() })
                         <span class="p-3 bg-indigo-600 text-white rounded-2xl shadow-lg">
                             <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4"/></svg>
                         </span>
-                        Tracker Implementation
+                        Tracker Implementation: {{ selectedSite?.label || '...' }}
                     </h3>
                     <div class="flex items-center gap-3">
                         <span class="px-3 py-1 bg-white/5 text-indigo-400 text-[9px] font-black rounded-lg border border-white/10 uppercase tracking-widest">v3.1 Secure Handshake</span>
@@ -1144,10 +1214,40 @@ watch(pathFilter, () => { if (!pathFilter.value) fetchEvents() })
         <ConfirmationModal
             :show="showRegenModal"
             title="Regenerate Site Token?"
-            message="This action is irreversible. All current tracking scripts will stop working until updated with the new token."
+            message="This action is irreversible. All current tracking scripts for this specific site will stop working until updated with the new token."
             confirmText="Regenerate"
             @close="showRegenModal = false"
             @confirm="regenerateToken"
         />
+
+        <!-- ── New Site Modal ────────── -->
+        <transition enter-active-class="transition duration-300 ease-out" enter-from-class="opacity-0" enter-to-class="opacity-100" leave-active-class="transition duration-200 ease-in" leave-from-class="opacity-100" leave-to-class="opacity-0">
+            <div v-if="showNewSiteModal" class="fixed inset-0 z-[70] flex items-center justify-center p-6">
+                <div class="absolute inset-0 bg-slate-100/40 backdrop-blur-md" @click="showNewSiteModal = false"></div>
+                <div class="relative w-full max-w-md bg-white rounded-[2.5rem] shadow-premium p-10 border border-slate-200">
+                    <h3 class="text-2xl font-black text-slate-900 mb-2">Add Tracking Site</h3>
+                    <p class="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-8">Generate a unique key for another domain.</p>
+
+                    <form @submit.prevent="createSite" class="space-y-6">
+                        <div class="space-y-2">
+                            <label class="text-[9px] font-black text-slate-400 uppercase tracking-widest ml-1">Site Label</label>
+                            <input v-model="newSite.label" required placeholder="e.g. Shopify Store, Landing Page..." class="w-full bg-slate-50 border-slate-100 rounded-xl text-xs font-bold py-4 px-5 focus:ring-0 focus:border-indigo-500" />
+                        </div>
+                        <div class="space-y-2">
+                            <label class="text-[9px] font-black text-slate-400 uppercase tracking-widest ml-1">Allowed Domain (Optional)</label>
+                            <input v-model="newSite.allowed_domain" placeholder="example.com" class="w-full bg-slate-50 border-slate-100 rounded-xl text-xs font-bold py-4 px-5 focus:ring-0 focus:border-indigo-500" />
+                            <p class="text-[9px] text-slate-400 font-medium leading-relaxed italic mt-2">Recommended for security. Only hits from this domain will be accepted.</p>
+                        </div>
+
+                        <div class="flex items-center gap-4 pt-4">
+                            <button type="submit" :disabled="isCreatingSite" class="flex-1 bg-indigo-600 text-white py-4 rounded-xl text-xs font-black uppercase tracking-widest shadow-lg shadow-indigo-100 hover:shadow-indigo-200 active:scale-95 transition-all disabled:opacity-50">
+                                {{ isCreatingSite ? 'Generating...' : 'Create Site' }}
+                            </button>
+                            <button type="button" @click="showNewSiteModal = false" class="px-6 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest hover:text-slate-600 transition-colors">Cancel</button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </transition>
     </div>
 </template>

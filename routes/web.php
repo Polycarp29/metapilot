@@ -199,10 +199,14 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::get('/connection-status', [\App\Http\Controllers\CdnTrackingController::class, 'connectionStatus'])->name('connection-status');
         Route::put('/allowed-domain', [\App\Http\Controllers\CdnTrackingController::class, 'saveAllowedDomain'])->name('allowed-domain');
         // Pixel event intelligence (used by DevelopersTab.vue)
-        Route::get('/pixel-events', [CdnTrackingController::class, 'events'])->name('pixel-events');
-        Route::get('/pixel-events/csv', [CdnTrackingController::class, 'downloadCsv'])->name('pixel-events.csv');
+        Route::get('/pixel-events', [\App\Http\Controllers\CdnTrackingController::class, 'events'])->name('pixel-events');
+        Route::get('/pixel-events/csv', [\App\Http\Controllers\CdnTrackingController::class, 'downloadCsv'])->name('pixel-events.csv');
         // Path intelligence & trend analytics
-        Route::get('/analytics', [CdnTrackingController::class, 'analytics'])->name('analytics');
+        Route::get('/analytics', [\App\Http\Controllers\CdnTrackingController::class, 'analytics'])->name('analytics');
+
+        // Multi-Site Pixel Management
+        Route::apiResource('pixel-sites', \App\Http\Controllers\PixelSiteController::class);
+        Route::post('pixel-sites/{pixel_site}/regenerate-token', [\App\Http\Controllers\PixelSiteController::class, 'regenerateToken'])->name('pixel-sites.regenerate-token');
     });
 
     // Regenerate token (agency management)

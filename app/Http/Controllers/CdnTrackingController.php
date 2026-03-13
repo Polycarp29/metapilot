@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\AdTrackEvent;
 use App\Models\Organization;
+use App\Models\PixelSite;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\File;
@@ -69,17 +70,19 @@ class CdnTrackingController extends Controller
             '_sig'         => 'required|string',
         ]);
 
-        $organization = Organization::where('ads_site_token', $request->token)->first();
-        if (!$organization) {
+        $pixelSite = PixelSite::where('ads_site_token', $request->token)->first();
+        if (!$pixelSite) {
             return response()->json(['error' => 'Invalid token'], 403)
                 ->withHeaders($this->corsHeaders());
         }
 
+        $organization = $pixelSite->organization;
+
         // --- Security: Domain Pinning ---
-        if ($organization->allowed_domain) {
+        if ($pixelSite->allowed_domain) {
             $origin  = $request->header('Origin', '');
             $referer = $request->header('Referer', '');
-            $allowed = strtolower(trim($organization->allowed_domain, '/'));
+            $allowed = strtolower(trim($pixelSite->allowed_domain, '/'));
 
             $originHost  = strtolower(parse_url($origin,  PHP_URL_HOST) ?? '');
             $refererHost = strtolower(parse_url($referer, PHP_URL_HOST) ?? '');
@@ -118,12 +121,12 @@ class CdnTrackingController extends Controller
         $expected = hash_hmac(
             'sha256',
             $request->token . $request->page_view_id . $ts,
-            $organization->ads_site_token
+            $pixelSite->ads_site_token
         );
 
         if (!hash_equals($expected, $signature)) {
             Log::warning('Pixel HMAC validation failed', [
-                'org_id'        => $organization->id,
+                'pixel_site_id' => $pixelSite->id,
                 'page_view_id'  => $request->page_view_id,
             ]);
             return response()->json(['error' => 'Invalid signature'], 403)
@@ -140,6 +143,7 @@ class CdnTrackingController extends Controller
             ['page_view_id' => $request->page_view_id],
             [
                 'organization_id'    => $organization->id,
+                'pixel_site_id'      => $pixelSite->id,
                 'site_token'         => $request->token,
                 'country_code'       => $geo['country_code'] ?? $request->header('CF-IPCountry'),
                 'city'               => $geo['city']         ?? null,
@@ -162,8 +166,8 @@ class CdnTrackingController extends Controller
         );
 
         // --- Mark pixel as verified on first domain-confirmed hit ---
-        if (!$organization->pixel_verified_at) {
-            $organization->update(['pixel_verified_at' => now()]);
+        if (!$pixelSite->pixel_verified_at) {
+            $pixelSite->update(['pixel_verified_at' => now()]);
         }
 
         return response()->json(null, 204)->withHeaders($this->corsHeaders());
@@ -183,19 +187,19 @@ class CdnTrackingController extends Controller
             'challenge' => 'required|string|max:64',
         ]);
 
-        $organization = Organization::where('ads_site_token', $request->token)->first();
+        $pixelSite = PixelSite::where('ads_site_token', $request->token)->first();
 
-        if (!$organization) {
+        if (!$pixelSite) {
             return response()->json(['ok' => false, 'error' => 'Invalid token'], 403)
                 ->withHeaders($this->corsHeaders());
         }
 
         // Check if the calling domain matches the allowed_domain
         $domainVerified = false;
-        if ($organization->allowed_domain) {
+        if ($pixelSite->allowed_domain) {
             $origin     = strtolower(parse_url($request->header('Origin', ''), PHP_URL_HOST) ?? '');
             $referer    = strtolower(parse_url($request->header('Referer', ''), PHP_URL_HOST) ?? '');
-            $allowed    = strtolower($organization->allowed_domain);
+            $allowed    = strtolower($pixelSite->allowed_domain);
             $normalise  = fn($h) => preg_replace('/^www\./', '', $h);
             $cleanAllowed = $normalise($allowed);
 
@@ -227,6 +231,10 @@ class CdnTrackingController extends Controller
         }
 
         $query = AdTrackEvent::where('organization_id', $organization->id);
+
+        if ($request->filled('pixel_site_id')) {
+            $query->where('pixel_site_id', $request->pixel_site_id);
+        }
 
         // Filter by Campaign ID (Agency Isolation)
         if ($request->filled('campaign_id') && $request->campaign_id !== 'all') {
@@ -292,6 +300,10 @@ class CdnTrackingController extends Controller
 
         $query = AdTrackEvent::where('organization_id', $organization->id);
 
+        if ($request->filled('pixel_site_id')) {
+            $query->where('pixel_site_id', $request->pixel_site_id);
+        }
+
         // Apply same filters as events()
         if ($request->filled('campaign_id') && $request->campaign_id !== 'all') $query->where('google_campaign_id', $request->campaign_id);
         if ($request->filled('type') && $request->type === 'ads') $query->whereNotNull('gclid');
@@ -348,52 +360,57 @@ class CdnTrackingController extends Controller
             return response()->json(['error' => 'Organization not found'], 404);
         }
 
-        $totalHits    = AdTrackEvent::where('organization_id', $organization->id)->count();
-        $hitsLast24h  = AdTrackEvent::where('organization_id', $organization->id)
-            ->where('created_at', '>=', now()->subHours(24))
-            ->count();
+        $pixelSites = $organization->pixelSites()->get()->map(function ($site) {
+            $totalHits    = AdTrackEvent::where('pixel_site_id', $site->id)->count();
+            $hitsLast24h  = AdTrackEvent::where('pixel_site_id', $site->id)
+                ->where('created_at', '>=', now()->subHours(24))
+                ->count();
 
-        $lastEvent = AdTrackEvent::where('organization_id', $organization->id)
-            ->orderBy('created_at', 'desc')
-            ->first(['created_at', 'page_url']);
+            $lastEvent = AdTrackEvent::where('pixel_site_id', $site->id)
+                ->orderBy('created_at', 'desc')
+                ->first(['created_at', 'page_url']);
 
-        // Determine domain of last hit
-        $lastHitDomain = null;
-        if ($lastEvent?->page_url) {
-            $lastHitDomain = parse_url($lastEvent->page_url, PHP_URL_HOST);
-        }
+            $lastHitDomain = $lastEvent?->page_url ? parse_url($lastEvent->page_url, PHP_URL_HOST) : null;
 
-        // Status logic
-        $pixelVerified = (bool) $organization->pixel_verified_at;
-        $recentlyActive = $hitsLast24h > 0;
+            $pixelVerified = (bool) $site->pixel_verified_at;
+            $recentlyActive = $hitsLast24h > 0;
 
-        if ($pixelVerified && $recentlyActive) {
-            $status = 'verified_active';
-        } elseif ($totalHits > 0) {
-            $status = 'connected_inactive';
-        } else {
-            $status = 'not_detected';
-        }
+            if ($pixelVerified && $recentlyActive) {
+                $status = 'verified_active';
+            } elseif ($totalHits > 0) {
+                $status = 'connected_inactive';
+            } else {
+                $status = 'not_detected';
+            }
+
+            return [
+                'id'                => $site->id,
+                'label'             => $site->label,
+                'ads_site_token'    => $site->ads_site_token,
+                'connected'         => $totalHits > 0,
+                'pixel_verified'    => $pixelVerified,
+                'pixel_verified_at' => $site->pixel_verified_at?->toIso8601String(),
+                'allowed_domain'    => $site->allowed_domain,
+                'last_hit_at'       => $lastEvent?->created_at?->toIso8601String(),
+                'last_hit_domain'   => $lastHitDomain,
+                'total_hits'        => $totalHits,
+                'hits_last_24h'     => $hitsLast24h,
+                'status'            => $status,
+            ];
+        });
 
         return response()->json([
-            'connected'       => $totalHits > 0,
-            'pixel_verified'  => $pixelVerified,
-            'pixel_verified_at' => $organization->pixel_verified_at?->toIso8601String(),
-            'allowed_domain'  => $organization->allowed_domain,
-            'last_hit_at'     => $lastEvent?->created_at?->toIso8601String(),
-            'last_hit_domain' => $lastHitDomain,
-            'total_hits'      => $totalHits,
-            'hits_last_24h'   => $hitsLast24h,
-            'status'          => $status,
+            'pixel_sites' => $pixelSites,
         ]);
     }
 
     /**
-     * Save the allowed domain for this organization's pixel pinning.
+     * Save the allowed domain for a specific pixel site.
      */
     public function saveAllowedDomain(Request $request)
     {
         $request->validate([
+            'pixel_site_id'  => 'required|integer|exists:pixel_sites,id',
             'allowed_domain' => 'nullable|string|max:255|regex:/^([a-zA-Z0-9\-\.]+\.[a-zA-Z]{2,})$/',
         ]);
 
@@ -402,16 +419,18 @@ class CdnTrackingController extends Controller
             return response()->json(['error' => 'Organization not found'], 404);
         }
 
-        // Reset pixel_verified_at when domain changes (needs re-verification)
-        $domainChanged = $organization->allowed_domain !== $request->allowed_domain;
+        $pixelSite = $organization->pixelSites()->findOrFail($request->pixel_site_id);
 
-        $organization->update([
+        // Reset pixel_verified_at when domain changes (needs re-verification)
+        $domainChanged = $pixelSite->allowed_domain !== $request->allowed_domain;
+
+        $pixelSite->update([
             'allowed_domain'    => $request->allowed_domain ?: null,
-            'pixel_verified_at' => $domainChanged ? null : $organization->pixel_verified_at,
+            'pixel_verified_at' => $domainChanged ? null : $pixelSite->pixel_verified_at,
         ]);
 
         return response()->json([
-            'allowed_domain' => $organization->allowed_domain,
+            'allowed_domain' => $pixelSite->allowed_domain,
             'message'        => $domainChanged
                 ? 'Domain updated. Pixel verification reset — the tracker must fire from the new domain to re-verify.'
                 : 'Domain saved.',
@@ -436,10 +455,10 @@ class CdnTrackingController extends Controller
 
         $orgId = $organization->id;
 
-        // ── 1. 30-day daily history ──────────────────────────────────────────
         $thirtyDaysAgo = now()->subDays(29)->startOfDay();
 
         $rawDaily = AdTrackEvent::where('organization_id', $orgId)
+            ->when($request->pixel_site_id, fn($q, $id) => $q->where('pixel_site_id', $id))
             ->where('created_at', '>=', $thirtyDaysAgo)
             ->selectRaw("DATE(created_at) as date, COUNT(*) as total,
                 SUM(CASE WHEN (gclid IS NOT NULL OR utm_campaign IS NOT NULL OR google_campaign_id IS NOT NULL) THEN 1 ELSE 0 END) as ad_hits")
@@ -476,6 +495,7 @@ class CdnTrackingController extends Controller
 
         // ── 3. Top pages with 14-day sparkline & delta ───────────────────────
         $topPageRows = AdTrackEvent::where('organization_id', $orgId)
+            ->when($request->pixel_site_id, fn($q, $id) => $q->where('pixel_site_id', $id))
             ->whereNotNull('page_url')
             ->selectRaw("page_url,
                 COUNT(*) as total_hits,
@@ -494,6 +514,7 @@ class CdnTrackingController extends Controller
         $topPageUrls = $topPageRows->pluck('page_url')->toArray();
 
         $sparklineRaw = AdTrackEvent::where('organization_id', $orgId)
+            ->when($request->pixel_site_id, fn($q, $id) => $q->where('pixel_site_id', $id))
             ->whereIn('page_url', $topPageUrls)
             ->where('created_at', '>=', $fourteenDaysAgo)
             ->selectRaw("page_url, DATE(created_at) as date, COUNT(*) as cnt")
@@ -531,6 +552,7 @@ class CdnTrackingController extends Controller
 
         // ── 4. Top referrers ─────────────────────────────────────────────────
         $topReferrers = AdTrackEvent::where('organization_id', $orgId)
+            ->when($request->pixel_site_id, fn($q, $id) => $q->where('pixel_site_id', $id))
             ->whereNotNull('referrer')
             ->where('referrer', '!=', '')
             ->selectRaw("referrer, COUNT(*) as count")
@@ -546,6 +568,7 @@ class CdnTrackingController extends Controller
 
         // ── 5. Trend velocity (fastest rising and falling over last 7d vs prev-7d per page) ─
         $velocityRows = AdTrackEvent::where('organization_id', $orgId)
+            ->when($request->pixel_site_id, fn($q, $id) => $q->where('pixel_site_id', $id))
             ->whereNotNull('page_url')
             ->where('created_at', '>=', now()->subDays(13)->startOfDay())
             ->selectRaw("page_url,

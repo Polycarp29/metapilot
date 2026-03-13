@@ -9,6 +9,7 @@ class AdTrackEvent extends Model
 {
     protected $fillable = [
         'organization_id',
+        'pixel_site_id',
         'site_token',
         'page_view_id',
         'country_code',
@@ -33,5 +34,10 @@ class AdTrackEvent extends Model
     public function organization(): BelongsTo
     {
         return $this->belongsTo(Organization::class);
+    }
+
+    public function pixelSite(): BelongsTo
+    {
+        return $this->belongsTo(PixelSite::class);
     }
 }

@@ -53,8 +53,15 @@ class AdCampaignController extends Controller
 
         $organization->update([
             'ads_customer_id' => $request->customer_id,
-            'ads_site_token' => $organization->ads_site_token ?: (string) Str::uuid(),
         ]);
+
+        // Ensure a default pixel site exists
+        if ($organization->pixelSites()->count() === 0) {
+            $organization->pixelSites()->create([
+                'label' => 'Default Site',
+                'ads_site_token' => (string) Str::uuid(),
+            ]);
+        }
 
         // Trigger immediate sync
         SyncAdCampaignsJob::dispatch($organization);
@@ -62,7 +69,7 @@ class AdCampaignController extends Controller
         return response()->json([
             'message' => 'Google Ads connected successfully. Syncing data...',
             'customer_id' => $organization->ads_customer_id,
-            'site_token' => $organization->ads_site_token,
+            'site_token' => $organization->pixelSites()->first()->ads_site_token,
         ]);
     }
 
@@ -91,13 +98,21 @@ class AdCampaignController extends Controller
             return response()->json(['error' => 'Organization not found'], 404);
         }
 
-        $organization->update([
-            'ads_site_token' => (string) Str::uuid(),
-        ]);
+        $pixelSite = $organization->pixelSites()->first();
+        if (!$pixelSite) {
+            $pixelSite = $organization->pixelSites()->create([
+                'label' => 'Default Site',
+                'ads_site_token' => (string) Str::uuid(),
+            ]);
+        } else {
+            $pixelSite->update([
+                'ads_site_token' => (string) Str::uuid(),
+            ]);
+        }
 
         return response()->json([
             'message' => 'Token regenerated successfully',
-            'site_token' => $organization->ads_site_token,
+            'site_token' => $pixelSite->ads_site_token,
         ]);
     }
 
@@ -107,12 +122,17 @@ class AdCampaignController extends Controller
     public function embedSnippet(Request $request)
     {
         $organization = $request->user()->currentOrganization();
-        if (!$organization || !$organization->ads_site_token) {
+        if (!$organization) {
+            return response()->json(['error' => 'Organization not found'], 404);
+        }
+
+        $pixelSite = $organization->pixelSites()->first();
+        if (!$pixelSite) {
             return response()->json(['error' => 'Ads site token not generated'], 404);
         }
 
         $baseUrl = config('app.url');
-        $snippet = "<script src=\"{$baseUrl}/cdn/ads-tracker.js\" data-token=\"{$organization->ads_site_token}\" async></script>";
+        $snippet = "<script src=\"{$baseUrl}/cdn/ads-tracker.js\" data-token=\"{$pixelSite->ads_site_token}\" async></script>";
 
         return response()->json(['snippet' => $snippet]);
     }

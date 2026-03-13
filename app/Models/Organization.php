@@ -159,4 +159,12 @@ class Organization extends Model
     {
         return $this->hasMany(BlogCategory::class);
     }
+
+    /**
+     * Get the pixel sites for the organization.
+     */
+    public function pixelSites()
+    {
+        return $this->hasMany(PixelSite::class);
+    }
 }

@@ -26,15 +26,49 @@ class GscService
 
         $client = new Client();
         $client->setAuthConfig($credentials);
+
+        // FIX (Bug 1): Set required OAuth scopes so the Sitemaps API (and Search Analytics)
+        // accept the token. Without this, the Google client sends requests without a
+        // valid scope, resulting in silent 403s that return empty arrays.
+        $client->addScope('https://www.googleapis.com/auth/webmasters');
+        $client->addScope('https://www.googleapis.com/auth/webmasters.readonly');
+
         $client->setAccessToken($property->access_token);
 
         if ($client->isAccessTokenExpired()) {
-            $client->fetchAccessTokenWithRefreshToken($property->refresh_token);
+            if (empty($property->refresh_token)) {
+                Log::warning("GSC initializeClient: Property {$property->id} has no refresh_token. User must reconnect their Google account.");
+                $property->update(['google_token_invalid' => true]);
+                throw new \RuntimeException("No refresh token stored for property {$property->id}. Google account must be reconnected.");
+            }
+
+            $newToken = $client->fetchAccessTokenWithRefreshToken($property->refresh_token);
+
+            // Google returns an array with an 'error' key when the refresh fails
+            // (e.g. refresh_token revoked, expired, or missing scope).
+            // Without this check we'd proceed with a bad token and get a 401 from the API.
+            if (isset($newToken['error'])) {
+                $errDesc = $newToken['error_description'] ?? $newToken['error'];
+                Log::warning("GSC initializeClient: Token refresh failed for property {$property->id}: {$errDesc}. Marking as invalid — user must reconnect.");
+                $property->update(['google_token_invalid' => true]);
+                throw new \RuntimeException("Google token refresh failed for property {$property->id}: {$errDesc}");
+            }
+
             $token = $client->getAccessToken();
-            $property->update([
-                'access_token' => $token['access_token'],
-                'token_expires_at' => now()->addSeconds($token['expires_in']),
-            ]);
+
+            $updateData = [
+                'access_token'         => $token['access_token'],
+                'token_expires_at'     => now()->addSeconds($token['expires_in'] ?? 3600),
+                'google_token_invalid' => false, // clear any previous invalid flag
+            ];
+
+            // FIX (Bug 3): Google occasionally rotates the refresh_token.
+            // Persist the new one if it's returned so future syncs don't fail.
+            if (!empty($newToken['refresh_token'])) {
+                $updateData['refresh_token'] = $newToken['refresh_token'];
+            }
+
+            $property->update($updateData);
         }
 
         $this->client = new SearchConsole($client);
@@ -180,39 +214,47 @@ class GscService
     public function fetchSitemaps(\App\Models\AnalyticsProperty $property)
     {
         if (!$property->gsc_site_url) {
+            Log::warning("GSC fetchSitemaps: Skipping property {$property->id} — gsc_site_url is empty.");
             return [];
         }
 
         $this->initializeClient($property);
 
+        Log::info("GSC fetchSitemaps: Querying siteUrl=[{$property->gsc_site_url}] for property {$property->id}");
+
         try {
             $response = $this->client->sitemaps->listSitemaps($property->gsc_site_url);
             $sitemaps = $response->getSitemap();
-            
-            if (!$sitemaps) return [];
+
+            if (!$sitemaps) {
+                Log::info("GSC fetchSitemaps: No sitemaps returned for property {$property->id} (siteUrl: {$property->gsc_site_url}). The site may have no submitted sitemaps in GSC.");
+                return [];
+            }
 
             $results = [];
             foreach ($sitemaps as $sitemap) {
                 $results[] = [
-                    'path' => $sitemap->getPath(),
+                    'path'           => $sitemap->getPath(),
                     'last_processed' => $sitemap->getLastSubmitted(),
-                    'last_check' => $sitemap->getLastDownloaded(),
-                    'errors' => $sitemap->getErrors(),
-                    'warnings' => $sitemap->getWarnings(),
-                    'contents' => $sitemap->getContents(), // contains counts
+                    'last_check'     => $sitemap->getLastDownloaded(),
+                    'errors'         => $sitemap->getErrors(),
+                    'warnings'       => $sitemap->getWarnings(),
+                    'contents'       => $sitemap->getContents(),
                 ];
             }
+
+            Log::info("GSC fetchSitemaps: Found " . count($results) . " sitemap(s) for property {$property->id}");
 
             return $results;
         } catch (\Google\Service\Exception $e) {
             if ($this->isPermissionError($e)) {
-                Log::warning("GSC Permission Denied for Property {$property->id} sitemaps.");
+                Log::warning("GSC fetchSitemaps: Permission denied (403) for property {$property->id}. Check that the Google account has verified ownership in Search Console. siteUrl=[{$property->gsc_site_url}]");
             } else {
-                Log::error("GSC Sitemaps Fetch Failed for Property {$property->id}: " . $e->getMessage());
+                Log::error("GSC fetchSitemaps: API error for property {$property->id} (siteUrl: {$property->gsc_site_url}): [{$e->getCode()}] " . $e->getMessage());
             }
             return [];
         } catch (\Exception $e) {
-            Log::error("GSC Sitemaps Fetch Failed for Property {$property->id}: " . $e->getMessage());
+            Log::error("GSC fetchSitemaps: Unexpected error for property {$property->id}: " . $e->getMessage());
             return [];
         }
     }
@@ -264,39 +306,70 @@ class GscService
         try {
             // 1. Fetch performance for the whole range (daily rows)
             $performanceData = $this->fetchPerformance($property, $startDate, $endDate);
-            
+
             // 2. Fetch breakdowns for the whole range (aggregate)
             $breakdowns = $this->fetchBreakdowns($property, $startDate, $endDate);
-            
+
             // 3. Fetch sitemaps
             $sitemaps = $this->fetchSitemaps($property);
 
             if ($performanceData) {
+                // Find the most recent date present in the returned data.
+                // We use this instead of $endDate because GSC has a ~2-3 day data lag,
+                // meaning the $endDate row is often absent. Attaching to it would mean
+                // sitemaps and breakdowns are never saved. (FIX Bug 2)
+                $latestDataDate = collect($performanceData)->max('date');
+
                 foreach ($performanceData as $daily) {
                     $date = $daily['date'];
-                    
+
                     $dataToSave = [
-                        'clicks' => $daily['clicks'],
+                        'clicks'      => $daily['clicks'],
                         'impressions' => $daily['impressions'],
-                        'ctr' => $daily['ctr'],
-                        'position' => $daily['position'],
+                        'ctr'         => $daily['ctr'],
+                        'position'    => $daily['position'],
                     ];
 
-                    // Attach breakdowns and sitemaps to the latest date in the range
-                    if ($date === $endDate) {
+                    // Attach breakdowns to the most recent row actually returned by GSC
+                    if ($date === $latestDataDate) {
                         $dataToSave['top_queries'] = $breakdowns['top_queries'] ?? [];
-                        $dataToSave['top_pages'] = $breakdowns['top_pages'] ?? [];
-                        $dataToSave['sitemaps'] = $sitemaps;
+                        $dataToSave['top_pages']   = $breakdowns['top_pages'] ?? [];
                     }
 
                     \App\Models\SearchConsoleMetric::updateOrCreate(
                         [
                             'analytics_property_id' => $property->id,
-                            'snapshot_date' => $date,
+                            'snapshot_date'         => $date,
                         ],
                         $dataToSave
                     );
                 }
+
+                // FIX (Bug 2): Persist sitemaps independently on the latest available row.
+                // This decouples sitemap storage from the GSC performance data lag so that
+                // sitemaps are always saved regardless of which dates GSC returns data for.
+                if (!empty($sitemaps)) {
+                    \App\Models\SearchConsoleMetric::updateOrCreate(
+                        [
+                            'analytics_property_id' => $property->id,
+                            'snapshot_date'         => $latestDataDate,
+                        ],
+                        ['sitemaps' => $sitemaps]
+                    );
+                    Log::info("GSC syncData: Saved " . count($sitemaps) . " sitemap(s) for property {$property->id} on snapshot_date {$latestDataDate}");
+                }
+            } elseif (!empty($sitemaps)) {
+                // No performance data at all (possible new property) — still save sitemaps
+                // on today's date so they're not lost.
+                $fallbackDate = now()->subDays(3)->format('Y-m-d');
+                \App\Models\SearchConsoleMetric::updateOrCreate(
+                    [
+                        'analytics_property_id' => $property->id,
+                        'snapshot_date'         => $fallbackDate,
+                    ],
+                    ['sitemaps' => $sitemaps]
+                );
+                Log::info("GSC syncData: No performance data, but saved " . count($sitemaps) . " sitemap(s) for property {$property->id} on fallback date {$fallbackDate}");
             }
         } catch (\Exception $e) {
             Log::error("GSC Sync failed for property {$property->id}: " . $e->getMessage());
