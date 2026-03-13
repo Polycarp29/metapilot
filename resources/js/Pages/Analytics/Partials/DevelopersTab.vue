@@ -729,10 +729,9 @@ watch(pathFilter, () => { if (!pathFilter.value) fetchEvents() })
                     <thead>
                         <tr class="bg-slate-50/60">
                             <th class="py-5 px-12 text-[9px] font-black text-slate-400 uppercase tracking-widest">Page / Path</th>
+                            <th class="py-5 px-6 text-[9px] font-black text-slate-400 uppercase tracking-widest text-center">Intent Score</th>
                             <th class="py-5 px-6 text-[9px] font-black text-slate-400 uppercase tracking-widest text-center">Total Hits</th>
-                            <th class="py-5 px-6 text-[9px] font-black text-slate-400 uppercase tracking-widest text-center">Ad Hits</th>
-                            <th class="py-5 px-6 text-[9px] font-black text-slate-400 uppercase tracking-widest text-center">Avg Stay</th>
-                            <th class="py-5 px-6 text-[9px] font-black text-slate-400 uppercase tracking-widest text-center">Avg Clicks</th>
+                            <th class="py-5 px-6 text-[9px] font-black text-slate-400 uppercase tracking-widest text-center">Engagement</th>
                             <th class="py-5 px-6 text-[9px] font-black text-slate-400 uppercase tracking-widest text-center">14-Day Trend</th>
                             <th class="py-5 px-10 text-[9px] font-black text-slate-400 uppercase tracking-widest text-right">Δ vs Yesterday</th>
                         </tr>
@@ -749,24 +748,33 @@ watch(pathFilter, () => { if (!pathFilter.value) fetchEvents() })
                                 <div class="flex items-center gap-4">
                                     <span class="w-7 h-7 flex items-center justify-center rounded-xl bg-slate-100 text-slate-400 text-[10px] font-black group-hover:bg-indigo-100 group-hover:text-indigo-600 transition-all">{{ idx + 1 }}</span>
                                     <div class="min-w-0">
-                                        <p class="text-xs font-black text-slate-900 truncate max-w-xs" :title="page.page_url">
-                                            {{ safePathLabel(page.page_url) }}
-                                        </p>
+                                        <div class="flex items-center gap-2 mb-1">
+                                            <p class="text-xs font-black text-slate-900 truncate max-w-xs" :title="page.page_url">
+                                                {{ safePathLabel(page.page_url) }}
+                                            </p>
+                                            <span v-if="page.is_ad_ready" class="px-2 py-0.5 bg-emerald-500 text-white text-[8px] font-black rounded-lg uppercase tracking-tighter">Ad Ready</span>
+                                        </div>
                                         <p class="text-[9px] text-slate-400 font-bold truncate max-w-xs">{{ safeHostname(page.page_url) }}</p>
                                     </div>
                                 </div>
                             </td>
                             <td class="py-7 px-6 text-center">
+                                <div class="inline-flex flex-col items-center">
+                                    <span class="text-sm font-black" :class="page.engagement_score >= 70 ? 'text-indigo-600' : 'text-slate-900'">{{ page.engagement_score }}</span>
+                                    <div class="w-12 h-1 bg-slate-100 rounded-full mt-1 overflow-hidden">
+                                        <div class="h-full bg-indigo-500" :style="{ width: page.engagement_score + '%' }"></div>
+                                    </div>
+                                </div>
+                            </td>
+                            <td class="py-7 px-6 text-center">
                                 <span class="text-sm font-black text-slate-900">{{ page.total_hits }}</span>
+                                <p class="text-[9px] text-slate-400 font-bold mt-1">{{ page.ad_hits }} Ad Hits</p>
                             </td>
                             <td class="py-7 px-6 text-center">
-                                <span class="text-sm font-black" :class="page.ad_hits > 0 ? 'text-indigo-600' : 'text-slate-300'">{{ page.ad_hits }}</span>
-                            </td>
-                            <td class="py-7 px-6 text-center">
-                                <span class="text-xs font-black text-slate-700">{{ page.avg_duration }}s</span>
-                            </td>
-                            <td class="py-7 px-6 text-center">
-                                <span class="text-xs font-black text-slate-700">{{ page.avg_clicks }}</span>
+                                <div class="flex flex-col items-center">
+                                    <span class="text-xs font-black text-slate-700">{{ page.avg_duration }}s Dwell</span>
+                                    <span class="text-[9px] text-slate-400 font-bold mt-1">{{ page.avg_clicks }} Avg Clicks</span>
+                                </div>
                             </td>
                             <td class="py-7 px-6">
                                 <!-- SVG sparkline -->
@@ -896,15 +904,21 @@ watch(pathFilter, () => { if (!pathFilter.value) fetchEvents() })
                     </div>
                 </div>
 
-                <div class="grid grid-cols-2 gap-6 mb-8">
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
                     <div class="space-y-3">
-                        <label class="block text-[10px] font-black text-slate-500 uppercase tracking-widest ml-1">Traffic Isolation (Campaign ID)</label>
+                        <label class="block text-[10px] font-black text-slate-500 uppercase tracking-widest ml-1">Tracking Site</label>
+                        <select v-model="selectedSiteId" class="w-full bg-slate-800 border-white/10 focus:border-indigo-500 focus:ring-0 rounded-2xl text-[11px] font-bold text-white py-4 px-6 appearance-none cursor-pointer">
+                            <option v-for="site in pixelSites" :key="site.id" :value="site.id" class="bg-slate-900 text-white">{{ site.label }}</option>
+                        </select>
+                    </div>
+                    <div class="space-y-3">
+                        <label class="block text-[10px] font-black text-slate-500 uppercase tracking-widest ml-1">Traffic Isolation</label>
                         <input v-model="selectedCampaignId" placeholder="e.g. MetaPilot_Agency_001" class="w-full bg-white/5 border-white/10 focus:border-indigo-500 focus:ring-0 rounded-2xl text-[11px] font-bold text-white py-4 px-6" />
                     </div>
                     <div class="space-y-3">
                         <label class="block text-[10px] font-black text-slate-500 uppercase tracking-widest ml-1">Property Link</label>
-                        <select v-model="selectedPropId" class="w-full bg-white/5 border-white/10 focus:border-indigo-500 focus:ring-0 rounded-2xl text-[11px] font-bold text-white py-4 px-6 appearance-none cursor-pointer">
-                            <option v-for="prop in properties" :key="prop.id" :value="prop.id">{{ prop.name }}</option>
+                        <select v-model="selectedPropId" class="w-full bg-slate-800 border-white/10 focus:border-indigo-500 focus:ring-0 rounded-2xl text-[11px] font-bold text-white py-4 px-6 appearance-none cursor-pointer">
+                            <option v-for="prop in properties" :key="prop.id" :value="prop.id" class="bg-slate-900 text-white">{{ prop.name }}</option>
                         </select>
                     </div>
                 </div>

@@ -529,6 +529,20 @@ class CdnTrackingController extends Controller
                 ? round((($todayC - $yesterdayC) / $yesterdayC) * 100, 1)
                 : ($todayC > 0 ? 100 : null);
 
+            // ── Engagement Scoring (0-100) ──
+            $avgDuration = $row->avg_duration ?? 0;
+            $avgClicks   = $row->avg_clicks ?? 0;
+            
+            // Dwell factor (0-50): 60s+ = max
+            $dwellScore = min(($avgDuration / 60) * 50, 50);
+            // Interaction factor (0-50): 5+ clicks = max
+            $interactionScore = min(($avgClicks / 5) * 50, 50);
+            
+            $engagementScore = round($dwellScore + $interactionScore);
+            
+            // Ad Ready if score >= 70 and has decent traffic
+            $isAdReady = $engagementScore >= 70 && $row->total_hits >= 5;
+
             // Build 14-day series (fill gaps with 0)
             $seriesMap = collect($sparklineRaw->get($row->page_url, []))->keyBy('date');
             $series = [];
@@ -538,15 +552,17 @@ class CdnTrackingController extends Controller
             }
 
             return [
-                'page_url'       => $row->page_url,
-                'total_hits'     => (int) $row->total_hits,
-                'ad_hits'        => (int) $row->ad_hits,
-                'avg_duration'   => round($row->avg_duration ?? 0),
-                'avg_clicks'     => round($row->avg_clicks ?? 0, 1),
-                'today_count'    => $todayC,
-                'yesterday_count'=> $yesterdayC,
-                'delta_pct'      => $deltaPct,
-                'sparkline'      => $series,
+                'page_url'         => $row->page_url,
+                'total_hits'       => (int) $row->total_hits,
+                'ad_hits'          => (int) $row->ad_hits,
+                'avg_duration'     => round($avgDuration),
+                'avg_clicks'       => round($avgClicks, 1),
+                'engagement_score' => $engagementScore,
+                'is_ad_ready'      => $isAdReady,
+                'today_count'      => $todayC,
+                'yesterday_count'  => $yesterdayC,
+                'delta_pct'        => $deltaPct,
+                'sparkline'        => $series,
             ];
         })->values();
 
