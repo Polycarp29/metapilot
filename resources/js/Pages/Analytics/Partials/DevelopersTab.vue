@@ -586,6 +586,7 @@ watch(pathFilter, () => { if (!pathFilter.value) fetchEvents() })
                 {{ pixelStatusBadge.label }}
             </div>
         </div>
+    </div>
 
         <!-- ── Insights Panels (Row 1) ──────────────────────────────── -->
         <div class="grid grid-cols-1 lg:grid-cols-12 gap-8">

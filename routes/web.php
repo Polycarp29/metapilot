@@ -193,11 +193,11 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::get('/data', [\App\Http\Controllers\AdCampaignController::class, 'index'])->name('index');
         Route::post('/connect', [\App\Http\Controllers\AdCampaignController::class, 'connect'])->name('connect');
         Route::post('/sync', [\App\Http\Controllers\AdCampaignController::class, 'sync'])->name('sync');
-        Route::get('/embed-snippet', [\App\Http\Controllers\AdCampaignController::class, 'embedSnippet'])->name('embed-snippet');
-        Route::post('/regenerate-token', [\App\Http\Controllers\AdCampaignController::class, 'regenerateToken'])->name('regenerate-token');
+
         // Pixel connection health & domain management
         Route::get('/connection-status', [\App\Http\Controllers\CdnTrackingController::class, 'connectionStatus'])->name('connection-status');
         Route::put('/allowed-domain', [\App\Http\Controllers\CdnTrackingController::class, 'saveAllowedDomain'])->name('allowed-domain');
+
         // Pixel event intelligence (used by DevelopersTab.vue)
         Route::get('/pixel-events', [\App\Http\Controllers\CdnTrackingController::class, 'events'])->name('pixel-events');
         Route::get('/pixel-events/csv', [\App\Http\Controllers\CdnTrackingController::class, 'downloadCsv'])->name('pixel-events.csv');
@@ -208,9 +208,6 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::apiResource('pixel-sites', \App\Http\Controllers\PixelSiteController::class);
         Route::post('pixel-sites/{pixel_site}/regenerate-token', [\App\Http\Controllers\PixelSiteController::class, 'regenerateToken'])->name('pixel-sites.regenerate-token');
     });
-
-    // Regenerate token (agency management)
-    Route::post('/regenerate-token', [CdnTrackingController::class, 'regenerateToken'])->name('regenerate-token');
 });
 
 

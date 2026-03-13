@@ -101,4 +101,52 @@ class CdnTrackingTest extends TestCase
 
         $response->assertStatus(403);
     }
+
+    public function test_multiple_pixel_sites_hits_are_separated()
+    {
+        $org = Organization::factory()->create();
+        $siteA = PixelSite::create(['organization_id' => $org->id, 'label' => 'Site A']);
+        $siteB = PixelSite::create(['organization_id' => $org->id, 'label' => 'Site B']);
+
+        // Send hit for Site A
+        $ts = time();
+        $pvA = 'pv-a-123';
+        $sigA = hash_hmac('sha256', $siteA->ads_site_token . $pvA . $ts, $siteA->ads_site_token);
+        
+        $this->postJson('/cdn/ad-hit', [
+            'token' => $siteA->ads_site_token,
+            'page_view_id' => $pvA,
+            '_ts' => $ts,
+            '_sig' => $sigA,
+        ])->assertStatus(204);
+
+        // Send hit for Site B
+        $pvB = 'pv-b-456';
+        $sigB = hash_hmac('sha256', $siteB->ads_site_token . $pvB . $ts, $siteB->ads_site_token);
+
+        $this->postJson('/cdn/ad-hit', [
+            'token' => $siteB->ads_site_token,
+            'page_view_id' => $pvB,
+            '_ts' => $ts,
+            '_sig' => $sigB,
+        ])->assertStatus(204);
+
+        $this->assertEquals(1, \App\Models\AdTrackEvent::where('pixel_site_id', $siteA->id)->count());
+        $this->assertEquals(1, \App\Models\AdTrackEvent::where('pixel_site_id', $siteB->id)->count());
+    }
+
+    public function test_verify_connection_handshake()
+    {
+        $org = Organization::factory()->create();
+        $pixelSite = PixelSite::create(['organization_id' => $org->id, 'label' => 'Test Site']);
+        
+        $challenge = 'test-challenge';
+        $response = $this->getJson("/cdn/verify-connection?token={$pixelSite->ads_site_token}&challenge={$challenge}");
+
+        $response->assertStatus(200)
+            ->assertJson([
+                'ok' => true,
+                'echo' => $challenge
+            ]);
+    }
 }

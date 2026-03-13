@@ -171,6 +171,7 @@
     };
 
     // ─── Connection Verification Handshake ────────────────────────────────────
+    let verifyRetryCount = 0;
     const verifyConnection = async () => {
         try {
             const challenge = (crypto.randomUUID ? crypto.randomUUID() : Math.random().toString(36).slice(2));
@@ -184,10 +185,20 @@
                     window.MetaPilot.domainVerified = data.domain_verified;
                     window.MetaPilot.serverTime = data.server_time;
                     window.MetaPilot.status = 'active';
+                    verifyRetryCount = 0; // reset
+                    return;
                 }
             }
+            throw new Error('Handshake failed');
         } catch (e) {
-            // Non-critical — connection verify is best-effort
+            if (verifyRetryCount < 3) {
+                verifyRetryCount++;
+                const delay = Math.pow(2, verifyRetryCount) * 1000;
+                window.MetaPilot.status = `retrying_handshake (${verifyRetryCount})`;
+                setTimeout(verifyConnection, delay);
+            } else {
+                window.MetaPilot.status = 'handshake_failed';
+            }
         }
     };
 
