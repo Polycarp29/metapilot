@@ -944,7 +944,19 @@ const analysisLink = ref(null)
 const currentFilter = ref('all') // all, good, issues, redirects, discovered
 const searchQuery = ref('')
 
-const linksList = computed(() => props.links.data || [])
+const linksList = computed(() => (props.links?.data || []).map(link => ({
+  ...link,
+  cdn_insight: link.cdn_insight || {
+    active: false,
+    hit_count: 0,
+    last_seen_at: null,
+    engagement_score: 0,
+    seo_score: 0,
+    unified_score: 0,
+    is_orphan: false,
+    is_ad_ready: false
+  }
+})))
 
 const filteredLinks = computed(() => {
   let list = linksList.value

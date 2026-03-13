@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\AdTrackEvent;
 use App\Models\CdnPageSchema;
+use App\Models\KeywordResearch;
 use App\Models\Organization;
 use App\Models\PixelSite;
 use App\Models\Schema;
@@ -131,6 +132,9 @@ class CdnTrackingController extends Controller
             Log::warning('Pixel HMAC validation failed', [
                 'pixel_site_id' => $pixelSite->id,
                 'page_view_id'  => $request->page_view_id,
+                'received_sig'  => $signature,
+                'expected_sig'  => $expected,
+                'payload'       => $request->token . $request->page_view_id . $ts,
             ]);
             return response()->json(['error' => 'Invalid signature'], 403)
                 ->withHeaders($this->corsHeaders());
