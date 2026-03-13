@@ -40,12 +40,23 @@ const analyticsData      = ref(null)
 const isLoadingAnalytics = ref(false)
 const pathFilter         = ref('')  // filter log by clicking a path row
 
+const activeTab          = ref('signals') // signals, health
+const errorResponse      = ref({ data: [], current_page: 1, last_page: 1, total: 0 })
+const isLoadingErrors    = ref(false)
+const errorFilters       = ref({
+    page: 1,
+    search: '',
+    per_page: 25
+})
+
 // Multi-site state
 const pixelSites         = ref([])
 const selectedSiteId     = ref(null)
 const isCreatingSite     = ref(false)
 const showNewSiteModal   = ref(false)
+const showSiteDropdown   = ref(false)
 const newSite            = ref({ label: '', allowed_domain: '' })
+const siteSearchQuery    = ref('')
 const selectedModules    = ref(['click', 'schema'])
 
 // Filters
@@ -94,6 +105,12 @@ const availableCampaigns = computed(() => {
     const caps = new Set()
     chartEvents.value.forEach(e => { if (e.google_campaign_id) caps.add(e.google_campaign_id) })
     return Array.from(caps)
+})
+
+const filteredSiteOptions = computed(() => {
+    if (!siteSearchQuery.value) return pixelSites.value
+    const q = siteSearchQuery.value.toLowerCase()
+    return pixelSites.value.filter(s => s.label.toLowerCase().includes(q))
 })
 
 const sessionTimeline = computed(() => {
@@ -388,6 +405,24 @@ const prevPage = () => {
     }
 }
 
+const fetchErrors = async () => {
+    if (!selectedSiteId.value) return
+    isLoadingErrors.value = true
+    try {
+        const { data } = await axios.get(route('pixel-errors'), {
+            params: {
+                ...errorFilters.value,
+                pixel_site_id: selectedSiteId.value
+            }
+        })
+        errorResponse.value = data
+    } catch (e) {
+        toast.add('Failed to fetch error logs', 'error')
+    } finally {
+        isLoadingErrors.value = false
+    }
+}
+
 const applyFilters = () => {
     filters.value.page = 1
     fetchEvents()
@@ -406,10 +441,10 @@ const fetchConnectionStatus = async () => {
         const r = await axios.get(route('google-ads.connection-status'))
         pixelSites.value = r.data.pixel_sites || []
         
-        // Default selection if none
-        if (!selectedSiteId.value && pixelSites.value.length > 0) {
-            selectedSiteId.value = pixelSites.value[0].id
-        }
+        // Default selection if none — we now allow null for "All Sites"
+        // if (!selectedSiteId.value && pixelSites.value.length > 0) {
+        //     selectedSiteId.value = pixelSites.value[0].id
+        // }
         
         if (selectedSite.value) {
             allowedDomainInput.value = selectedSite.value.allowed_domain || ''
@@ -450,7 +485,7 @@ const saveAllowedDomain = async () => {
 
 const updateSnippet = () => {
     if (!selectedSite.value) {
-        snippet.value = 'Select a site to generate snippet'
+        snippet.value = '/* Please select a specific tracking site from the dropdown to generate your custom tracking snippet. */'
         return
     }
     const base = window.location.origin
@@ -538,8 +573,10 @@ watch([selectedPropId, selectedCampaignId, selectedSiteId, selectedModules], () 
     }
 }, { deep: true })
 watch(selectedSiteId, () => {
+    fetchSignals()
     fetchEvents()
     fetchAnalytics()
+    if (activeTab.value === 'health') fetchErrors()
 })
 watch(pathFilter, () => { if (!pathFilter.value) fetchEvents() })
 </script>
@@ -556,24 +593,63 @@ watch(pathFilter, () => { if (!pathFilter.value) fetchEvents() })
                 <p class="text-slate-500 font-medium mt-2 max-w-xl leading-relaxed">Secure pixel tracking with agency attribution monitoring & real-time signal intelligence.</p>
             </div>
             <div class="flex items-center gap-4">
-                <div class="flex items-center gap-1.5 p-1.5 bg-slate-100 rounded-2xl overflow-x-auto max-w-md no-scrollbar">
-                    <button v-for="site in pixelSites" :key="site.id"
-                        @click="selectedSiteId = site.id"
-                        class="px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-tight transition-all whitespace-nowrap flex items-center gap-2"
-                        :class="selectedSiteId === site.id ? 'bg-white text-indigo-600 shadow-sm border border-slate-200' : 'text-slate-400 hover:text-slate-600'">
-                        {{ site.label }}
-                        <span class="w-1.5 h-1.5 rounded-full" :class="{
-                            'bg-emerald-500': site.status === 'verified_active',
-                            'bg-amber-400': site.status === 'connected_inactive',
-                            'bg-slate-300': site.status === 'not_detected',
-                        }"></span>
-                    </button>
-                    <button @click="showNewSiteModal = true" class="px-4 py-2 text-slate-400 hover:text-white hover:bg-slate-900 rounded-xl transition-all">
-                        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M12 4v16m8-8H4"/></svg>
-                    </button>
+                <!-- Scalable Site Switcher -->
+                <div class="relative">
+                    <div class="flex items-center gap-1.5 p-1.5 bg-slate-100 rounded-2xl">
+                        <button @click="selectedSiteId = null; showSiteDropdown = false"
+                            class="px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-tight transition-all whitespace-nowrap flex items-center gap-2"
+                            :class="!selectedSiteId ? 'bg-white text-indigo-600 shadow-sm border border-slate-200' : 'text-slate-400 hover:text-slate-600'">
+                            All Sites
+                        </button>
+                        
+                        <div class="h-6 w-px bg-slate-200 mx-1"></div>
+
+                        <!-- Dropdown Trigger -->
+                        <button @click="showSiteDropdown = !showSiteDropdown" 
+                            class="px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-tight transition-all whitespace-nowrap flex items-center gap-3"
+                            :class="selectedSiteId ? 'bg-white text-indigo-600 shadow-sm border border-slate-200' : 'text-slate-400 hover:text-slate-600'">
+                            {{ selectedSite ? selectedSite.label : 'Select Site' }}
+                            <span v-if="selectedSite" class="w-1.5 h-1.5 rounded-full" :class="{
+                                'bg-emerald-500': selectedSite.status === 'verified_active',
+                                'bg-amber-400': selectedSite.status === 'connected_inactive',
+                                'bg-slate-300': selectedSite.status === 'not_detected',
+                            }"></span>
+                            <svg class="w-3 h-3 transition-transform" :class="{ 'rotate-180': showSiteDropdown }" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M19 9l-7 7-7-7"/></svg>
+                        </button>
+
+                        <button @click="showNewSiteModal = true" class="px-3 py-2 text-slate-400 hover:text-white hover:bg-slate-900 rounded-xl transition-all">
+                            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M12 4v16m8-8H4"/></svg>
+                        </button>
+                    </div>
+
+                    <!-- Enhanced Dropdown Menu -->
+                    <div v-if="showSiteDropdown" class="absolute right-0 top-full mt-3 w-72 bg-white rounded-3xl shadow-premium border border-slate-100 z-50 overflow-hidden">
+                        <div class="p-3 border-b border-slate-50">
+                            <input v-model="siteSearchQuery" placeholder="Search sites..." class="w-full bg-slate-50 border-none rounded-xl text-[11px] font-bold py-2.5 px-4 focus:ring-2 focus:ring-indigo-500/10" />
+                        </div>
+                        <div class="max-h-64 overflow-y-auto p-2 no-scrollbar">
+                            <button v-for="site in filteredSiteOptions" :key="site.id"
+                                @click="selectedSiteId = site.id; showSiteDropdown = false; siteSearchQuery = ''"
+                                class="w-full text-left px-4 py-3 rounded-xl hover:bg-slate-50 transition-all flex items-center justify-between group">
+                                <div class="flex items-center gap-3">
+                                    <div class="w-2 h-2 rounded-full" :class="{
+                                        'bg-emerald-500': site.status === 'verified_active',
+                                        'bg-amber-400': site.status === 'connected_inactive',
+                                        'bg-slate-300': site.status === 'not_detected',
+                                    }"></div>
+                                    <span class="text-[11px] font-black uppercase text-slate-700 group-hover:text-indigo-600">{{ site.label }}</span>
+                                </div>
+                                <span v-if="selectedSiteId === site.id" class="text-indigo-600">
+                                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M5 13l4 4L19 7"/></svg>
+                                </span>
+                            </button>
+                            <div v-if="filteredSiteOptions.length === 0" class="p-8 text-center text-[10px] font-black text-slate-300 uppercase italic">No sites found</div>
+                        </div>
+                    </div>
                 </div>
 
-                <div v-if="selectedSite" class="flex items-center gap-2 px-5 py-3 rounded-2xl border font-black text-[11px] uppercase tracking-widest transition-all"
+                <!-- Global Health Status Indicator -->
+                <div v-if="selectedSite" class="flex items-center gap-2 px-5 py-3 rounded-2xl border font-black text-[11px] uppercase tracking-widest transition-all shadow-sm"
                 :class="{
                     'bg-emerald-50 border-emerald-200 text-emerald-700': pixelStatusBadge.color === 'emerald',
                     'bg-amber-50 border-amber-200 text-amber-700': pixelStatusBadge.color === 'amber',
@@ -587,6 +663,10 @@ watch(pathFilter, () => { if (!pathFilter.value) fetchEvents() })
                     }"></span>
                 {{ pixelStatusBadge.label }}
             </div>
+            <div v-else class="flex items-center gap-2 px-5 py-3 rounded-2xl border border-indigo-100 bg-indigo-50/50 text-indigo-600 font-black text-[11px] uppercase tracking-widest shadow-sm">
+                <span class="w-2 h-2 rounded-full bg-indigo-500"></span>
+                Aggregate Mode
+            </div>
         </div>
     </div>
 
@@ -599,7 +679,7 @@ watch(pathFilter, () => { if (!pathFilter.value) fetchEvents() })
                     <p class="text-[11px] font-black text-slate-400 uppercase tracking-widest mb-1">Total Signals</p>
                     <h4 class="text-4xl font-black text-slate-900 tracking-tight">{{ logResponse.total }}</h4>
                     <div class="mt-3 flex items-center justify-between">
-                        <span class="text-[10px] font-black text-slate-400">{{ selectedSite?.hits_last_24h ?? '—' }} in last 24h</span>
+                        <span class="text-[10px] font-black text-slate-400">{{ selectedSite ? selectedSite.hits_last_24h : pixelSites.reduce((s, x) => s + x.hits_last_24h, 0) }} in last 24h</span>
                         <span v-if="todayDelta !== null" class="text-[10px] font-black px-2 py-0.5 rounded-lg"
                             :class="deltaBadgeClass(todayDelta)">
                             {{ deltaIcon(todayDelta) }} today
@@ -910,7 +990,7 @@ watch(pathFilter, () => { if (!pathFilter.value) fetchEvents() })
                         <span class="p-3 bg-indigo-600 text-white rounded-2xl shadow-lg">
                             <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4"/></svg>
                         </span>
-                        Tracker Implementation: {{ selectedSite?.label || '...' }}
+                        Tracker Implementation: {{ selectedSite ? selectedSite.label : 'Select a Site' }}
                     </h3>
                     <div class="flex items-center gap-3">
                         <span class="px-3 py-1 bg-white/5 text-indigo-400 text-[9px] font-black rounded-lg border border-white/10 uppercase tracking-widest">v3.1 Secure Handshake</span>
@@ -921,6 +1001,7 @@ watch(pathFilter, () => { if (!pathFilter.value) fetchEvents() })
                     <div class="space-y-3">
                         <label class="block text-[10px] font-black text-slate-500 uppercase tracking-widest ml-1">Tracking Site</label>
                         <select v-model="selectedSiteId" class="w-full bg-slate-800 border-white/10 focus:border-indigo-500 focus:ring-0 rounded-2xl text-[11px] font-bold text-white py-4 px-6 appearance-none cursor-pointer">
+                            <option :value="null" class="bg-slate-900 text-slate-400">Select a Site...</option>
                             <option v-for="site in pixelSites" :key="site.id" :value="site.id" class="bg-slate-900 text-white">{{ site.label }}</option>
                         </select>
                     </div>
@@ -988,7 +1069,7 @@ watch(pathFilter, () => { if (!pathFilter.value) fetchEvents() })
                         </div>
                     </div>
                 </div>
-                <div class="mt-6 flex justify-end">
+                <div v-if="selectedSite" class="mt-6 flex justify-end">
                     <button @click="showRegenModal = true" class="text-[10px] font-black text-rose-500 hover:text-white transition-colors uppercase tracking-widest">Regenerate Secret</button>
                 </div>
             </div>
@@ -1014,11 +1095,22 @@ watch(pathFilter, () => { if (!pathFilter.value) fetchEvents() })
         <div id="intel-log" class="space-y-8">
             <div class="flex items-end justify-between gap-8">
                 <div class="flex-1">
-                    <h3 class="text-3xl font-black text-slate-900 tracking-tight">Intelligence Log</h3>
-                    <p class="text-slate-500 font-medium mt-1">Real-time attribution and behavioral forensics</p>
+                    <div class="flex items-center gap-6 mb-2">
+                        <button @click="activeTab = 'signals'" 
+                            class="text-3xl font-black tracking-tight transition-all"
+                            :class="activeTab === 'signals' ? 'text-slate-900 border-b-4 border-indigo-600 pb-1' : 'text-slate-300 hover:text-slate-500'">
+                            Intelligence Log
+                        </button>
+                        <button @click="activeTab = 'health'" 
+                            class="text-3xl font-black tracking-tight transition-all"
+                            :class="activeTab === 'health' ? 'text-slate-900 border-b-4 border-indigo-600 pb-1' : 'text-slate-300 hover:text-slate-500'">
+                            Web Health
+                        </button>
+                    </div>
+                    <p class="text-slate-500 font-medium">{{ activeTab === 'signals' ? 'Real-time attribution and behavioral forensics' : 'Field errors and JavaScript runtime health' }}</p>
                 </div>
                 <div class="flex items-center gap-3">
-                    <button @click="downloadCsv" class="px-6 py-4 bg-white border border-slate-200 text-slate-600 rounded-2xl text-[10px] font-black uppercase tracking-widest hover:bg-slate-50 transition-all flex items-center gap-3">
+                    <button v-if="activeTab === 'signals'" @click="downloadCsv" class="px-6 py-4 bg-white border border-slate-200 text-slate-600 rounded-2xl text-[10px] font-black uppercase tracking-widest hover:bg-slate-50 transition-all flex items-center gap-3">
                         <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
                         Export CSV
                     </button>
@@ -1026,11 +1118,22 @@ watch(pathFilter, () => { if (!pathFilter.value) fetchEvents() })
                         <div class="absolute inset-y-0 left-0 pl-6 flex items-center pointer-events-none">
                             <svg class="w-4 h-4 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
                         </div>
-                        <input v-model="searchQuery" @keyup.enter="applyFilters" placeholder="Search Session, URL, City..." class="w-full bg-white border-slate-200 focus:border-indigo-500 focus:ring-0 rounded-2xl text-xs font-bold text-slate-800 py-4 pl-14 shadow-premium-soft" />
+                        <input v-if="activeTab === 'signals'"
+                            type="text" 
+                            v-model="searchQuery" 
+                            placeholder="Search sessions, URLs, cities..." 
+                            class="w-full bg-white border-slate-200 rounded-[2rem] text-[11px] font-bold text-slate-700 py-4 pl-14 pr-6 focus:ring-4 focus:ring-indigo-50 transition-all" />
+                        <input v-else
+                            type="text" 
+                            v-model="errorFilters.search" 
+                            @input="fetchErrors()"
+                            placeholder="Search errors, stacks, or URLs..." 
+                            class="w-full bg-white border-slate-200 rounded-[2rem] text-[11px] font-bold text-slate-700 py-4 pl-14 pr-6 focus:ring-4 focus:ring-indigo-50 transition-all" />
                     </div>
                 </div>
             </div>
 
+            <div v-show="activeTab === 'signals'" class="space-y-8">
             <!-- Advanced Filter Bar -->
             <div class="bg-white p-8 rounded-[2.5rem] border border-slate-100 shadow-premium-soft flex flex-wrap items-center gap-6">
                 <!-- Type -->
@@ -1185,7 +1288,95 @@ watch(pathFilter, () => { if (!pathFilter.value) fetchEvents() })
             </div>
         </div>
 
-        <!-- ── Session Detail Modal ─────────────────────────────────────── -->
+        <!-- ── Web Health Monitor ──────────────────────────────────────── -->
+        <div v-show="activeTab === 'health'" class="space-y-8">
+            <div class="bg-white shadow-premium rounded-[3.5rem] border border-slate-100/50 overflow-hidden">
+                <div class="overflow-x-auto">
+                    <table class="w-full text-left border-collapse min-w-[1000px]">
+                        <thead>
+                            <tr class="bg-slate-50/50">
+                                <th class="py-10 px-10 text-[10px] font-black text-slate-400 uppercase tracking-widest border-b border-slate-100">Error Discovery</th>
+                                <th class="py-10 px-6 text-[10px] font-black text-slate-400 uppercase tracking-widest border-b border-slate-100">Origin / File</th>
+                                <th class="py-10 px-6 text-[10px] font-black text-slate-400 uppercase tracking-widest border-b border-slate-100">Environment</th>
+                                <th class="py-10 px-10 text-[10px] font-black text-slate-400 uppercase tracking-widest border-b border-slate-100 text-right">Timestamp</th>
+                            </tr>
+                        </thead>
+                        <tbody class="divide-y divide-slate-50">
+                            <tr v-for="err in errorResponse.data" :key="err.id" class="group hover:bg-rose-50/30 transition-all">
+                                <td class="py-8 px-10">
+                                    <div class="flex items-center gap-5">
+                                        <div class="w-12 h-12 rounded-2xl border-2 border-slate-100 bg-white flex items-center justify-center text-rose-500 shadow-sm">
+                                            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/></svg>
+                                        </div>
+                                        <div class="max-w-md">
+                                            <p class="text-xs font-black text-slate-900 line-clamp-2" :title="err.message">{{ err.message }}</p>
+                                            <p class="text-[9px] text-slate-400 font-black uppercase tracking-tight mt-1 truncate">{{ err.url }}</p>
+                                        </div>
+                                    </div>
+                                </td>
+                                <td class="py-8 px-6">
+                                    <div>
+                                        <p class="text-xs font-black text-slate-800">{{ err.filename ? err.filename.split('/').pop() : 'Unknown Source' }}</p>
+                                        <p v-if="err.line" class="text-[9px] text-slate-400 font-black uppercase tracking-widest">Line {{ err.line }}:{{ err.col }}</p>
+                                        <span class="px-2 py-0.5 bg-slate-100 text-[8px] font-black text-slate-500 rounded-md uppercase tracking-wider mt-1 inline-block">{{ err.source }}</span>
+                                    </div>
+                                </td>
+                                <td class="py-8 px-6">
+                                    <div class="flex items-center gap-3">
+                                        <div class="text-[9px] font-black text-slate-500 uppercase">
+                                            {{ err.user_agent ? (err.user_agent.includes('Chrome') ? 'Chrome' : err.user_agent.includes('Firefox') ? 'Firefox' : 'Other') : 'Unknown' }}
+                                        </div>
+                                        <div class="w-1.5 h-1.5 bg-slate-200 rounded-full"></div>
+                                        <div class="text-[9px] font-black text-slate-400 uppercase line-clamp-1 max-w-[100px]">{{ err.user_agent }}</div>
+                                    </div>
+                                </td>
+                                <td class="py-8 px-10 text-right">
+                                    <p class="text-xs font-black text-slate-900">{{ new Date(err.created_at).toLocaleTimeString() }}</p>
+                                    <p class="text-[9px] text-slate-400 font-black uppercase mt-1">{{ err.created_at.split('T')[0] }}</p>
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+
+                <!-- Pagination -->
+                <div class="px-10 py-8 bg-slate-50/50 border-t border-slate-100 flex items-center justify-between">
+                    <p class="text-[10px] font-black text-slate-400 uppercase tracking-widest">
+                        Showing <span class="text-slate-900">{{ errorResponse.from || 0 }}-{{ errorResponse.to || 0 }}</span> of <span class="text-slate-900">{{ errorResponse.total }}</span> health signals
+                    </p>
+                    <div class="flex items-center gap-3">
+                        <button 
+                            @click="errorFilters.page--; fetchErrors()" 
+                            :disabled="errorFilters.page === 1 || isLoadingErrors"
+                            class="px-5 py-2.5 bg-white border border-slate-200 rounded-xl text-[10px] font-black uppercase tracking-widest disabled:opacity-30 disabled:cursor-not-allowed hover:bg-slate-50 transition-all"
+                        >
+                            Prev
+                        </button>
+                        <div class="flex items-center gap-2">
+                            <span class="text-[10px] font-black text-slate-900">Page {{ errorFilters.page }} of {{ errorResponse.last_page }}</span>
+                        </div>
+                        <button 
+                            @click="errorFilters.page++; fetchErrors()" 
+                            :disabled="errorFilters.page === errorResponse.last_page || isLoadingErrors"
+                            class="px-5 py-2.5 bg-white border border-slate-200 rounded-xl text-[10px] font-black uppercase tracking-widest disabled:opacity-30 disabled:cursor-not-allowed hover:bg-slate-50 transition-all"
+                        >
+                            Next
+                        </button>
+                    </div>
+                </div>
+
+                <div v-if="errorResponse.data.length === 0" class="p-32 text-center">
+                    <div class="w-24 h-24 bg-emerald-50 rounded-[3rem] flex items-center justify-center mx-auto mb-10">
+                        <svg class="w-10 h-10 text-emerald-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 13l4 4L19 7"/></svg>
+                    </div>
+                    <h4 class="text-3xl font-black text-slate-900 mb-4 tracking-tighter uppercase italic">Optimal Health</h4>
+                    <p class="text-slate-500 max-w-sm mx-auto font-medium">No client-side JavaScript errors or promise rejections captured in the field. Your frontend is running smoothly.</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ── Session Detail Modal ─────────────────────────────────────── -->
         <transition enter-active-class="transition duration-300 ease-out" enter-from-class="opacity-0" enter-to-class="opacity-100" leave-active-class="transition duration-200 ease-in" leave-from-class="opacity-100" leave-to-class="opacity-0">
             <div v-if="selectedSession" class="fixed inset-0 z-[60] flex items-center justify-center p-6 md:p-12">
                 <div class="absolute inset-0 bg-slate-900/60 backdrop-blur-2xl" @click="selectedSession = null"></div>

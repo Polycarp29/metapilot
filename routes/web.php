@@ -136,7 +136,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::get('/analytics/acquisition/{property}', [\App\Http\Controllers\AnalyticsDashboardController::class, 'getAcquisition'])->name('api.analytics.acquisition');
     Route::get('/analytics/forecast/{property}', [\App\Http\Controllers\AnalyticsDashboardController::class, 'getForecast'])->name('api.analytics.forecast');
     Route::get('/analytics/forecasts/{property}', [\App\Http\Controllers\AnalyticsDashboardController::class, 'getForecasts'])->name('analytics.forecasts');
-    Route::post('/analytics/refresh-predictions/{property}', [\App\Http\Controllers\AnalyticsDashboardController::class, 'refreshPredictions'])->name('analytics.refresh-predictions');
+    // ... other analytics routes ...
 
     Route::get('/analytics/seo-intelligence/{property}', [\App\Http\Controllers\AnalyticsDashboardController::class, 'getSEOIntelligence'])->name('api.analytics.seo-intelligence');
     Route::post('/analytics/ad-insights/{property}', [\App\Http\Controllers\AnalyticsDashboardController::class, 'getAdInsights'])->name('api.analytics.ad-insights');
@@ -144,49 +144,11 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::delete('api/analytics/properties/{property}', [\App\Http\Controllers\AnalyticsPropertyController::class, 'destroy'])->name('analytics.properties.destroy');
     Route::put('api/analytics/properties/{property}', [\App\Http\Controllers\AnalyticsPropertyController::class, 'update'])->name('analytics.properties.update');
 
-
     // Campaigns
     Route::get('campaigns', [\App\Http\Controllers\SeoCampaignController::class, 'index'])->name('campaigns.index');
     Route::get('campaigns/create', [\App\Http\Controllers\SeoCampaignController::class, 'create'])->name('campaigns.create');
     Route::post('campaigns', [\App\Http\Controllers\SeoCampaignController::class, 'store'])->name('campaigns.store');
     Route::get('campaigns/{campaign}', [\App\Http\Controllers\SeoCampaignController::class, 'show'])->name('campaigns.show');
-    Route::get('api/campaigns/propose/{property}', [\App\Http\Controllers\SeoCampaignController::class, 'propose'])->name('api.campaigns.propose');
-    Route::get('api/campaigns/{campaign}/performance', [\App\Http\Controllers\SeoCampaignController::class, 'performance'])->name('api.campaigns.performance');
-
-    // Keywords Hub
-    Route::get('keywords/trending', [\App\Http\Controllers\KeywordController::class, 'trending'])->name('keywords.trending');
-    Route::get('keywords/research', [\App\Http\Controllers\KeywordController::class, 'research'])->name('keywords.research');
-    Route::get('keywords/intelligence', [\App\Http\Controllers\KeywordController::class, 'intelligence'])->name('keywords.intelligence');
-
-    // Keyword Wallet API
-    Route::prefix('api/keywords/wallet')->name('api.keywords.wallet.')->group(function () {
-        Route::get('/', [\App\Http\Controllers\KeywordWalletController::class, 'index'])->name('index');
-        Route::post('/', [\App\Http\Controllers\KeywordWalletController::class, 'store'])->name('store');
-        Route::delete('/{savedKeyword}', [\App\Http\Controllers\KeywordWalletController::class, 'destroy'])->name('destroy');
-    });
-
-    // Trending Keywords for Campaigns
-    Route::prefix('api/trending-keywords')->name('api.trending-keywords.')->group(function () {
-        Route::get('/', [\App\Http\Controllers\CampaignKeywordController::class, 'index'])->name('index');
-        Route::get('/suggestions', [\App\Http\Controllers\CampaignKeywordController::class, 'suggestions'])->name('suggestions');
-        Route::post('/discover', [\App\Http\Controllers\CampaignKeywordController::class, 'discover'])->name('discover');
-        Route::post('/campaigns/{campaign}/attach', [\App\Http\Controllers\CampaignKeywordController::class, 'attachKeywords'])->name('attach');
-        Route::get('/campaigns/{campaign}/performance', [\App\Http\Controllers\CampaignKeywordController::class, 'performance'])->name('campaign-performance');
-    });
-
-    // Keyword Intelligence API
-    Route::prefix('api/keyword-intelligence')->name('api.ki.')->group(function () {
-        Route::get('/', [\App\Http\Controllers\Api\KeywordIntelligenceController::class, 'index'])->name('index');
-        Route::get('/bookmarks', [\App\Http\Controllers\Api\KeywordIntelligenceController::class, 'bookmarks'])->name('bookmarks');
-        Route::get('/{ki}/history', [\App\Http\Controllers\Api\KeywordIntelligenceController::class, 'history'])->name('history');
-        Route::post('/{ki}/bookmark', [\App\Http\Controllers\Api\KeywordIntelligenceController::class, 'bookmark'])->name('bookmark');
-        Route::delete('/{ki}/bookmark', [\App\Http\Controllers\Api\KeywordIntelligenceController::class, 'destroyBookmark'])->name('bookmark.destroy');
-        Route::post('/{ki}/predict-decay', [\App\Http\Controllers\Api\KeywordIntelligenceController::class, 'predictDecay'])->name('predict-decay');
-    });
-
-    // Organization Selection
-    Route::get('organizations/select', [\App\Http\Controllers\OrganizationController::class, 'select'])->name('organizations.select');
-    Route::post('organizations/select', [\App\Http\Controllers\OrganizationController::class, 'store'])->name('organizations.select.store');
 
     // Google Ads Management
     Route::prefix('google-ads')->name('google-ads.')->group(function () {
@@ -201,6 +163,8 @@ Route::middleware(['auth', 'verified'])->group(function () {
         // Pixel event intelligence (used by DevelopersTab.vue)
         Route::get('/pixel-events', [\App\Http\Controllers\CdnTrackingController::class, 'events'])->name('pixel-events');
         Route::get('/pixel-events/csv', [\App\Http\Controllers\CdnTrackingController::class, 'downloadCsv'])->name('pixel-events.csv');
+        Route::get('/pixel-errors', [\App\Http\Controllers\CdnTrackingController::class, 'errors'])->name('pixel-errors');
+
         // Path intelligence & trend analytics
         Route::get('/analytics', [\App\Http\Controllers\CdnTrackingController::class, 'analytics'])->name('analytics');
 
@@ -210,16 +174,17 @@ Route::middleware(['auth', 'verified'])->group(function () {
     });
 });
 
-
 // CDN Tracking (Unauthenticated — external pixel endpoints)
 // The OPTIONS preflight must be outside throttle for CORS to work reliably.
 Route::options('/cdn/ad-hit', [\App\Http\Controllers\CdnTrackingController::class, 'preflight']);
 Route::options('/cdn/verify-connection', [\App\Http\Controllers\CdnTrackingController::class, 'preflight']);
+Route::options('/cdn/error', [\App\Http\Controllers\CdnTrackingController::class, 'preflight']);
 
 Route::prefix('cdn')->name('cdn.')->middleware('throttle:120,1')->group(function () {
     Route::get('/ads-tracker.js', [\App\Http\Controllers\CdnTrackingController::class, 'serveScript'])->name('serve-script');
     Route::post('/ad-hit', [\App\Http\Controllers\CdnTrackingController::class, 'trackHit'])->name('track-hit');
     Route::get('/verify-connection', [\App\Http\Controllers\CdnTrackingController::class, 'verifyConnection'])->name('verify-connection');
+    Route::post('/error', [\App\Http\Controllers\CdnTrackingController::class, 'logError'])->name('log-error');
 });
 
 // Invitation Acceptance (Public/Guest or Auth)

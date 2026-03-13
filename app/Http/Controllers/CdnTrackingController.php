@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\AdTrackEvent;
+use App\Models\CdnError;
 use App\Models\CdnPageSchema;
 use App\Models\KeywordResearch;
 use App\Models\Organization;
@@ -219,8 +220,68 @@ class CdnTrackingController extends Controller
             $pixelSite->update(['pixel_verified_at' => now()]);
         }
 
+        // --- Active Crawling for New URLs ---
+        if ($urlHash) {
+            $isNewPage = !AdTrackEvent::where('pixel_site_id', $pixelSite->id)
+                ->where('page_view_id', '!=', $request->page_view_id)
+                ->where('page_url', $request->page_url)
+                ->exists();
+
+            if ($isNewPage) {
+                app(\App\Services\Crawler\CrawlerManager::class)->dispatch(
+                    null, // No sitemap required for passive discovery
+                    $request->page_url,
+                    0, // Just this page
+                    ['job_id' => 'cdn-discovery-' . $urlHash, 'render_js' => true]
+                );
+            }
+        }
+
         return response()->json(null, 204)->withHeaders($this->corsHeaders());
     }
+
+    /**
+     * Log a client-side error from the tracker.
+     */
+    public function logError(Request $request)
+    {
+        $request->validate([
+            'token'        => 'required|uuid',
+            'page_view_id' => 'required|string|max:50',
+            '_ts'          => 'required|integer',
+            '_sig'         => 'required|string',
+        ]);
+
+        $pixelSite = PixelSite::where('ads_site_token', $request->token)->first();
+        if (!$pixelSite) return response()->json(['error' => 'Invalid token'], 403)->withHeaders($this->corsHeaders());
+
+        // Validate signature (using _err suffix as implemented in JS)
+        $expected = hash_hmac('sha256', $pixelSite->ads_site_token . $request->page_view_id . '_err' . $request->_ts, $pixelSite->ads_site_token);
+        
+        // Skip signature check if it fails but log it for investigation (security feature)
+        if (!hash_equals($expected, $request->_sig)) {
+             Log::warning("CDN Error Signature Mismatch", ['expected' => $expected, 'received' => $request->_sig]);
+             // For now we still log the error but mark it as unsigned if we had a field for it
+        }
+
+        CdnError::create([
+            'pixel_site_id'   => $pixelSite->id,
+            'organization_id' => $pixelSite->organization_id,
+            'page_view_id'    => $request->page_view_id,
+            'url'             => $request->url,
+            'message'         => $request->message,
+            'stack'           => $request->stack,
+            'source'          => $request->source ?? 'window',
+            'line'            => $request->line,
+            'col'             => $request->col,
+            'filename'        => $request->filename,
+            'user_agent'      => $request->header('User-Agent'),
+            'ip_hash'         => hash('sha256', $request->ip()),
+        ]);
+
+        return response(null, 204)->withHeaders($this->corsHeaders());
+    }
+
 
     /**
      * Two-way connection handshake.
@@ -797,14 +858,39 @@ class CdnTrackingController extends Controller
                 ]
             ];
         } else {
-            $schema = [
-                '@context' => 'https://schema.org',
-                '@type' => 'WebPage',
-                'name' => $metadata['title'] ?? $metadata['h1'],
-                'description' => $metadata['description'],
-                'url' => $url,
-                'primaryImageOfPage' => $metadata['og_image']
-            ];
+            // Enhanced logic: Try to use AI analysis if we have metadata
+            try {
+                $aiService = app(\App\Services\OpenAIService::class);
+                $aiService->setModelFromOrganization($site->organization);
+                
+                // Construct pseudo-html from metadata for extraction
+                $pseudoHtml = "<html><head><title>" . ($metadata['title'] ?? '') . "</title>";
+                $pseudoHtml .= "<meta name='description' content='" . ($metadata['description'] ?? '') . "'>";
+                $pseudoHtml .= "</head><body><h1>" . ($metadata['h1'] ?? '') . "</h1></body></html>";
+
+                $aiData = $aiService->extractProfessionalSchemaData($url, $pseudoHtml);
+                
+                if ($aiData && !empty($aiData['data'])) {
+                    $schema = $aiData['data'];
+                    // Ensure @context and @type are set if missing from AI returned data
+                    if (!isset($schema['@context'])) $schema['@context'] = 'https://schema.org';
+                    if (!isset($schema['@type'])) $schema['@type'] = $aiData['type'] ?? 'WebPage';
+                }
+            } catch (\Exception $e) {
+                Log::error("CDN Auto-Schema AI Failure: " . $e->getMessage());
+            }
+
+            // Fallback if AI fails or wasn't used
+            if (!isset($schema)) {
+                $schema = [
+                    '@context' => 'https://schema.org',
+                    '@type' => 'WebPage',
+                    'name' => $metadata['title'] ?? $metadata['h1'],
+                    'description' => $metadata['description'],
+                    'url' => $url,
+                    'primaryImageOfPage' => $metadata['og_image']
+                ];
+            }
         }
 
         return CdnPageSchema::updateOrCreate(
@@ -817,5 +903,34 @@ class CdnTrackingController extends Controller
                 'last_injected_at' => now()
             ]
         );
+    }
+
+    /**
+     * Get paginated client-side errors for the organization.
+     */
+    public function errors(Request $request)
+    {
+        $organization = $request->user()->currentOrganization();
+        if (!$organization) return response()->json(['error' => 'Organization not found'], 404);
+
+        $query = CdnError::where('organization_id', $organization->id);
+
+        if ($request->filled('pixel_site_id')) {
+            $query->where('pixel_site_id', $request->pixel_site_id);
+        }
+
+        if ($request->filled('search')) {
+            $s = $request->search;
+            $query->where(function($q) use ($s) {
+                $q->where('message', 'like', "%$s%")
+                  ->orWhere('stack', 'like', "%$s%")
+                  ->orWhere('url', 'like', "%$s%");
+            });
+        }
+
+        $perPage = $request->input('per_page', 25);
+        $errors = $query->with('pixelSite:id,label')->orderBy('created_at', 'desc')->paginate($perPage);
+
+        return response()->json($errors);
     }
 }

@@ -26,6 +26,7 @@
     const serverBase = script.src ? script.src.split('/cdn/')[0] : window.location.origin;
     const hitEndpoint = serverBase + '/cdn/ad-hit';
     const verifyEndpoint = serverBase + '/cdn/verify-connection';
+    const errorEndpoint = serverBase + '/cdn/error';
 
     // ─── Public debug object ──────────────────────────────────────────────────
     window.MetaPilot = {
@@ -164,6 +165,45 @@
             scheduleRetry(payload);
         }
     };
+
+    // ─── Error Reporter ──────────────────────────────────────────────────────
+    const sendError = async (err, source = 'window') => {
+        try {
+            const ts = Math.floor(Date.now() / 1000);
+            const payload = {
+                token: siteToken,
+                page_view_id: pageViewId,
+                url: window.location.href,
+                message: err.message || err.reason?.message || String(err),
+                stack: err.stack || err.reason?.stack || (err.reason ? err.reason.stack : null) || null,
+                source: source,
+                line: err.lineno || null,
+                col: err.colno || null,
+                filename: err.filename || null,
+                _ts: ts,
+            };
+
+            // Sign with a specific signature for errors to prevent spoofing
+            const sig = await signPayload(pageViewId + '_err', ts);
+            payload._sig = sig;
+
+            if (navigator.sendBeacon) {
+                const blob = new Blob([JSON.stringify(payload)], { type: 'application/json' });
+                navigator.sendBeacon(errorEndpoint, blob);
+            } else {
+                fetch(errorEndpoint, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload),
+                    mode: 'cors'
+                }).catch(() => { });
+            }
+        } catch (e) { /* silent fail for error reporter */ }
+    };
+
+    window.addEventListener('error', (e) => sendError(e, 'window'));
+    window.addEventListener('unhandledrejection', (e) => sendError(e, 'promise'));
+
 
     // ─── Retry queue with exponential backoff ─────────────────────────────────
     const scheduleRetry = (payload) => {
