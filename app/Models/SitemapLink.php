@@ -50,7 +50,7 @@ class SitemapLink extends Model
 
     public function getCdnInsightAttribute()
     {
-        $sitemapService = app(SitemapService::class);
+        $sitemapService = app(\App\Services\SitemapService::class);
         $seoScore = $sitemapService->calculateSeoScore($this);
         $engagementWeight = 0.5; // 50% SEO, 50% Engagement if active
         
