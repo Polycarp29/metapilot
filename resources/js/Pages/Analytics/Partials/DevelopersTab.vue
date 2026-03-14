@@ -58,7 +58,7 @@ const showNewSiteModal   = ref(false)
 const showSiteDropdown   = ref(false)
 const newSite            = ref({ label: '', allowed_domain: '' })
 const siteSearchQuery    = ref('')
-const selectedModules    = ref(localStorage.getItem('mp_selected_modules') ? JSON.parse(localStorage.getItem('mp_selected_modules')) : ['click', 'schema'])
+const selectedModules    = ref(['click', 'schema']) // Default, will be overriden by site config
 
 // Filters
 const filters = ref({
@@ -443,13 +443,17 @@ const fetchConnectionStatus = async () => {
         const r = await axios.get(route('google-ads.connection-status'))
         pixelSites.value = r.data.pixel_sites || []
         
-        // Default selection if none — we now allow null for "All Sites"
-        // if (!selectedSiteId.value && pixelSites.value.length > 0) {
-        //     selectedSiteId.value = pixelSites.value[0].id
-        // }
+        // Default selection if none — we now allow null for "All Sites" but for snippet generation 
+        // it's better to select the first one if the user hasn't made a choice.
+        if (!selectedSiteId.value && pixelSites.value.length > 0) {
+            selectedSiteId.value = pixelSites.value[0].id
+        }
         
         if (selectedSite.value) {
             allowedDomainInput.value = selectedSite.value.allowed_domain || ''
+            if (selectedSite.value.enabled_modules) {
+                selectedModules.value = [...selectedSite.value.enabled_modules]
+            }
         }
     } catch (e) { /* silent */ }
 }
@@ -603,6 +607,10 @@ watch([selectedPropId, selectedCampaignId, selectedSiteId, selectedModules], () 
     }
 }, { deep: true })
 
+watch(() => props.propertyId, (val) => {
+    if (val) selectedPropId.value = val
+}, { immediate: true })
+
 watch(selectedSiteId, (val) => {
     if (val) localStorage.setItem('mp_selected_site_id', val)
     else localStorage.removeItem('mp_selected_site_id')
@@ -617,11 +625,10 @@ watch(selectedSiteId, (val) => {
 
     fetchEvents()
     fetchAnalytics()
-})
+}, { immediate: true })
 
-watch(selectedModules, (val) => {
-    localStorage.setItem('mp_selected_modules', JSON.stringify(val))
-}, { deep: true })
+// Modules are now primarily synced from backend via selectedSiteId watch and fetchConnectionStatus
+// We don't watch selectedModules to save to localStorage anymore as backend is Source of Truth
 
 watch(activeTab, (val) => {
     localStorage.setItem('mp_dev_active_tab', val)

@@ -611,6 +611,7 @@ class CdnTrackingController extends Controller
                 'last_hit_domain'   => $lastHitDomain,
                 'total_hits'        => $site->total_hits,
                 'hits_last_24h'     => $site->hits_last_24h,
+                'enabled_modules'   => $site->enabled_modules,
                 'status'            => $status,
             ];
         });
