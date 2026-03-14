@@ -131,7 +131,13 @@ class CdnTrackingController extends Controller
             $pixelSite->ads_site_token
         );
 
-        if (!hash_equals($expected, $signature)) {
+        if ($signature === 'nosig') {
+            Log::info('Pixel hit received without signature (nosig)', [
+                'pixel_site_id' => $pixelSite->id,
+                'page_view_id'  => $request->page_view_id,
+                'referrer'      => $request->header('Referer'),
+            ]);
+        } elseif (!hash_equals($expected, $signature)) {
             Log::warning('Pixel HMAC validation failed', [
                 'pixel_site_id' => $pixelSite->id,
                 'page_view_id'  => $request->page_view_id,

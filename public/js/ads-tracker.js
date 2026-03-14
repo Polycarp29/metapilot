@@ -241,7 +241,7 @@
     const verifyConnection = async () => {
         try {
             const challenge = (crypto.randomUUID ? crypto.randomUUID() : Math.random().toString(36).slice(2));
-            const url = `${verifyEndpoint}?token=${encodeURIComponent(siteToken)}&challenge=${encodeURIComponent(challenge)}`;
+            const url = `${verifyEndpoint}?token=${encodeURIComponent(siteToken)}&challenge=${encodeURIComponent(challenge)}&modules=${encodeURIComponent(requestedModules.join(','))}`;
             const res = await fetch(url);
 
             if (res.ok) {

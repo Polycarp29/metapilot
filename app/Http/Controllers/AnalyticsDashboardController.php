@@ -181,6 +181,10 @@ class AnalyticsDashboardController extends Controller
                 Log::info("AI Insight generation successful for property {$property->id}.");
             } else {
                 Log::warning("AI Insight generation failed for property {$property->id}.");
+                return response()->json([
+                    'status' => 'error',
+                    'message' => 'AI Insight generation failed. This usually happens when there is insufficient data for a comparison or the AI model is temporarily unavailable.'
+                ], 200); // We return 200 with error status to let the UI handle it gracefully
             }
         } else {
             Log::info("Serving cached AI insight for property {$property->id} (Created at: {$insight->insight_at}).");
