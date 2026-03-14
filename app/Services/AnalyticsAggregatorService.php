@@ -61,7 +61,7 @@ class AnalyticsAggregatorService
 
         // Merge live data with DB data (prefer live for counts, DB for averages if improved)
         $finalStats = [
-            'total_users' => $liveAggregates['active_users'] ?? (int) $aggregates->total_users, // Active Users is the standard "Users" metric
+            'total_users' => $liveAggregates['active_users'] ?? (int) $aggregates->total_users, 
             'total_users_all' => $liveAggregates['total_users'] ?? (int) $aggregates->total_users_all,
             'total_new_users' => $liveAggregates['new_users'] ?? (int) $aggregates->total_new_users,
             'total_sessions' => $liveAggregates['sessions'] ?? (int) $aggregates->total_sessions,
@@ -71,7 +71,21 @@ class AnalyticsAggregatorService
             'avg_bounce_rate' => $liveAggregates ? $liveAggregates['bounce_rate'] : (float) $aggregates->avg_bounce_rate,
         ];
 
-        if (!$latestRecord && !$liveAggregates) {
+        // 3.5. Incorporate Pixel Data (Live Clicks/Hits)
+        $pixelStats = \App\Models\AdTrackEvent::where('organization_id', $property->organization_id)
+            ->whereBetween('created_at', [$startDate . ' 00:00:00', $endDate . ' 23:59:59'])
+            ->select([
+                DB::raw('COUNT(DISTINCT session_id) as sessions'),
+                DB::raw('COUNT(DISTINCT ip_hash) as users'),
+            ])
+            ->first();
+
+        if ($pixelStats) {
+            $finalStats['total_users'] = max((int) $finalStats['total_users'], (int) $pixelStats->users);
+            $finalStats['total_sessions'] = max((int) $finalStats['total_sessions'], (int) $pixelStats->sessions);
+        }
+
+        if (!$latestRecord && !$liveAggregates && (int) $finalStats['total_users'] === 0) {
             return [
                 'total_users' => 0,
                 'total_users_all' => 0,
@@ -227,6 +241,37 @@ class AnalyticsAggregatorService
                 'by_first_source' => [], 'by_medium' => [], 'by_campaign' => [], 'by_device' => [], 
                 'by_country' => [], 'by_city' => [], 'by_event' => [], 'by_audience' => [],
             ], $breakdowns);
+
+            // 3.6. Merge Pixel Breakdowns for Pages and Sources if GA4 is empty
+            if (empty($breakdowns['by_page'])) {
+                $pixelPages = \App\Models\AdTrackEvent::where('organization_id', $property->organization_id)
+                    ->whereBetween('created_at', [$startDate . ' 00:00:00', $endDate . ' 23:59:59'])
+                    ->select('page_url', DB::raw('COUNT(DISTINCT session_id) as sessions'), DB::raw('COUNT(DISTINCT ip_hash) as users'))
+                    ->groupBy('page_url')
+                    ->orderByDesc('sessions')
+                    ->limit(20)
+                    ->get();
+                
+                $breakdowns['by_page'] = $pixelPages->map(fn($p) => [
+                    'page' => $p->page_url,
+                    'users' => $p->users,
+                    'sessions' => $p->sessions
+                ])->toArray();
+            }
+
+            if (empty($breakdowns['by_source'])) {
+                $pixelSources = \App\Models\AdTrackEvent::where('organization_id', $property->organization_id)
+                    ->whereBetween('created_at', [$startDate . ' 00:00:00', $endDate . ' 23:59:59'])
+                    ->select('utm_source', 'utm_medium', DB::raw('COUNT(DISTINCT session_id) as sessions'))
+                    ->groupBy('utm_source', 'utm_medium')
+                    ->orderByDesc('sessions')
+                    ->get();
+                
+                $breakdowns['by_source'] = $pixelSources->map(fn($s) => [
+                    'name' => ($s->utm_source ?: 'direct') . ' / ' . ($s->utm_medium ?: 'none'),
+                    'sessions' => $s->sessions
+                ])->toArray();
+            }
         }
 
         // Combine the aggregates with the latest breakdowns

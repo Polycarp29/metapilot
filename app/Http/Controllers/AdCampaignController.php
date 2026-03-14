@@ -22,8 +22,11 @@ class AdCampaignController extends Controller
             return response()->json(['error' => 'Property ID is required'], 400);
         }
 
-        $property = AnalyticsProperty::findOrFail($propertyId);
-        $campaigns = AdCampaign::where('analytics_property_id', $property->id)->get();
+        $organization = $request->user()->currentOrganization();
+        $property = AnalyticsProperty::where('organization_id', $organization->id)->findOrFail($propertyId);
+        $campaigns = AdCampaign::where('organization_id', $organization->id)
+            ->where('analytics_property_id', $property->id)
+            ->get();
         
         $forecast = AnalyticalForecast::where('analytics_property_id', $property->id)
             ->where('forecast_type', 'ad_performance')

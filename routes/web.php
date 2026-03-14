@@ -159,6 +159,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
         // Pixel connection health & domain management
         Route::get('/connection-status', [\App\Http\Controllers\CdnTrackingController::class, 'connectionStatus'])->name('connection-status');
         Route::put('/allowed-domain', [\App\Http\Controllers\CdnTrackingController::class, 'saveAllowedDomain'])->name('allowed-domain');
+        Route::put('/pixel-modules', [\App\Http\Controllers\CdnTrackingController::class, 'saveModules'])->name('pixel-modules');
 
         // Pixel event intelligence (used by DevelopersTab.vue)
         Route::get('/pixel-events', [\App\Http\Controllers\CdnTrackingController::class, 'events'])->name('pixel-events');

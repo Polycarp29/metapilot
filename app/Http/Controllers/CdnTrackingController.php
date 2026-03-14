@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\AdCampaign;
 use App\Models\AdTrackEvent;
 use App\Models\CdnError;
 use App\Models\CdnPageSchema;
@@ -187,26 +188,58 @@ class CdnTrackingController extends Controller
             ]
         );
 
-        // --- Intelligence Platform Integration ---
-        if ($urlHash) {
-            // 1. Link to SitemapLink
-            $sitemapLink = SitemapLink::whereHas('sitemap', function($q) use ($organization) {
-                $q->where('organization_id', $organization->id);
-            })->where('url_hash', $urlHash)->first();
+            // --- Intelligence Platform Integration ---
+            $requestedModules = $request->input('modules', []);
+            if (is_string($requestedModules)) $requestedModules = explode(',', $requestedModules);
+            
+            $enabledModules = $pixelSite->enabled_modules ?? ['click', 'schema'];
+            $activeModules  = array_intersect($requestedModules, $enabledModules);
 
-            if ($sitemapLink) {
-                $sitemapLink->increment('cdn_hit_count');
-                $sitemapLink->update([
-                    'cdn_active' => true,
-                    'cdn_last_seen_at' => now(),
-                ]);
+            // 1. Link to SitemapLink (Enforced by 'click' module)
+            if (in_array('click', $activeModules)) {
+                $sitemapLink = SitemapLink::whereHas('sitemap', function($q) use ($organization) {
+                    $q->where('organization_id', $organization->id);
+                })->where('url_hash', $urlHash)->first();
+
+                if ($sitemapLink) {
+                    $sitemapLink->increment('cdn_hit_count');
+                    $clicks = (int) ($request->click_count ?? 0);
+                    if ($clicks > 0) {
+                        $sitemapLink->increment('cdn_click_count', $clicks);
+                    }
+                    
+                    // Recalculate Engagement Score: (Click Rate * 80) + (Volume Bonus * 20)
+                    $totalHits = $sitemapLink->cdn_hit_count;
+                    $totalClicks = $sitemapLink->cdn_click_count;
+                    $clickRate = $totalHits > 0 ? ($totalClicks / $totalHits) : 0;
+                    $volumeBonus = min(1, $totalHits / 100); // Max bonus at 100 hits
+                    
+                    $engagementScore = ($clickRate * 80) + ($volumeBonus * 20);
+
+                    $sitemapLink->update([
+                        'cdn_active' => true,
+                        'cdn_last_seen_at' => now(),
+                        'cdn_engagement_score' => min(100, $engagementScore)
+                    ]);
+                }
+
+                // 1.5 Link to AdCampaign (Organization Scoped)
+                if ($request->campaign_id) {
+                    $adCampaign = AdCampaign::where('organization_id', $organization->id)
+                        ->where('google_campaign_id', $request->campaign_id)
+                        ->first();
+                    
+                    if ($adCampaign) {
+                        $cMetrics = $adCampaign->metrics ?? [];
+                        $cMetrics['internal_hits'] = ($cMetrics['internal_hits'] ?? 0) + 1;
+                        $cMetrics['internal_clicks'] = ($cMetrics['internal_clicks'] ?? 0) + (int) ($request->click_count ?? 0);
+                        $adCampaign->update(['metrics' => $cMetrics]);
+                    }
+                }
             }
 
-            // 2. Auto-Generate Schema if requested and missing
-            $modules = $request->input('modules', []);
-            if (is_string($modules)) $modules = explode(',', $modules);
-
-            if (in_array('schema', $modules) && $request->metadata) {
+            // 2. Auto-Generate Schema (Enforced by 'schema' module)
+            if (in_array('schema', $activeModules) && $request->metadata) {
                 $exists = CdnPageSchema::where('pixel_site_id', $pixelSite->id)
                     ->where('url_hash', $urlHash)
                     ->exists();
@@ -215,7 +248,6 @@ class CdnTrackingController extends Controller
                     $this->generateSchemaForPage($pixelSite, $request->page_url, $request->metadata);
                 }
             }
-        }
 
         // --- Mark pixel as verified on first domain-confirmed hit ---
         if (!$pixelSite->pixel_verified_at) {
@@ -618,6 +650,34 @@ class CdnTrackingController extends Controller
             'message'        => $domainChanged
                 ? 'Domain updated. Pixel verification reset — the tracker must fire from the new domain to re-verify.'
                 : 'Domain saved.',
+        ]);
+    }
+
+    /**
+     * Save the enabled modules for a specific pixel site.
+     */
+    public function saveModules(Request $request)
+    {
+        $request->validate([
+            'pixel_site_id' => 'required|integer|exists:pixel_sites,id',
+            'modules'       => 'required|array',
+            'modules.*'     => 'string|in:click,schema,seo,behavior',
+        ]);
+
+        $organization = $request->user()->currentOrganization();
+        if (!$organization) {
+            return response()->json(['error' => 'Organization not found'], 404);
+        }
+
+        $pixelSite = $organization->pixelSites()->findOrFail($request->pixel_site_id);
+
+        $pixelSite->update([
+            'enabled_modules' => $request->modules,
+        ]);
+
+        return response()->json([
+            'enabled_modules' => $pixelSite->enabled_modules,
+            'message'         => 'Tracker modules updated successfully. These modules are now enforced for this site.',
         ]);
     }
 

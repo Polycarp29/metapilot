@@ -15,7 +15,7 @@ class SitemapLink extends Model
         'seo_bottlenecks', 'url_slug_quality', 'depth_from_root',
         'internal_links_in', 'internal_links_out',
         'http_status', 'effective_url', 'ai_schema_data',
-        'cdn_hit_count', 'cdn_engagement_score', 'cdn_last_seen_at', 'cdn_active'
+        'cdn_hit_count', 'cdn_click_count', 'cdn_engagement_score', 'cdn_last_seen_at', 'cdn_active'
     ];
 
     protected $casts = [
@@ -36,6 +36,7 @@ class SitemapLink extends Model
         'http_status' => 'integer',
         'ai_schema_data' => 'json',
         'cdn_hit_count' => 'integer',
+        'cdn_click_count' => 'integer',
         'cdn_engagement_score' => 'float',
         'cdn_last_seen_at' => 'datetime',
         'cdn_active' => 'boolean',

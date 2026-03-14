@@ -35,12 +35,13 @@ const searchQuery        = ref('')
 const connectionStatus   = ref(null)
 const allowedDomainInput = ref('')
 const domainSavedMsg     = ref('')
+const isSavingModules    = ref(false)
 const showRegenModal     = ref(false)
 const analyticsData      = ref(null)
 const isLoadingAnalytics = ref(false)
 const pathFilter         = ref('')  // filter log by clicking a path row
 
-const activeTab          = ref('signals')
+const activeTab          = ref(localStorage.getItem('mp_dev_active_tab') || 'signals')
 const errorResponse      = ref({ data: [], current_page: 1, last_page: 1, total: 0 })
 const isLoadingErrors    = ref(false)
 const errorFilters       = ref({
@@ -51,13 +52,13 @@ const errorFilters       = ref({
 
 // Multi-site state
 const pixelSites         = ref([])
-const selectedSiteId     = ref(null)
+const selectedSiteId     = ref(localStorage.getItem('mp_selected_site_id') ? parseInt(localStorage.getItem('mp_selected_site_id')) : null)
 const isCreatingSite     = ref(false)
 const showNewSiteModal   = ref(false)
 const showSiteDropdown   = ref(false)
 const newSite            = ref({ label: '', allowed_domain: '' })
 const siteSearchQuery    = ref('')
-const selectedModules    = ref(['click', 'schema'])
+const selectedModules    = ref(localStorage.getItem('mp_selected_modules') ? JSON.parse(localStorage.getItem('mp_selected_modules')) : ['click', 'schema'])
 
 // Filters
 const filters = ref({
@@ -494,6 +495,24 @@ const saveAllowedDomain = async () => {
     }
 }
 
+const saveModules = async () => {
+    if (!selectedSiteId.value) return
+    isSavingModules.value = true
+    try {
+        const { data } = await axios.put(route('google-ads.pixel-modules'), {
+            pixel_site_id: selectedSiteId.value,
+            modules: selectedModules.value
+        })
+        toast.add(data.message, 'success')
+        // Refresh site data to ensure everything is synced
+        await fetchConnectionStatus()
+    } catch (e) {
+        toast.add(e.response?.data?.message || 'Failed to save tracker modules', 'error')
+    } finally {
+        isSavingModules.value = false
+    }
+}
+
 const updateSnippet = () => {
     if (!selectedSite.value) {
         snippet.value = '/* Please select a specific tracking site from the dropdown to generate your custom tracking snippet. */'
@@ -583,9 +602,29 @@ watch([selectedPropId, selectedCampaignId, selectedSiteId, selectedModules], () 
         allowedDomainInput.value = selectedSite.value.allowed_domain || ''
     }
 }, { deep: true })
-watch(selectedSiteId, () => {
+
+watch(selectedSiteId, (val) => {
+    if (val) localStorage.setItem('mp_selected_site_id', val)
+    else localStorage.removeItem('mp_selected_site_id')
+
+    // Sync modules from backend when site changes
+    if (selectedSite.value && selectedSite.value.enabled_modules) {
+        selectedModules.value = [...selectedSite.value.enabled_modules]
+    } else if (selectedSite.value) {
+        // Default seed if backend is empty
+        selectedModules.value = ['click', 'schema']
+    }
+
     fetchEvents()
     fetchAnalytics()
+})
+
+watch(selectedModules, (val) => {
+    localStorage.setItem('mp_selected_modules', JSON.stringify(val))
+}, { deep: true })
+
+watch(activeTab, (val) => {
+    localStorage.setItem('mp_dev_active_tab', val)
 })
 watch(pathFilter, () => { if (!pathFilter.value) fetchEvents() })
 </script>
@@ -597,7 +636,7 @@ watch(pathFilter, () => { if (!pathFilter.value) fetchEvents() })
             <div>
                 <h2 class="text-4xl font-black text-slate-900 tracking-tight flex items-center gap-4">
                     Developer Tools
-                    <span class="px-3 py-1 bg-indigo-50 text-indigo-600 text-[10px] font-black rounded-full uppercase tracking-tighter border border-indigo-100/50">v3.1</span>
+                    <span class="px-3 py-1 bg-indigo-50 text-indigo-600 text-[10px] font-black rounded-full uppercase tracking-tighter border border-indigo-100/50">v3.2</span>
                 </h2>
                 <p class="text-slate-500 font-medium mt-2 max-w-xl leading-relaxed">Secure pixel tracking with agency attribution monitoring & real-time signal intelligence.</p>
             </div>
@@ -1028,7 +1067,17 @@ watch(pathFilter, () => { if (!pathFilter.value) fetchEvents() })
 
                 <!-- Module Selection -->
                 <div class="mb-10">
-                    <label class="block text-[10px] font-black text-slate-500 uppercase tracking-widest ml-1 mb-4">Active Modules</label>
+                    <div class="flex items-center justify-between mb-4">
+                        <label class="block text-[10px] font-black text-slate-500 uppercase tracking-widest ml-1">Active Modules</label>
+                        <button v-if="selectedSiteId" 
+                            @click="saveModules"
+                            :disabled="isSavingModules"
+                            class="flex items-center gap-2 px-4 py-1.5 bg-indigo-600 hover:bg-indigo-500 text-white text-[10px] font-black rounded-lg transition-all shadow-sm disabled:opacity-50">
+                            <svg v-if="isSavingModules" class="w-3 h-3 animate-spin" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
+                            <svg v-else class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M5 13l4 4L19 7"/></svg>
+                            Save configuration to Site
+                        </button>
+                    </div>
                     <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
                         <div v-for="mod in [
                             { id: 'click', label: 'Click Stream', desc: 'Ad attribution' },

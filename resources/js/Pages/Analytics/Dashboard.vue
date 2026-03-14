@@ -40,7 +40,7 @@ const props = defineProps({
   organization: Object
 })
 
-const selectedPropertyId = ref(props.properties[0]?.id || null)
+const selectedPropertyId = ref(localStorage.getItem('mp_dashboard_property_id') ? parseInt(localStorage.getItem('mp_dashboard_property_id')) : (props.properties[0]?.id || null))
 const timeframe = ref(30)
 const customStartDate = ref(new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0])
 const customEndDate = ref(new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString().split('T')[0])
@@ -58,7 +58,7 @@ const chartMetric = ref('users')
 const isAutoRefreshEnabled = ref(false)
 const autoRefreshInterval = ref(null)
 const lastRefetchTime = ref(null)
-const activeTab = ref('overview')
+const activeTab = ref(localStorage.getItem('mp_dashboard_active_tab') || 'overview')
 const showSyncSuccessToast = ref(false)
 const isReconnecting = ref(false)
 const syncPollingInterval = ref(null)
@@ -376,10 +376,10 @@ const toggleAutoRefresh = () => {
   isAutoRefreshEnabled.value = !isAutoRefreshEnabled.value
   
   if (isAutoRefreshEnabled.value) {
-    // Refresh every 15 minutes
+    // Refresh every 15 seconds for live feel
     autoRefreshInterval.value = setInterval(() => {
       fetchData(true)
-    }, 15 * 60 * 1000)
+    }, 15 * 1000)
   } else {
     if (autoRefreshInterval.value) {
       clearInterval(autoRefreshInterval.value)
@@ -663,9 +663,16 @@ watch([querySearch, queryTrendFilter], () => queryPage.value = 1)
 watch([pageSearch, pageTrendFilter], () => pagePage.value = 1)
 
 watch([selectedPropertyId, timeframe, customStartDate, customEndDate], () => {
+  if (selectedPropertyId.value) {
+    localStorage.setItem('mp_dashboard_property_id', selectedPropertyId.value)
+  }
   fetchData()
   queryPage.value = 1
   pagePage.value = 1
+})
+
+watch(activeTab, (val) => {
+  localStorage.setItem('mp_dashboard_active_tab', val)
 })
 
 import { onUnmounted } from 'vue'

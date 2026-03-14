@@ -33,7 +33,7 @@
 
     // ─── Public debug object ──────────────────────────────────────────────────
     window.MetaPilot = {
-        version: '3.1',
+        version: '3.2',
         token: siteToken,
         modules: requestedModules,
         status: 'initialising',
@@ -251,9 +251,10 @@
                     window.MetaPilot.domainVerified = data.domain_verified;
                     window.MetaPilot.serverTime = data.server_time;
                     window.MetaPilot.status = 'active';
+                    window.MetaPilot.modules = data.modules_active || requestedModules;
 
-                    // Handle Auto-Schema Injection
-                    if (requestedModules.includes('schema') && data.schema_json && !window.MetaPilot.schemaInjected) {
+                    // Handle Auto-Schema Injection (honor backend enforcement)
+                    if (window.MetaPilot.modules.includes('schema') && data.schema_json && !window.MetaPilot.schemaInjected) {
                         const script = document.createElement('script');
                         script.type = 'application/ld+json';
                         script.text = JSON.stringify(data.schema_json);

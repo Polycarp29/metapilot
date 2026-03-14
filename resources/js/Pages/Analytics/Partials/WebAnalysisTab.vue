@@ -22,11 +22,11 @@ const toast = useToastStore()
 
 // ─── State ────────────────────────────────────────────────────────────────────
 const pixelSites          = ref([])
-const selectedSiteId      = ref(null)
+const selectedSiteId      = ref(localStorage.getItem('mp_selected_site_id') ? parseInt(localStorage.getItem('mp_selected_site_id')) : null)
 const showSiteDropdown    = ref(false)
 const siteSearchQuery     = ref('')
 const expandedLink        = ref(null)
-const activeSection       = ref('seo') // seo | sitemaps | health
+const activeSection       = ref(localStorage.getItem('mp_active_section') || 'seo') // seo | sitemaps | health
 
 const webAnalysisResponse = ref({
     sitemaps: [],
@@ -300,12 +300,20 @@ onMounted(() => {
     fetchWebAnalysis()
     fetchSchemaDebug()
     fetchDiscoveredPages()
-    refreshInterval = setInterval(fetchWebAnalysis, 60000)
+    refreshInterval = setInterval(fetchWebAnalysis, 15000)
 })
 
 onUnmounted(() => clearInterval(refreshInterval))
 
-watch(selectedSiteId, () => fetchWebAnalysis())
+watch(selectedSiteId, (val) => {
+    if (val) localStorage.setItem('mp_selected_site_id', val)
+    else localStorage.removeItem('mp_selected_site_id')
+    fetchWebAnalysis()
+})
+
+watch(activeSection, (val) => {
+    localStorage.setItem('mp_active_section', val)
+})
 </script>
 
 <template>
