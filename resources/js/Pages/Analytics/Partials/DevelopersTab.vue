@@ -457,8 +457,18 @@ const runConnectionTest = async () => {
     isTestingConn.value = true
     try {
         await fetchConnectionStatus()
+        const sites = pixelSites.value
+        const active = sites.filter(s => s.status === 'verified_active').length
+        const total = sites.length
+        if (total === 0) {
+            toast.error('No pixel sites found. Create a site first.')
+        } else if (active > 0) {
+            toast.success(`Connection verified — ${active}/${total} site(s) active`)
+        } else {
+            toast.add(`${total} site(s) found but none active in last 24h. Check your pixel snippet is installed correctly.`, 'warning')
+        }
     } catch (e) {
-        // silent
+        toast.error('Connection test failed — please check your network')
     } finally {
         isTestingConn.value = false
     }
@@ -556,7 +566,6 @@ onMounted(() => {
     fetchEvents()
     fetchConnectionStatus()
     fetchAnalytics()
-    fetchWebAnalysis()
     eventsInterval    = setInterval(fetchEvents, 60000)
     connInterval      = setInterval(fetchConnectionStatus, 30000)
     analyticsInterval = setInterval(fetchAnalytics, 300000) // every 5 min
@@ -576,7 +585,6 @@ watch([selectedPropId, selectedCampaignId, selectedSiteId, selectedModules], () 
 }, { deep: true })
 watch(selectedSiteId, () => {
     fetchEvents()
-    fetchAnalytics()
     fetchAnalytics()
 })
 watch(pathFilter, () => { if (!pathFilter.value) fetchEvents() })

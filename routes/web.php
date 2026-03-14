@@ -168,6 +168,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
         // Path intelligence & trend analytics
         Route::get('/analytics', [\App\Http\Controllers\CdnTrackingController::class, 'analytics'])->name('analytics');
         Route::get('/web-analysis', [\App\Http\Controllers\CdnTrackingController::class, 'webAnalysis'])->name('web-analysis');
+        Route::get('/web-analysis/pdf', [\App\Http\Controllers\CdnTrackingController::class, 'downloadPdf'])->name('web-analysis.pdf');
         Route::get('/schema-debug', [\App\Http\Controllers\CdnTrackingController::class, 'schemaDebug'])->name('schema-debug');
         Route::post('/enable-cdn-discovery', [\App\Http\Controllers\CdnTrackingController::class, 'enableCdnDiscovery'])->name('enable-cdn-discovery');
         Route::get('/discovered-pages', [\App\Http\Controllers\CdnTrackingController::class, 'discoveredPages'])->name('discovered-pages');

@@ -11,6 +11,7 @@ use App\Models\PixelSite;
 use App\Models\Schema;
 use App\Models\Sitemap;
 use App\Models\SitemapLink;
+use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\File;
@@ -148,15 +149,9 @@ class CdnTrackingController extends Controller
         $geo        = $this->getGeoData($request->ip());
 
         // Normalize URL for consistent hashing
-        $rawUrl = $request->page_url;
-        if ($rawUrl) {
-            $parsed = parse_url($rawUrl);
-            $normalizedUrl = ($parsed['host'] ?? '') . ($parsed['path'] ?? '');
-            $normalizedUrl = strtolower(rtrim($normalizedUrl, '/'));
-            $urlHash = hash('sha256', $normalizedUrl);
-        } else {
-            $urlHash = null;
-        }
+        $normalizedUrl = $this->normalizeUrlForHash($request->page_url);
+        $urlHash = $normalizedUrl ? hash('sha256', $normalizedUrl) : null;
+
 
         // --- Upsert the hit ---
         $hit = AdTrackEvent::updateOrCreate(
@@ -344,13 +339,17 @@ class CdnTrackingController extends Controller
         }
 
         // --- Intelligence Platform Modules ---
-        $modules = $request->input('modules', []);
-        if (is_string($modules)) {
-            $modules = explode(',', $modules);
-        }
+    $modules = $request->input('modules', []);
+    if (is_string($modules)) {
+        $modules = explode(',', $modules);
+    }
 
-        $schemaJson = null;
-        if (in_array('schema', $modules)) {
+    // Validate modules against site's enabled_modules
+    $enabledModules = $pixelSite->enabled_modules ?? ['click', 'schema'];
+    $modules = array_values(array_intersect($modules, $enabledModules));
+
+    $schemaJson = null;
+    if (in_array('schema', $modules)) {
             $url = $request->header('Referer');
             if ($url) {
                 $parsed = parse_url($url);
@@ -465,14 +464,34 @@ class CdnTrackingController extends Controller
         }
 
         // Apply same filters as events()
-        if ($request->filled('campaign_id') && $request->campaign_id !== 'all') $query->where('google_campaign_id', $request->campaign_id);
-        if ($request->filled('type') && $request->type === 'ads') $query->whereNotNull('gclid');
-        if ($request->filled('device') && $request->device !== 'all') $query->where('device_type', $request->device);
-        if ($request->filled('country') && $request->country !== 'all') $query->where('country_code', $request->country);
-        if ($request->filled('search')) {
-            $s = $request->search;
-            $query->where('session_id', 'like', "%$s%")->orWhere('page_url', 'like', "%$s%");
+    if ($request->filled('campaign_id') && $request->campaign_id !== 'all') $query->where('google_campaign_id', $request->campaign_id);
+    
+    if ($request->filled('type')) {
+        if ($request->type === 'ads') {
+            $query->where(function($q) {
+                $q->whereNotNull('gclid')
+                  ->orWhereNotNull('utm_campaign')
+                  ->orWhereNotNull('google_campaign_id');
+            });
+        } elseif ($request->type === 'organic') {
+            $query->whereNull('gclid')
+                  ->whereNull('utm_campaign')
+                  ->whereNull('google_campaign_id');
         }
+    }
+
+    if ($request->filled('device') && $request->device !== 'all') $query->where('device_type', $request->device);
+    if ($request->filled('country') && $request->country !== 'all') $query->where('country_code', $request->country);
+    
+    if ($request->filled('search')) {
+        $s = $request->search;
+        $query->where(function($q) use ($s) {
+            $q->where('session_id', 'like', "%$s%")
+              ->orWhere('page_url', 'like', "%$s%")
+              ->orWhere('city', 'like', "%$s%");
+        });
+    }
+    
 
         $events = $query->orderBy('created_at', 'desc')->limit(5000)->get();
 
@@ -483,8 +502,6 @@ class CdnTrackingController extends Controller
             "Cache-Control"       => "must-revalidate, post-check=0, pre-check=0",
             "Expires"             => "0"
         ];
-
-        $columns = ['ID', 'Date', 'Session', 'Campaign', 'GCLID', 'URL', 'Device', 'Location', 'Clicks', 'Dwell(s)'];
 
         $callback = function() use($events, $columns) {
             $file = fopen('php://output', 'w');
@@ -520,24 +537,25 @@ class CdnTrackingController extends Controller
             return response()->json(['error' => 'Organization not found'], 404);
         }
 
-        $pixelSites = $organization->pixelSites()->get()->map(function ($site) {
-            $totalHits    = AdTrackEvent::where('pixel_site_id', $site->id)->count();
-            $hitsLast24h  = AdTrackEvent::where('pixel_site_id', $site->id)
-                ->where('created_at', '>=', now()->subHours(24))
-                ->count();
-
-            $lastEvent = AdTrackEvent::where('pixel_site_id', $site->id)
+        $pixelSites = $organization->pixelSites()
+        ->withCount(['adTrackEvents as total_hits'])
+        ->withCount(['adTrackEvents as hits_last_24h' => function ($q) {
+            $q->where('created_at', '>=', now()->subHours(24));
+        }])
+        ->get()
+        ->map(function ($site) {
+            $lastEvent = $site->adTrackEvents()
                 ->orderBy('created_at', 'desc')
                 ->first(['created_at', 'page_url']);
 
             $lastHitDomain = $lastEvent?->page_url ? parse_url($lastEvent->page_url, PHP_URL_HOST) : null;
 
             $pixelVerified = (bool) $site->pixel_verified_at;
-            $recentlyActive = $hitsLast24h > 0;
+            $recentlyActive = $site->hits_last_24h > 0;
 
             if ($pixelVerified && $recentlyActive) {
                 $status = 'verified_active';
-            } elseif ($totalHits > 0) {
+            } elseif ($site->total_hits > 0) {
                 $status = 'connected_inactive';
             } else {
                 $status = 'not_detected';
@@ -547,14 +565,14 @@ class CdnTrackingController extends Controller
                 'id'                => $site->id,
                 'label'             => $site->label,
                 'ads_site_token'    => $site->ads_site_token,
-                'connected'         => $totalHits > 0,
+                'connected'         => $site->total_hits > 0,
                 'pixel_verified'    => $pixelVerified,
                 'pixel_verified_at' => $site->pixel_verified_at?->toIso8601String(),
                 'allowed_domain'    => $site->allowed_domain,
                 'last_hit_at'       => $lastEvent?->created_at?->toIso8601String(),
                 'last_hit_domain'   => $lastHitDomain,
-                'total_hits'        => $totalHits,
-                'hits_last_24h'     => $hitsLast24h,
+                'total_hits'        => $site->total_hits,
+                'hits_last_24h'     => $site->hits_last_24h,
                 'status'            => $status,
             ];
         });
@@ -840,12 +858,13 @@ class CdnTrackingController extends Controller
 
         return Cache::remember("geoip_{$ip}", 86400, function () use ($ip) {
             try {
+                // Switch to ipapi.co for free HTTPS support (1000/day)
                 $response = Http::timeout(2)
-                    ->get("http://ip-api.com/json/{$ip}?fields=status,countryCode,city");
+                    ->get("https://ipapi.co/{$ip}/json/");
 
-                if ($response->successful() && $response->json('status') === 'success') {
+                if ($response->successful()) {
                     return [
-                        'country_code' => $response->json('countryCode'),
+                        'country_code' => $response->json('country_code'),
                         'city'         => $response->json('city'),
                     ];
                 }
@@ -861,7 +880,8 @@ class CdnTrackingController extends Controller
      */
     private function generateSchemaForPage(PixelSite $site, string $url, array $metadata)
     {
-        $urlHash = hash('sha256', $url);
+        $urlHash = hash('sha256', $this->normalizeUrlForHash($url));
+
         
         // Detect schema type from metadata or URL
         $type = $metadata['content_type'] ?? 'website';
@@ -973,10 +993,16 @@ class CdnTrackingController extends Controller
                 return [
                     'id' => $link->id,
                     'url' => $link->url,
+                    'title' => $link->title,
+                    'description' => $link->description,
+                    'h1' => $link->h1,
+                    'http_status' => $link->http_status,
+                    'load_time' => $link->load_time,
                     'seo_score' => $link->cdn_insight['seo_score'],
                     'unified_score' => $link->cdn_insight['unified_score'],
                     'is_ad_ready' => $link->cdn_insight['is_ad_ready'],
                     'seo_bottlenecks' => $link->seo_bottlenecks,
+                    'seo_audit' => $link->seo_audit,
                     'schema_suggestions' => $link->schema_suggestions,
                 ];
             });
@@ -1034,6 +1060,67 @@ class CdnTrackingController extends Controller
             'schema_stats'   => $schemaStats,
             'trends'         => $trends,
         ]);
+    }
+
+    /**
+     * Export web analysis as a professional PDF report.
+     */
+    public function downloadPdf(Request $request)
+    {
+        $organization = $request->user()->currentOrganization();
+        if (!$organization) abort(404);
+
+        $pixelSiteId = $request->input('pixel_site_id');
+        $pixelSite = $pixelSiteId ? PixelSite::where('organization_id', $organization->id)->find($pixelSiteId) : null;
+
+        // Reuse webAnalysis logic but with larger limits for PDF
+        $sitemaps = $organization->sitemaps()->withCount('links')->get();
+        
+        $analysisLinksQuery = SitemapLink::whereHas('sitemap', function($q) use ($organization) {
+            $q->where('organization_id', $organization->id);
+        });
+
+        if ($pixelSite && $pixelSite->allowed_domain) {
+            $domain = preg_replace('/^www\./', '', $pixelSite->allowed_domain);
+            $analysisLinksQuery->where('url', 'like', "%$domain%");
+        }
+
+        $analysisLinks = $analysisLinksQuery->whereNotNull('seo_audit')
+            ->orderByDesc('cdn_engagement_score')
+            ->limit(50) // More context for PDF
+            ->get();
+
+        $errorSummary = CdnError::where('organization_id', $organization->id)
+            ->when($pixelSiteId, fn($q) => $q->where('pixel_site_id', $pixelSiteId))
+            ->where('created_at', '>=', now()->subDays(7))
+            ->selectRaw("COUNT(*) as total, 
+                COUNT(DISTINCT url) as unique_urls,
+                COUNT(DISTINCT message) as unique_messages")
+            ->first();
+
+        $schemaStats = CdnPageSchema::where('pixel_site_id', $pixelSiteId ?: 0)
+            ->when(!$pixelSiteId, function($q) use ($organization) {
+                $q->whereHas('pixelSite', fn($site) => $site->where('organization_id', $organization->id));
+            })
+            ->selectRaw("COUNT(*) as total_schemas, 
+                SUM(injected_count) as total_injections,
+                SUM(CASE WHEN has_conflict = 1 THEN 1 ELSE 0 END) as conflicts")
+            ->first();
+
+        $totalScore = $analysisLinks->avg('cdn_insight.seo_score') ?? 0;
+
+        $pdf = Pdf::loadView('pdf.web-analysis', [
+            'organization'   => $organization,
+            'pixelSite'      => $pixelSite,
+            'sitemaps'       => $sitemaps,
+            'analysisLinks'  => $analysisLinks,
+            'errorSummary'   => $errorSummary,
+            'schemaStats'    => $schemaStats,
+            'overallScore'   => round($totalScore),
+            'generatedAt'    => now()->format('M d, Y H:i'),
+        ]);
+
+        return $pdf->download('web-analytics-report-' . now()->format('Y-m-d') . '.pdf');
     }
 
     /**
@@ -1207,5 +1294,16 @@ class CdnTrackingController extends Controller
                 'is_index'   => false,
             ]
         );
+    }
+
+    /**
+     * Normalize a URL for consistent hashing (strips scheme, lowercases, trims trailing slash).
+     */
+    private function normalizeUrlForHash(?string $url): string
+    {
+        if (!$url) return '';
+        $parsed = parse_url($url);
+        $normalized = ($parsed['host'] ?? '') . ($parsed['path'] ?? '');
+        return strtolower(rtrim($normalized, '/'));
     }
 }

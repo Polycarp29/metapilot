@@ -12,6 +12,9 @@
 (function () {
     'use strict';
 
+    if (window.__metapilot_loaded) return;
+    window.__metapilot_loaded = true;
+
     const script = document.currentScript;
     const siteToken = script ? script.getAttribute('data-token') : null;
     const campaignId = script ? script.getAttribute('data-campaign') : null;

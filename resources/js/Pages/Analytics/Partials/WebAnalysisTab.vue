@@ -36,6 +36,10 @@ const webAnalysisResponse = ref({
     trends: { labels: [], errors: [], injections: [] }
 })
 const isLoadingWebAnalysis = ref(false)
+const isExportingPdf       = ref(false)
+const showSeoModal         = ref(false)
+const selectedSeoLink      = ref(null)
+const isValidatingLink     = ref(false)
 let refreshInterval = null
 
 // Schema debug
@@ -176,6 +180,49 @@ const fetchWebAnalysis = async (isManual = false) => {
         toast.add('Failed to fetch web analysis', 'error')
     } finally {
         isLoadingWebAnalysis.value = false
+    }
+}
+
+const downloadPdfReport = () => {
+    isExportingPdf.value = true
+    try {
+        const url = route('google-ads.web-analysis.pdf', { pixel_site_id: selectedSiteId.value || '' })
+        window.open(url, '_blank')
+        toast.add('Generating PDF report...', 'success')
+    } catch (e) {
+        toast.add('Failed to start PDF export', 'error')
+    } finally {
+        setTimeout(() => { isExportingPdf.value = false }, 2000)
+    }
+}
+
+const openSeoDetails = (link) => {
+    selectedSeoLink.value = link
+    showSeoModal.value = true
+}
+
+const revalidateLink = async (link) => {
+    if (isValidatingLink.value) return
+    isValidatingLink.value = true
+    try {
+        const { data } = await axios.post(route('sitemaps.links.manual-analyze', { link: link.id }))
+        if (data.success) {
+            toast.add('Page re-validated successfully.', 'success')
+            // Update the local link data if found in our main list
+            const idx = webAnalysisResponse.value.analysis_links.findIndex(l => l.id === link.id)
+            if (idx !== -1) {
+                webAnalysisResponse.value.analysis_links[idx] = { 
+                    ...webAnalysisResponse.value.analysis_links[idx], 
+                    ...data.link,
+                    seo_score: data.link.seo_audit?.score ?? data.link.seo_score 
+                }
+                selectedSeoLink.value = webAnalysisResponse.value.analysis_links[idx]
+            }
+        }
+    } catch (e) {
+        toast.add(e.response?.data?.message || 'Failed to re-validate page', 'error')
+    } finally {
+        isValidatingLink.value = false
     }
 }
 
@@ -334,12 +381,21 @@ watch(selectedSiteId, () => fetchWebAnalysis())
                     </div>
                 </div>
 
-                <!-- Refresh -->
-                <button @click="fetchWebAnalysis(true)"
-                    class="w-11 h-11 flex items-center justify-center bg-white/10 hover:bg-white/15 border border-white/10 rounded-2xl transition-all text-white"
-                    :class="{ 'opacity-50 cursor-not-allowed': isLoadingWebAnalysis }">
-                    <svg class="w-4 h-4" :class="{ 'animate-spin': isLoadingWebAnalysis }" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
-                </button>
+                <div class="flex items-center gap-2 mr-1">
+                    <button @click="downloadPdfReport"
+                        :disabled="isExportingPdf"
+                        class="flex items-center gap-2.5 px-5 py-3 bg-white/10 hover:bg-white/15 border border-white/10 rounded-2xl text-[10px] font-black uppercase tracking-tight text-white transition-all">
+                        <svg v-if="isExportingPdf" class="w-3.5 h-3.5 animate-spin" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
+                        <svg v-else class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2V19a2 2 0 00-2-2z"/></svg>
+                        Export PDF
+                    </button>
+
+                    <button @click="fetchWebAnalysis(true)"
+                        class="w-11 h-11 flex items-center justify-center bg-white/10 hover:bg-white/15 border border-white/10 rounded-2xl transition-all text-white shadow-sm"
+                        :class="{ 'opacity-50 cursor-not-allowed': isLoadingWebAnalysis }">
+                        <svg class="w-4 h-4" :class="{ 'animate-spin': isLoadingWebAnalysis }" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
+                    </button>
+                </div>
             </div>
         </div>
 
@@ -456,7 +512,8 @@ watch(selectedSiteId, () => fetchWebAnalysis())
                                     </div>
                                 </td>
                                 <td class="py-4 px-4 text-center">
-                                    <div class="inline-flex items-center justify-center w-10 h-10 rounded-2xl border-2 font-black text-xs leading-none mx-auto transition-transform group-hover:scale-110"
+                                    <div @click.stop="openSeoDetails(link)"
+                                        class="inline-flex items-center justify-center w-10 h-10 rounded-2xl border-2 font-black text-xs leading-none mx-auto transition-transform hover:scale-110 cursor-help"
                                         :class="link.seo_score >= 80 ? 'border-emerald-400 bg-emerald-50 text-emerald-600' :
                                                 link.seo_score >= 50 ? 'border-amber-400 bg-amber-50 text-amber-600' :
                                                 'border-rose-400 bg-rose-50 text-rose-600'">
@@ -464,15 +521,18 @@ watch(selectedSiteId, () => fetchWebAnalysis())
                                     </div>
                                 </td>
                                 <td class="py-4 px-4 pr-8 text-right">
-                                    <div class="flex items-center justify-end gap-1.5 flex-wrap">
-                                        <span v-if="link.is_ad_ready" class="px-2 py-0.5 bg-indigo-50 text-indigo-600 text-[8px] font-black rounded-md uppercase border border-indigo-100">Ad Ready</span>
-                                        <span v-if="link.seo_bottlenecks?.length" class="px-2 py-0.5 bg-rose-50 text-rose-500 text-[8px] font-black rounded-md uppercase border border-rose-100">
-                                            {{ link.seo_bottlenecks.length }} Issues
-                                        </span>
-                                        <span v-if="link.schema_suggestions?.length" class="px-2 py-0.5 bg-blue-50 text-blue-500 text-[8px] font-black rounded-md uppercase border border-blue-100">
-                                            Schema+
-                                        </span>
-                                        <svg class="w-3 h-3 text-slate-300 group-hover:text-slate-500 ml-1 flex-shrink-0 transition-all" :class="{ 'rotate-90': expandedLink === link.id }" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M9 5l7 7-7 7"/></svg>
+                                    <div class="flex items-center justify-end gap-3">
+                                        <div class="hidden sm:flex items-center gap-1.5 flex-wrap justify-end">
+                                            <span v-if="link.is_ad_ready" class="px-2 py-0.5 bg-indigo-50 text-indigo-600 text-[8px] font-black rounded-md uppercase border border-indigo-100">Ad Ready</span>
+                                            <span v-if="link.seo_bottlenecks?.length" class="px-2 py-0.5 bg-rose-50 text-rose-500 text-[8px] font-black rounded-md uppercase border border-rose-100">
+                                                {{ link.seo_bottlenecks.length }} Issues
+                                            </span>
+                                        </div>
+                                        <button @click.stop="openSeoDetails(link)"
+                                            class="p-2 hover:bg-slate-100 rounded-xl transition-colors text-slate-400 hover:text-indigo-600" title="View Details">
+                                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/></svg>
+                                        </button>
+                                        <svg class="w-3 h-3 text-slate-200 group-hover:text-slate-400 transition-all" :class="{ 'rotate-90': expandedLink === link.id }" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M9 5l7 7-7 7"/></svg>
                                     </div>
                                 </td>
                             </tr>
@@ -883,9 +943,152 @@ watch(selectedSiteId, () => fetchWebAnalysis())
         </div>
 
     </div>
+
+    <!-- ─── MODAL: SEO Details Deep-Dive ─────────────────────────────────── -->
+    <Teleport to="body">
+        <div v-if="showSeoModal" class="fixed inset-0 z-[100] flex items-center justify-center p-4 sm:p-6">
+            <!-- Backdrop -->
+            <div @click="showSeoModal = false" class="absolute inset-0 bg-slate-900/60 backdrop-blur-sm animate-in fade-in duration-300"></div>
+            
+            <!-- Modal Content -->
+            <div class="bg-white w-full max-w-2xl rounded-[2.5rem] shadow-2xl overflow-hidden relative z-10 animate-in fade-in zoom-in duration-300">
+                <!-- Modal Header -->
+                <div class="px-10 py-8 border-b border-slate-50 bg-slate-50/50 relative">
+                    <div class="flex items-center justify-between mb-2">
+                        <div class="flex items-center gap-3">
+                            <div class="w-2 h-8 bg-indigo-600 rounded-full"></div>
+                            <h2 class="text-xl font-black text-slate-900 uppercase tracking-tight">Technical SEO Deep-Dive</h2>
+                        </div>
+                        <button @click="showSeoModal = false" class="p-2 hover:bg-slate-200 rounded-full transition-colors">
+                            <svg class="w-6 h-6 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M6 18L18 6M6 6l12 12"/></svg>
+                        </button>
+                    </div>
+                    <p class="text-[11px] font-mono text-slate-400 truncate pr-20">{{ selectedSeoLink?.url }}</p>
+                    
+                    <!-- Floating Score -->
+                    <div class="absolute top-8 right-24 flex items-center gap-4">
+                        <div class="text-right">
+                            <p class="text-[9px] font-black text-slate-400 uppercase tracking-widest">Health Score</p>
+                            <p class="text-2xl font-black" :class="selectedSeoLink?.seo_score >= 80 ? 'text-emerald-500' : selectedSeoLink?.seo_score >= 50 ? 'text-amber-500' : 'text-rose-500'">
+                                {{ selectedSeoLink?.seo_score }}%
+                            </p>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="p-10 max-h-[70vh] overflow-y-auto custom-scrollbar">
+                    <!-- Issues Breakdown -->
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-8 mb-10">
+                        <!-- Fails/Warnings -->
+                        <div>
+                            <div class="flex items-center gap-2 mb-4">
+                                <svg class="w-4 h-4 text-rose-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+                                <h4 class="text-[10px] font-black text-rose-500 uppercase tracking-widest">Action Items</h4>
+                            </div>
+                            <div class="space-y-2">
+                                <div v-for="err in selectedSeoLink?.seo_audit?.errors" :key="err"
+                                    class="p-3 bg-rose-50 border border-rose-100 rounded-2xl flex items-start gap-3">
+                                    <span class="w-1.5 h-1.5 bg-rose-500 rounded-full mt-1.5 flex-shrink-0"></span>
+                                    <p class="text-[11px] font-bold text-rose-700 leading-tight">{{ err }}</p>
+                                </div>
+                                <div v-for="wrn in selectedSeoLink?.seo_audit?.warnings" :key="wrn"
+                                    class="p-3 bg-amber-50 border border-amber-100 rounded-2xl flex items-start gap-3">
+                                    <span class="w-1.5 h-1.5 bg-amber-500 rounded-full mt-1.5 flex-shrink-0"></span>
+                                    <p class="text-[11px] font-bold text-amber-700 leading-tight">{{ wrn }}</p>
+                                </div>
+                                <!-- Success placeholder if no errors -->
+                                <div v-if="!selectedSeoLink?.seo_audit?.errors?.length && !selectedSeoLink?.seo_audit?.warnings?.length"
+                                    class="p-8 border border-dashed border-slate-200 rounded-2xl text-center">
+                                    <p class="text-[10px] font-black text-slate-300 uppercase tracking-widest">No major issues detected</p>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Passes -->
+                        <div>
+                            <div class="flex items-center gap-2 mb-4">
+                                <svg class="w-4 h-4 text-emerald-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 13l4 4L19 7"/></svg>
+                                <h4 class="text-[10px] font-black text-emerald-500 uppercase tracking-widest">Optimization Passes</h4>
+                            </div>
+                            <div class="space-y-2 opacity-60 grayscale hover:grayscale-0 transition-all">
+                                <div v-if="selectedSeoLink?.title" class="p-3 bg-emerald-50 border border-emerald-100 rounded-2xl flex items-center gap-3">
+                                    <svg class="w-3.5 h-3.5 text-emerald-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 13l4 4L19 7"/></svg>
+                                    <p class="text-[10px] font-bold text-emerald-700 uppercase">Title Optimised</p>
+                                </div>
+                                <div v-if="selectedSeoLink?.h1" class="p-3 bg-emerald-50 border border-emerald-100 rounded-2xl flex items-center gap-3">
+                                    <svg class="w-3.5 h-3.5 text-emerald-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 13l4 4L19 7"/></svg>
+                                    <p class="text-[10px] font-bold text-emerald-700 uppercase">Heading Structure Ok</p>
+                                </div>
+                                <div v-if="selectedSeoLink?.http_status === 200" class="p-3 bg-emerald-50 border border-emerald-100 rounded-2xl flex items-center gap-3">
+                                    <svg class="w-3.5 h-3.5 text-emerald-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 13l4 4L19 7"/></svg>
+                                    <p class="text-[10px] font-bold text-emerald-700 uppercase">Server Status Indexed</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Page Content Preview -->
+                    <div class="bg-slate-50 border border-slate-100 rounded-3xl p-6 mb-8">
+                        <div class="flex items-center gap-2 mb-5">
+                            <svg class="w-4 h-4 text-indigo-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4"/></svg>
+                            <h4 class="text-[10px] font-black text-indigo-600 uppercase tracking-widest">Metadata Context</h4>
+                        </div>
+                        <div class="space-y-4">
+                            <div>
+                                <p class="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1">Title Tag</p>
+                                <p class="text-xs font-bold text-slate-800">{{ selectedSeoLink?.title || 'Not Detected' }}</p>
+                            </div>
+                            <div>
+                                <p class="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1">Primary H1</p>
+                                <p class="text-xs font-bold text-slate-800">{{ selectedSeoLink?.h1 || 'Not Detected' }}</p>
+                            </div>
+                            <div>
+                                <p class="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1">Description</p>
+                                <p class="text-xs font-medium text-slate-500 leading-relaxed italic line-clamp-2">
+                                    "{{ selectedSeoLink?.description || 'No meta description found.' }}"
+                                </p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Technical Stats -->
+                    <div class="flex items-center gap-6">
+                        <div class="flex-1 p-5 bg-white border border-slate-100 rounded-2xl text-center">
+                            <p class="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1">Load Time</p>
+                            <p class="text-base font-black text-slate-900">{{ selectedSeoLink?.load_time ? selectedSeoLink.load_time.toFixed(2) : '—' }}s</p>
+                        </div>
+                        <div class="flex-1 p-5 bg-white border border-slate-100 rounded-2xl text-center">
+                            <p class="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1">Status Code</p>
+                            <p class="text-base font-black" :class="selectedSeoLink?.http_status === 200 ? 'text-emerald-500' : 'text-rose-500'">
+                                {{ selectedSeoLink?.http_status || '—' }}
+                            </p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Footer Actions -->
+                <div class="px-10 py-8 bg-slate-50/50 border-t border-slate-50 flex items-center justify-between">
+                    <p class="text-[10px] font-medium text-slate-400 max-w-xs leading-tight">
+                        Last re-validated: {{ selectedSeoLink?.updated_at ? new Date(selectedSeoLink.updated_at).toLocaleString() : 'Never' }}
+                    </p>
+                    <button @click="revalidateLink(selectedSeoLink)"
+                        :disabled="isValidatingLink"
+                        class="flex items-center gap-3 px-8 py-4 bg-indigo-600 hover:bg-indigo-700 disabled:bg-slate-400 text-white rounded-2xl text-xs font-black uppercase tracking-tight transition-all shadow-lg shadow-indigo-200">
+                        <svg v-if="isValidatingLink" class="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
+                        <svg v-else class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
+                        <span>{{ isValidatingLink ? 'Validating...' : 'Validate Changes' }}</span>
+                    </button>
+                </div>
+            </div>
+        </div>
+    </Teleport>
 </template>
 
 <style scoped>
 .animate-fade-in { animation: fadeIn 0.2s ease-out; }
 @keyframes fadeIn { from { opacity: 0; transform: translateY(-4px); } to { opacity: 1; transform: translateY(0); } }
+.custom-scrollbar::-webkit-scrollbar { width: 6px; }
+.custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
+.custom-scrollbar::-webkit-scrollbar-thumb { background: #e2e8f0; border-radius: 10px; }
+.custom-scrollbar::-webkit-scrollbar-thumb:hover { background: #cbd5e1; }
 </style>
