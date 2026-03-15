@@ -1074,22 +1074,26 @@ class CdnTrackingController extends Controller
         $pixelSiteId = $request->input('pixel_site_id');
         $pixelSite = $pixelSiteId ? PixelSite::where('organization_id', $organization->id)->find($pixelSiteId) : null;
 
-        // 1. Sitemaps Status
-        $sitemaps = $organization->sitemaps()
+        // 1. Sitemaps (with Pagination)
+        $sitemapsPage = $request->input('sitemaps_page', 1);
+        $sitemapsPerPage = $request->input('sitemaps_per_page', 6);
+        
+        $paginatedSitemaps = $organization->sitemaps()
             ->withCount('links')
-            ->get()
-            ->map(function($s) {
-                return [
-                    'id'                => $s->id,
-                    'name'              => $s->name,
-                    'site_url'          => $s->site_url,
-                    'links_count'       => $s->links_count,
-                    'last_crawl_status' => $s->last_crawl_status,
-                    'last_generated_at' => $s->last_generated_at ? $s->last_generated_at->diffForHumans() : 'Never',
-                    'is_discovery'      => (bool) $s->is_discovery,
-                    'crawl_mode'        => $s->crawl_mode ?? 'python',
-                ];
-            });
+            ->paginate($sitemapsPerPage, ['*'], 'sitemaps_page', $sitemapsPage);
+
+        $sitemaps = collect($paginatedSitemaps->items())->map(function($s) {
+            return [
+                'id'                => $s->id,
+                'name'              => $s->name,
+                'site_url'          => $s->site_url,
+                'links_count'       => $s->links_count,
+                'last_crawl_status' => $s->last_crawl_status,
+                'last_generated_at' => $s->last_generated_at ? $s->last_generated_at->diffForHumans() : 'Never',
+                'is_discovery'      => (bool) $s->is_discovery,
+                'crawl_mode'        => $s->crawl_mode ?? 'python',
+            ];
+        });
 
         // 2. SEO & AI Analysis Links
         $analysisLinksQuery = SitemapLink::whereHas('sitemap', function($q) use ($organization) {
@@ -1099,6 +1103,24 @@ class CdnTrackingController extends Controller
         if ($pixelSite && $pixelSite->allowed_domain) {
             $domain = preg_replace('/^www\./', '', $pixelSite->allowed_domain);
             $analysisLinksQuery->where('url', 'like', "%$domain%");
+        }
+
+        if ($request->filled('sitemap_id')) {
+            $analysisLinksQuery->where('sitemap_id', $request->sitemap_id);
+        }
+
+        if ($request->filled('min_score')) {
+            $analysisLinksQuery->where('seo_score', '>=', $request->min_score);
+        }
+
+        if ($request->filled('status')) {
+            if ($request->status === 'ad_ready') {
+                $analysisLinksQuery->where('cdn_engagement_score', '>=', 70);
+            } elseif ($request->status === 'has_issues') {
+                $analysisLinksQuery->whereNotNull('seo_bottlenecks')
+                                  ->where('seo_bottlenecks', '!=', '[]')
+                                  ->where('seo_bottlenecks', '!=', '');
+            }
         }
 
         if ($request->filled('search')) {
@@ -1180,6 +1202,12 @@ class CdnTrackingController extends Controller
                 'last_page'    => $paginatedLinks->lastPage(),
                 'total'        => $paginatedLinks->total(),
                 'per_page'     => $paginatedLinks->perPage(),
+            ],
+            'sitemaps_pagination' => [
+                'current_page' => $paginatedSitemaps->currentPage(),
+                'last_page'    => $paginatedSitemaps->lastPage(),
+                'total'        => $paginatedSitemaps->total(),
+                'per_page'     => $paginatedSitemaps->perPage(),
             ],
             'filters'        => [
                 'search' => $request->search,
@@ -1322,22 +1350,31 @@ class CdnTrackingController extends Controller
 
         $pixelSiteId = $request->input('pixel_site_id');
 
-        $schemas = CdnPageSchema::whereHas('pixelSite', fn($q) => $q->where('organization_id', $organization->id))
+        $perPage = $request->input('per_page', 10);
+        $paginatedSchemas = CdnPageSchema::whereHas('pixelSite', fn($q) => $q->where('organization_id', $organization->id))
             ->when($pixelSiteId, fn($q) => $q->where('pixel_site_id', $pixelSiteId))
             ->where('is_auto_generated', true)
             ->orderByDesc('last_injected_at')
-            ->limit(20)
-            ->get()
-            ->map(fn($s) => [
-                'id'               => $s->id,
-                'url'              => $s->url,
-                'schema_type'      => $s->schema_type,
-                'injected_count'   => $s->injected_count,
-                'last_injected_at' => $s->last_injected_at?->diffForHumans(),
-                'schema_preview'   => json_encode($s->schema_json, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE),
-            ]);
+            ->paginate($perPage);
 
-        return response()->json(['schemas' => $schemas]);
+        $schemas = collect($paginatedSchemas->items())->map(fn($s) => [
+            'id'               => $s->id,
+            'url'              => $s->url,
+            'schema_type'      => $s->schema_type,
+            'injected_count'   => $s->injected_count,
+            'last_injected_at' => $s->last_injected_at?->diffForHumans(),
+            'schema_preview'   => json_encode($s->schema_json, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE),
+        ]);
+
+        return response()->json([
+            'schemas' => $schemas,
+            'pagination' => [
+                'current_page' => $paginatedSchemas->currentPage(),
+                'last_page'    => $paginatedSchemas->lastPage(),
+                'total'        => $paginatedSchemas->total(),
+                'per_page'     => $paginatedSchemas->perPage(),
+            ]
+        ]);
     }
 
     /**
@@ -1439,23 +1476,30 @@ class CdnTrackingController extends Controller
             return response()->json(['pages' => [], 'total' => 0, 'sitemap_id' => null]);
         }
 
-        $pages = $discoverySitemap->links()
+        $perPage = $request->input('per_page', 10);
+        $paginatedPages = $discoverySitemap->links()
             ->orderByDesc('cdn_last_seen_at')
-            ->limit(50)
-            ->get()
-            ->map(fn($link) => [
-                'id'              => $link->id,
-                'url'             => $link->url,
-                'title'           => $link->title,
-                'cdn_hit_count'   => $link->cdn_hit_count,
-                'cdn_last_seen_at'=> $link->cdn_last_seen_at?->diffForHumans(),
-                'seo_score'       => $link->cdn_insight['seo_score'] ?? null,
-                'status_code'     => $link->status_code,
-            ]);
+            ->paginate($perPage);
+
+        $pages = collect($paginatedPages->items())->map(fn($link) => [
+            'id'              => $link->id,
+            'url'             => $link->url,
+            'title'           => $link->title,
+            'cdn_hit_count'   => $link->cdn_hit_count,
+            'cdn_last_seen_at'=> $link->cdn_last_seen_at?->diffForHumans(),
+            'seo_score'       => $link->cdn_insight['seo_score'] ?? null,
+            'status_code'     => $link->status_code,
+        ]);
 
         return response()->json([
             'pages'      => $pages,
-            'total'      => $discoverySitemap->links()->count(),
+            'total'      => $paginatedPages->total(),
+            'pagination' => [
+                'current_page' => $paginatedPages->currentPage(),
+                'last_page'    => $paginatedPages->lastPage(),
+                'total'        => $paginatedPages->total(),
+                'per_page'     => $paginatedPages->perPage(),
+            ],
             'sitemap_id' => $discoverySitemap->id,
             'crawl_mode' => $discoverySitemap->crawl_mode,
         ]);

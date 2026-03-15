@@ -34,6 +34,17 @@ const webAnalysisResponse = ref({
     error_summary: {},
     schema_stats: {},
     trends: { labels: [], errors: [], injections: [] },
+    pagination: { current_page: 1, last_page: 1, total: 0 },
+    sitemaps_pagination: { current_page: 1, last_page: 1, total: 0 }
+})
+
+const schemaDebugResponse = ref({
+    schemas: [],
+    pagination: { current_page: 1, last_page: 1, total: 0 }
+})
+
+const discoveredPagesResponse = ref({
+    pages: [],
     pagination: { current_page: 1, last_page: 1, total: 0 }
 })
 const isLoadingWebAnalysis = ref(false)
@@ -43,7 +54,13 @@ const selectedSeoLink      = ref(null)
 const isValidatingLink     = ref(false)
 const searchQuery          = ref('')
 const searchInput          = ref('')
-const currentPage          = ref(1)
+const currentPage = ref(1)
+const sitemapsPage = ref(1)
+const discoveredPage = ref(1)
+const schemaDebugPage = ref(1)
+const filterStatus         = ref('all') // all | ad_ready | has_issues
+const minSeoScore          = ref(0)
+const filterSitemapId      = ref('all')
 
 // Terminal Modals
 const showTerminalModal    = ref(false)
@@ -180,22 +197,23 @@ const fetchConnectionStatus = async () => {
     } catch (e) { /* silent */ }
 }
 
-const fetchWebAnalysis = async (isManual = false) => {
+const fetchWebAnalysis = async () => {
     isLoadingWebAnalysis.value = true
     try {
         const { data } = await axios.get(route('google-ads.web-analysis'), {
             params: { 
                 pixel_site_id: selectedSiteId.value,
                 search: searchQuery.value,
-                page: currentPage.value
+                page: currentPage.value,
+                sitemaps_page: sitemapsPage.value,
+                status: filterStatus.value !== 'all' ? filterStatus.value : null,
+                min_score: minSeoScore.value > 0 ? minSeoScore.value : null,
+                sitemap_id: filterSitemapId.value !== 'all' ? filterSitemapId.value : null
             }
         })
         webAnalysisResponse.value = data
-        if (isManual) {
-            toast.add('Analysis data updated.', 'success')
-        }
     } catch (e) {
-        toast.add('Failed to fetch web analysis', 'error')
+        console.error("Web analysis fetch failed", e)
     } finally {
         isLoadingWebAnalysis.value = false
     }
@@ -210,6 +228,21 @@ const handleSearch = () => {
 const goToPage = (page) => {
     currentPage.value = page
     fetchWebAnalysis()
+}
+
+const goToSitemapsPage = (page) => {
+    sitemapsPage.value = page
+    fetchWebAnalysis()
+}
+
+const goToDiscoveredPage = (page) => {
+    discoveredPage.value = page
+    fetchDiscoveredPages()
+}
+
+const goToSchemaDebugPage = (page) => {
+    schemaDebugPage.value = page
+    fetchSchemaDebug()
 }
 
 const openTerminal = async () => {
@@ -288,8 +321,13 @@ const revalidateLink = async (link) => {
 const fetchSchemaDebug = async () => {
     isLoadingSchemaDbg.value = true
     try {
-        const { data } = await axios.get(route('google-ads.schema-debug'))
-        schemaDebugItems.value = data.schemas || []
+        const { data } = await axios.get(route('google-ads.schema-debug'), {
+            params: { 
+                pixel_site_id: selectedSiteId.value,
+                page: schemaDebugPage.value
+            }
+        })
+        schemaDebugResponse.value = data
     } catch (e) { /* silent */ } finally {
         isLoadingSchemaDbg.value = false
     }
@@ -327,9 +365,13 @@ const enableCdnDiscovery = async () => {
 const fetchDiscoveredPages = async () => {
     isLoadingDiscovered.value = true
     try {
-        const { data } = await axios.get(route('google-ads.discovered-pages'))
-        discoveredPages.value  = data.pages || []
-        totalDiscovered.value  = data.total  || 0
+        const { data } = await axios.get(route('google-ads.discovered-pages'), {
+            params: { 
+                pixel_site_id: selectedSiteId.value,
+                page: discoveredPage.value
+            }
+        })
+        discoveredPagesResponse.value = data
         if (data.sitemap_id) {
             cdnDiscovery.value.sitemap_id = data.sitemap_id
             cdnDiscovery.value.enabled    = data.crawl_mode === 'cdn'
@@ -541,6 +583,39 @@ watch(activeSection, (val) => {
                     </div>
                 </div>
 
+                <!-- Filter Bar -->
+                <div class="px-8 py-4 bg-slate-50/50 border-b border-slate-50 flex flex-wrap items-center gap-4">
+                    <div class="flex items-center gap-2">
+                        <span class="text-[9px] font-black text-slate-400 uppercase tracking-widest">Status:</span>
+                        <select v-model="filterStatus" @change="fetchWebAnalysis()"
+                            class="bg-white border-slate-200 rounded-lg text-[10px] font-bold py-1 px-3 focus:ring-0">
+                            <option value="all">All Pages</option>
+                            <option value="ad_ready">Ad Ready</option>
+                            <option value="has_issues">Has Issues</option>
+                        </select>
+                    </div>
+
+                    <div class="flex items-center gap-2">
+                        <span class="text-[9px] font-black text-slate-400 uppercase tracking-widest">Min Score:</span>
+                        <input type="number" v-model.number="minSeoScore" @input="fetchWebAnalysis()" min="0" max="100"
+                            class="w-16 bg-white border-slate-200 rounded-lg text-[10px] font-bold py-1 px-3 focus:ring-0" />
+                    </div>
+
+                    <div class="flex items-center gap-2">
+                        <span class="text-[9px] font-black text-slate-400 uppercase tracking-widest">Sitemap:</span>
+                        <select v-model="filterSitemapId" @change="fetchWebAnalysis()"
+                            class="bg-white border-slate-200 rounded-lg text-[10px] font-bold py-1 px-3 focus:ring-0 max-w-[150px]">
+                            <option value="all">All Sitemaps</option>
+                            <option v-for="s in webAnalysisResponse.sitemaps" :key="s.id" :value="s.id">{{ s.name }}</option>
+                        </select>
+                    </div>
+
+                    <button @click="filterStatus = 'all'; minSeoScore = 0; filterSitemapId = 'all'; fetchWebAnalysis()"
+                        class="text-[9px] font-black text-indigo-600 uppercase hover:underline ml-auto">
+                        Reset Filters
+                    </button>
+                </div>
+
                 <!-- Loading skeleton -->
                 <div v-if="isLoadingWebAnalysis" class="p-8 space-y-4">
                     <div v-for="n in 5" :key="n" class="h-12 bg-slate-50 rounded-2xl animate-pulse"></div>
@@ -625,17 +700,14 @@ watch(activeSection, (val) => {
                         </p>
                         <div class="flex items-center gap-1.5">
                             <button @click="goToPage(currentPage - 1)" :disabled="currentPage === 1"
-                                class="w-8 h-8 flex items-center justify-center rounded-xl border border-slate-200 text-slate-400 hover:text-slate-900 disabled:opacity-30 disabled:cursor-not-allowed transition-all">
+                                class="flex items-center gap-2 px-4 py-2 rounded-xl border border-slate-200 text-slate-500 hover:text-slate-900 hover:bg-slate-50 disabled:opacity-30 disabled:cursor-not-allowed transition-all text-[10px] font-black uppercase tracking-tight">
                                 <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M15 19l-7-7 7-7"/></svg>
+                                Previous
                             </button>
-                            <button v-for="p in webAnalysisResponse.pagination.last_page" :key="p"
-                                @click="goToPage(p)"
-                                class="w-8 h-8 rounded-xl text-[10px] font-black transition-all"
-                                :class="currentPage === p ? 'bg-slate-900 text-white shadow-lg' : 'text-slate-500 hover:bg-slate-50 border border-transparent'">
-                                {{ p }}
-                            </button>
+                            
                             <button @click="goToPage(currentPage + 1)" :disabled="currentPage === webAnalysisResponse.pagination.last_page"
-                                class="w-8 h-8 flex items-center justify-center rounded-xl border border-slate-200 text-slate-400 hover:text-slate-900 disabled:opacity-30 disabled:cursor-not-allowed transition-all">
+                                class="flex items-center gap-2 px-4 py-2 rounded-xl border border-slate-200 text-slate-500 hover:text-slate-900 hover:bg-slate-50 disabled:opacity-30 disabled:cursor-not-allowed transition-all text-[10px] font-black uppercase tracking-tight">
+                                Next
                                 <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M9 5l7 7-7 7"/></svg>
                             </button>
                         </div>
@@ -810,7 +882,7 @@ watch(activeSection, (val) => {
                 </div>
 
                 <!-- Empty -->
-                <div v-else-if="!discoveredPages.length" class="flex flex-col items-center py-16">
+                <div v-else-if="!discoveredPagesResponse.pages.length" class="flex flex-col items-center py-16">
                     <div class="w-12 h-12 bg-teal-50 rounded-2xl flex items-center justify-center mb-4 border border-teal-100">
                         <svg class="w-5 h-5 text-teal-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/></svg>
                     </div>
@@ -820,7 +892,7 @@ watch(activeSection, (val) => {
 
                 <!-- Page rows -->
                 <div v-else class="divide-y divide-slate-50">
-                    <div v-for="page in discoveredPages" :key="page.id"
+                    <div v-for="page in discoveredPagesResponse.pages" :key="page.id"
                         class="flex items-center gap-4 px-8 py-4 hover:bg-slate-50/70 transition-all group">
                         <!-- Hit count pill -->
                         <span class="flex-shrink-0 min-w-[2.5rem] h-8 flex items-center justify-center bg-teal-50 border border-teal-100 rounded-xl text-[10px] font-black text-teal-700">
@@ -848,6 +920,25 @@ watch(activeSection, (val) => {
                             <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"/></svg>
                         </Link>
                     </div>
+
+                    <!-- Discovered Pages Pagination -->
+                    <div v-if="discoveredPagesResponse.pagination?.last_page > 1" class="px-8 py-5 bg-slate-50/30 flex items-center justify-between">
+                        <p class="text-[9px] font-black text-slate-400 uppercase tracking-widest">
+                            Page {{ discoveredPagesResponse.pagination.current_page }} / {{ discoveredPagesResponse.pagination.last_page }}
+                        </p>
+                        <div class="flex items-center gap-1.5">
+                            <button @click="goToDiscoveredPage(discoveredPage - 1)" :disabled="discoveredPage === 1"
+                                class="px-3 py-1.5 rounded-lg border border-slate-200 text-slate-500 hover:text-slate-900 hover:bg-slate-50 disabled:opacity-30 disabled:cursor-not-allowed transition-all text-[9px] font-black uppercase tracking-tight flex items-center gap-1.5">
+                                <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M15 19l-7-7 7-7"/></svg>
+                                Prev
+                            </button>
+                            <button @click="goToDiscoveredPage(discoveredPage + 1)" :disabled="discoveredPage === discoveredPagesResponse.pagination.last_page"
+                                class="px-3 py-1.5 rounded-lg border border-slate-200 text-slate-500 hover:text-slate-900 hover:bg-slate-50 disabled:opacity-30 disabled:cursor-not-allowed transition-all text-[9px] font-black uppercase tracking-tight flex items-center gap-1.5">
+                                Next
+                                <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M9 5l7 7-7 7"/></svg>
+                            </button>
+                        </div>
+                    </div>
                 </div>
             </div>
 
@@ -860,50 +951,71 @@ watch(activeSection, (val) => {
                 <p class="text-xs text-slate-400 max-w-xs">Add a sitemap in your site settings to start crawling and tracking index coverage.</p>
             </div>
 
-            <div v-else class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5">
-                <div v-for="sitemap in webAnalysisResponse.sitemaps" :key="sitemap.id"
-                    class="bg-white border border-slate-100 rounded-[2rem] p-8 shadow-sm hover:shadow-md hover:border-indigo-200 transition-all group">
-                    <div class="flex items-start justify-between mb-6">
-                        <div class="w-12 h-12 bg-indigo-50 rounded-2xl flex items-center justify-center text-indigo-600 group-hover:scale-110 transition-transform">
-                            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
+            <div v-else class="space-y-6">
+                <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5">
+                    <div v-for="sitemap in webAnalysisResponse.sitemaps" :key="sitemap.id"
+                        class="bg-white border border-slate-100 rounded-[2rem] p-8 shadow-sm hover:shadow-md hover:border-indigo-200 transition-all group">
+                        <div class="flex items-start justify-between mb-6">
+                            <div class="w-12 h-12 bg-indigo-50 rounded-2xl flex items-center justify-center text-indigo-600 group-hover:scale-110 transition-transform">
+                                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
+                            </div>
+                            <!-- Badges -->
+                            <div class="flex flex-wrap items-center gap-1.5 justify-end">
+                                <!-- URL count -->
+                                <span class="px-3 py-1 bg-indigo-50 text-indigo-600 text-[9px] font-black rounded-full uppercase tracking-tighter">
+                                    {{ sitemap.links_count || 0 }} URLs
+                                </span>
+                                <!-- Crawl mode badge -->
+                                <!-- Silent Crawl only show if CDN is connected for selected site -->
+                                <span v-if="sitemap.crawl_mode === 'cdn' && cdnConnected"
+                                    class="px-2.5 py-1 bg-teal-50 text-teal-700 text-[9px] font-black rounded-full border border-teal-200 flex items-center gap-1">
+                                    <span class="w-1.5 h-1.5 bg-teal-400 rounded-full animate-pulse"></span>Silent Crawl
+                                </span>
+                                <span v-else-if="sitemap.crawl_mode === 'cdn' && !cdnConnected"
+                                    class="px-2.5 py-1 bg-slate-100 text-slate-400 text-[9px] font-black rounded-full border border-slate-200 flex items-center gap-1"
+                                    title="CDN pixel not connected — silent crawl inactive">
+                                    <span class="w-1.5 h-1.5 bg-slate-400 rounded-full"></span>Silent Crawl
+                                </span>
+                                <span v-else
+                                    class="px-2.5 py-1 bg-violet-50 text-violet-700 text-[9px] font-black rounded-full border border-violet-200 flex items-center gap-1">
+                                    <span class="w-1.5 h-1.5 bg-violet-400 rounded-full"></span>Aggressive Crawl
+                                </span>
+                                <!-- Discovery badge -->
+                                <span v-if="sitemap.is_discovery"
+                                    class="px-2.5 py-1 bg-amber-50 text-amber-700 text-[9px] font-black rounded-full border border-amber-200">
+                                    🔍 Discovered
+                                </span>
+                            </div>
                         </div>
-                        <!-- Badges -->
-                        <div class="flex flex-wrap items-center gap-1.5 justify-end">
-                            <!-- URL count -->
-                            <span class="px-3 py-1 bg-indigo-50 text-indigo-600 text-[9px] font-black rounded-full uppercase tracking-tighter">
-                                {{ sitemap.links_count || 0 }} URLs
-                            </span>
-                            <!-- Crawl mode badge -->
-                            <!-- Silent Crawl only show if CDN is connected for selected site -->
-                            <span v-if="sitemap.crawl_mode === 'cdn' && cdnConnected"
-                                class="px-2.5 py-1 bg-teal-50 text-teal-700 text-[9px] font-black rounded-full border border-teal-200 flex items-center gap-1">
-                                <span class="w-1.5 h-1.5 bg-teal-400 rounded-full animate-pulse"></span>Silent Crawl
-                            </span>
-                            <span v-else-if="sitemap.crawl_mode === 'cdn' && !cdnConnected"
-                                class="px-2.5 py-1 bg-slate-100 text-slate-400 text-[9px] font-black rounded-full border border-slate-200 flex items-center gap-1"
-                                title="CDN pixel not connected — silent crawl inactive">
-                                <span class="w-1.5 h-1.5 bg-slate-400 rounded-full"></span>Silent Crawl
-                            </span>
-                            <span v-else
-                                class="px-2.5 py-1 bg-violet-50 text-violet-700 text-[9px] font-black rounded-full border border-violet-200 flex items-center gap-1">
-                                <span class="w-1.5 h-1.5 bg-violet-400 rounded-full"></span>Aggressive Crawl
-                            </span>
-                            <!-- Discovery badge -->
-                            <span v-if="sitemap.is_discovery"
-                                class="px-2.5 py-1 bg-amber-50 text-amber-700 text-[9px] font-black rounded-full border border-amber-200">
-                                🔍 Discovered
-                            </span>
+                        <!-- Clickable name → sitemaps.show -->
+                        <Link :href="route('sitemaps.show', sitemap.id)"
+                            class="block text-sm font-black text-slate-900 mb-1 hover:text-indigo-600 transition-colors underline-offset-2 hover:underline">
+                            {{ sitemap.name }}
+                        </Link>
+                        <p class="text-[10px] text-slate-400 font-mono truncate mb-4">{{ sitemap.site_url }}</p>
+                        <div class="flex items-center gap-2 text-[9px] font-black text-slate-400 uppercase tracking-widest">
+                            <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+                            Last crawled: {{ sitemap.last_generated_at || 'Never' }}
                         </div>
                     </div>
-                    <!-- Clickable name → sitemaps.show -->
-                    <Link :href="route('sitemaps.show', sitemap.id)"
-                        class="block text-sm font-black text-slate-900 mb-1 hover:text-indigo-600 transition-colors underline-offset-2 hover:underline">
-                        {{ sitemap.name }}
-                    </Link>
-                    <p class="text-[10px] text-slate-400 font-mono truncate mb-4">{{ sitemap.site_url }}</p>
-                    <div class="flex items-center gap-2 text-[9px] font-black text-slate-400 uppercase tracking-widest">
-                        <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
-                        Last crawled: {{ sitemap.last_generated_at || 'Never' }}
+                </div>
+
+                <!-- Sitemaps Pagination -->
+                <div v-if="webAnalysisResponse.sitemaps_pagination?.last_page > 1" class="flex items-center justify-between px-8 py-6 bg-white border border-slate-100 rounded-[2rem] shadow-sm">
+                    <p class="text-[10px] font-black text-slate-400 uppercase tracking-widest">
+                        Page {{ webAnalysisResponse.sitemaps_pagination.current_page }} of {{ webAnalysisResponse.sitemaps_pagination.last_page }}
+                    </p>
+                    <div class="flex items-center gap-1.5">
+                        <button @click="goToSitemapsPage(sitemapsPage - 1)" :disabled="sitemapsPage === 1"
+                            class="flex items-center gap-2 px-4 py-2 rounded-xl border border-slate-200 text-slate-500 hover:text-slate-900 hover:bg-slate-50 disabled:opacity-30 disabled:cursor-not-allowed transition-all text-[10px] font-black uppercase tracking-tight">
+                            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M15 19l-7-7 7-7"/></svg>
+                            Prev
+                        </button>
+                        <button @click="goToSitemapsPage(sitemapsPage + 1)" :disabled="sitemapsPage === webAnalysisResponse.sitemaps_pagination.last_page"
+                            class="flex items-center gap-2 px-4 py-2 rounded-xl border border-slate-200 text-slate-500 hover:text-slate-900 hover:bg-slate-50 disabled:opacity-30 disabled:cursor-not-allowed transition-all text-[10px] font-black uppercase tracking-tight">
+                            Next
+                            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M9 5l7 7-7 7"/></svg>
+                        </button>
                     </div>
                 </div>
             </div>
@@ -1003,7 +1115,7 @@ watch(activeSection, (val) => {
                 </div>
 
                 <!-- Empty -->
-                <div v-else-if="!schemaDebugItems.length" class="flex flex-col items-center py-16 text-center">
+                <div v-else-if="!schemaDebugResponse.schemas.length" class="flex flex-col items-center py-16 text-center">
                     <div class="w-12 h-12 bg-violet-50 rounded-2xl flex items-center justify-center mb-4 border border-violet-100">
                         <svg class="w-5 h-5 text-violet-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4"/></svg>
                     </div>
@@ -1013,7 +1125,7 @@ watch(activeSection, (val) => {
 
                 <!-- Schema list -->
                 <div v-else class="divide-y divide-slate-50">
-                    <div v-for="s in schemaDebugItems" :key="s.id"
+                    <div v-for="s in schemaDebugResponse.schemas" :key="s.id"
                         @click="expandedSchema = expandedSchema === s.id ? null : s.id"
                         class="px-8 py-4 hover:bg-slate-50/70 cursor-pointer transition-all group">
                         <div class="flex items-center justify-between">
@@ -1037,6 +1149,25 @@ watch(activeSection, (val) => {
                         <!-- Expanded JSON preview -->
                         <div v-if="expandedSchema === s.id" class="mt-4 animate-fade-in">
                             <pre class="text-[10px] bg-slate-900 text-emerald-300 rounded-2xl p-5 overflow-x-auto max-h-64 font-mono leading-relaxed">{{ s.schema_preview }}</pre>
+                        </div>
+                    </div>
+
+                    <!-- Schema Debug Pagination -->
+                    <div v-if="schemaDebugResponse.pagination?.last_page > 1" class="px-8 py-5 border-t border-slate-50 flex items-center justify-between bg-slate-50/30">
+                        <p class="text-[9px] font-black text-slate-400 uppercase tracking-widest">
+                            Showing page {{ schemaDebugResponse.pagination.current_page }} / {{ schemaDebugResponse.pagination.last_page }}
+                        </p>
+                        <div class="flex items-center gap-1.5">
+                            <button @click="goToSchemaDebugPage(schemaDebugPage - 1)" :disabled="schemaDebugPage === 1"
+                                class="px-3 py-1.5 rounded-lg border border-slate-200 text-slate-500 hover:text-slate-900 hover:bg-slate-50 disabled:opacity-30 disabled:cursor-not-allowed transition-all text-[9px] font-black uppercase tracking-tight flex items-center gap-1.5">
+                                <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M15 19l-7-7 7-7"/></svg>
+                                Prev
+                            </button>
+                            <button @click="goToSchemaDebugPage(schemaDebugPage + 1)" :disabled="schemaDebugPage === schemaDebugResponse.pagination.last_page"
+                                class="px-3 py-1.5 rounded-lg border border-slate-200 text-slate-500 hover:text-slate-900 hover:bg-slate-50 disabled:opacity-30 disabled:cursor-not-allowed transition-all text-[9px] font-black uppercase tracking-tight flex items-center gap-1.5">
+                                Next
+                                <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M9 5l7 7-7 7"/></svg>
+                            </button>
                         </div>
                     </div>
                 </div>
@@ -1129,7 +1260,49 @@ watch(activeSection, (val) => {
                         </div>
                     </div>
 
-                    <!-- Page Content Preview -->
+                    <!-- Simulation: Site Engine Preview -->
+                    <div class="mb-10">
+                        <div class="flex items-center gap-2 mb-4">
+                            <svg class="w-4 h-4 text-emerald-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/></svg>
+                            <h4 class="text-[10px] font-black text-emerald-600 uppercase tracking-widest">Site Engine Simulation</h4>
+                        </div>
+                        
+                        <div class="bg-white border border-slate-100 rounded-3xl overflow-hidden shadow-sm p-8">
+                            <!-- Simulation Content -->
+                            <div class="max-w-xl">
+                                <div class="flex items-center gap-2 mb-1">
+                                    <div class="w-6 h-6 rounded-full bg-slate-100 flex items-center justify-center text-[10px]">🌐</div>
+                                    <div class="flex flex-col">
+                                        <span class="text-[10px] font-bold text-slate-900 leading-tight">{{ safeHostname(selectedSeoLink?.url) }}</span>
+                                        <span class="text-[9px] text-slate-400 leading-tight">{{ selectedSeoLink?.url }}</span>
+                                    </div>
+                                </div>
+                                <h3 class="text-lg font-bold text-[#1a0dab] hover:underline cursor-pointer mb-1">{{ selectedSeoLink?.title || 'Page Title Not Found' }}</h3>
+                                <p class="text-[13px] text-[#4d5156] leading-relaxed mb-3">
+                                    {{ selectedSeoLink?.description || 'No description available for this page.' }}
+                                </p>
+                                
+                                <!-- AI Injection Overlay -->
+                                <div class="mt-4 p-4 bg-indigo-50/50 border border-dashed border-indigo-200 rounded-2xl relative">
+                                    <div class="absolute -top-2.5 left-4 px-2 bg-indigo-600 text-white text-[8px] font-black rounded uppercase tracking-widest">AI Injection Zone</div>
+                                    <div class="flex items-start gap-3">
+                                        <div class="w-6 h-6 bg-indigo-600 rounded-lg flex items-center justify-center flex-shrink-0 animate-pulse">
+                                            <svg class="w-3.5 h-3.5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M13 10V3L4 14h7v7l9-11h-7z"/></svg>
+                                        </div>
+                                        <div>
+                                            <p class="text-[10px] font-bold text-indigo-900 mb-1">Automated Schema Enrichment</p>
+                                            <p class="text-[9px] text-indigo-700/70 leading-relaxed font-mono">
+                                                // Injected JSON-LD Graph for {{ selectedSeoLink?.schema_suggestions?.[0] || 'WebPage' }}<br>
+                                                { "@context": "https://schema.org", "@type": "{{ selectedSeoLink?.schema_suggestions?.[0] || 'WebPage' }}", ... }
+                                            </p>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Page Content Preview (Existing Metadata Section) -->
                     <div class="bg-slate-50 border border-slate-100 rounded-3xl p-6 mb-8">
                         <div class="flex items-center gap-2 mb-5">
                             <svg class="w-4 h-4 text-indigo-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4"/></svg>
