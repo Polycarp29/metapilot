@@ -1092,7 +1092,6 @@ class CdnTrackingController extends Controller
             });
 
         // 2. SEO & AI Analysis Links
-        // We pick top analysis links for the selected site or organization
         $analysisLinksQuery = SitemapLink::whereHas('sitemap', function($q) use ($organization) {
             $q->where('organization_id', $organization->id);
         });
@@ -1102,27 +1101,36 @@ class CdnTrackingController extends Controller
             $analysisLinksQuery->where('url', 'like', "%$domain%");
         }
 
-        $analysisLinks = $analysisLinksQuery->whereNotNull('seo_audit')
-            ->orderByDesc('cdn_engagement_score')
-            ->limit(10)
-            ->get()
-            ->map(function($link) {
-                return [
-                    'id' => $link->id,
-                    'url' => $link->url,
-                    'title' => $link->title,
-                    'description' => $link->description,
-                    'h1' => $link->h1,
-                    'http_status' => $link->http_status,
-                    'load_time' => $link->load_time,
-                    'seo_score' => $link->cdn_insight['seo_score'],
-                    'unified_score' => $link->cdn_insight['unified_score'],
-                    'is_ad_ready' => $link->cdn_insight['is_ad_ready'],
-                    'seo_bottlenecks' => $link->seo_bottlenecks,
-                    'seo_audit' => $link->seo_audit,
-                    'schema_suggestions' => $link->schema_suggestions,
-                ];
+        if ($request->filled('search')) {
+            $s = $request->search;
+            $analysisLinksQuery->where(function($q) use ($s) {
+                $q->where('url', 'like', "%$s%")
+                  ->orWhere('title', 'like', "%$s%");
             });
+        }
+
+        $perPage = $request->input('per_page', 25);
+        $paginatedLinks = $analysisLinksQuery->whereNotNull('seo_audit')
+            ->orderByDesc('cdn_engagement_score')
+            ->paginate($perPage);
+
+        $analysisLinks = collect($paginatedLinks->items())->map(function($link) {
+            return [
+                'id' => $link->id,
+                'url' => $link->url,
+                'title' => $link->title,
+                'description' => $link->description,
+                'h1' => $link->h1,
+                'http_status' => $link->http_status,
+                'load_time' => $link->load_time,
+                'seo_score' => $link->cdn_insight['seo_score'] ?? $link->seo_score,
+                'unified_score' => $link->cdn_insight['unified_score'] ?? 0,
+                'is_ad_ready' => $link->cdn_insight['is_ad_ready'] ?? false,
+                'seo_bottlenecks' => $link->seo_bottlenecks,
+                'seo_audit' => $link->seo_audit,
+                'schema_suggestions' => $link->schema_suggestions,
+            ];
+        });
 
         // 3. JS Error Summary
         $errorSummary = CdnError::where('organization_id', $organization->id)
@@ -1164,18 +1172,25 @@ class CdnTrackingController extends Controller
             ->get()
             ->pluck('count', 'date');
 
-        $trends = [
-            'labels' => $days->values(),
-            'errors' => $days->map(fn($d) => $errorTrend->get($d, 0))->values(),
-            'injections' => $days->map(fn($d) => $injectionTrend->get($d, 0))->values(),
-        ];
-
         return response()->json([
             'sitemaps'       => $sitemaps,
             'analysis_links' => $analysisLinks,
+            'pagination'     => [
+                'current_page' => $paginatedLinks->currentPage(),
+                'last_page'    => $paginatedLinks->lastPage(),
+                'total'        => $paginatedLinks->total(),
+                'per_page'     => $paginatedLinks->perPage(),
+            ],
+            'filters'        => [
+                'search' => $request->search,
+            ],
             'error_summary'  => $errorSummary,
             'schema_stats'   => $schemaStats,
-            'trends'         => $trends,
+            'trends'         => [
+                'labels'     => $days->map(fn($d) => now()->parse($d)->format('M d')),
+                'errors'     => $days->map(fn($d) => $errorTrend->get($d, 0)),
+                'injections' => $days->map(fn($d) => (int) $injectionTrend->get($d, 0)),
+            ],
         ]);
     }
 

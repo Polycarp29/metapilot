@@ -33,13 +33,23 @@ const webAnalysisResponse = ref({
     analysis_links: [],
     error_summary: {},
     schema_stats: {},
-    trends: { labels: [], errors: [], injections: [] }
+    trends: { labels: [], errors: [], injections: [] },
+    pagination: { current_page: 1, last_page: 1, total: 0 }
 })
 const isLoadingWebAnalysis = ref(false)
 const isExportingPdf       = ref(false)
 const showSeoModal         = ref(false)
 const selectedSeoLink      = ref(null)
 const isValidatingLink     = ref(false)
+const searchQuery          = ref('')
+const searchInput          = ref('')
+const currentPage          = ref(1)
+
+// Terminal Modal
+const showTerminalModal    = ref(false)
+const terminalLogs         = ref([])
+const isLoadingLogs        = ref(false)
+
 let refreshInterval = null
 
 // Schema debug
@@ -170,7 +180,11 @@ const fetchWebAnalysis = async (isManual = false) => {
     isLoadingWebAnalysis.value = true
     try {
         const { data } = await axios.get(route('google-ads.web-analysis'), {
-            params: { pixel_site_id: selectedSiteId.value }
+            params: { 
+                pixel_site_id: selectedSiteId.value,
+                search: searchQuery.value,
+                page: currentPage.value
+            }
         })
         webAnalysisResponse.value = data
         if (isManual) {
@@ -180,6 +194,32 @@ const fetchWebAnalysis = async (isManual = false) => {
         toast.add('Failed to fetch web analysis', 'error')
     } finally {
         isLoadingWebAnalysis.value = false
+    }
+}
+
+const handleSearch = () => {
+    searchQuery.value = searchInput.value
+    currentPage.value = 1
+    fetchWebAnalysis()
+}
+
+const goToPage = (page) => {
+    currentPage.value = page
+    fetchWebAnalysis()
+}
+
+const openTerminal = async () => {
+    showTerminalModal.value = true
+    isLoadingLogs.value = true
+    try {
+        const { data } = await axios.get(route('google-ads.pixel-events'), {
+            params: { pixel_site_id: selectedSiteId.value, per_page: 50 }
+        })
+        terminalLogs.value = data.data || []
+    } catch (e) {
+        toast.add('Failed to fetch event logs', 'error')
+    } finally {
+        isLoadingLogs.value = false
     }
 }
 
@@ -435,12 +475,14 @@ watch(activeSection, (val) => {
 
             <!-- 4 Stat Cards -->
             <div v-for="stat in [
-                { label: 'Sitemaps', value: webAnalysisResponse.sitemaps?.length || 0, color: 'indigo', icon: 'M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z', sub: 'Indexed coverage' },
-                { label: 'AI Injections', value: webAnalysisResponse.schema_stats?.total_injections || 0, color: 'emerald', icon: 'M13 10V3L4 14h7v7l9-11h-7z', sub: 'JSON-LD served' },
-                { label: 'JS Events', value: webAnalysisResponse.error_summary?.total || 0, color: 'amber', icon: 'M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z', sub: '7-day window' },
-                { label: 'SEO Conflicts', value: webAnalysisResponse.schema_stats?.conflicts || 0, color: 'rose', icon: 'M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z', sub: 'Duplicate schema' },
+                { label: 'Sitemaps', value: webAnalysisResponse.sitemaps?.length || 0, color: 'indigo', icon: 'M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z', sub: 'Indexed coverage', action: null },
+                { label: 'AI Injections', value: webAnalysisResponse.schema_stats?.total_injections || 0, color: 'emerald', icon: 'M13 10V3L4 14h7v7l9-11h-7z', sub: 'JSON-LD served', action: null },
+                { label: 'JS Events', value: webAnalysisResponse.error_summary?.total || 0, color: 'amber', icon: 'M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z', sub: '7-day window', action: openTerminal },
+                { label: 'SEO Conflicts', value: webAnalysisResponse.schema_stats?.conflicts || 0, color: 'rose', icon: 'M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z', sub: 'Duplicate schema', action: null },
             ]" :key="stat.label"
-                class="bg-white border border-slate-100 rounded-[2rem] p-8 shadow-sm hover:shadow-md transition-all group relative overflow-hidden">
+                @click="stat.action ? stat.action() : null"
+                class="bg-white border border-slate-100 rounded-[2rem] p-8 shadow-sm hover:shadow-md transition-all group relative overflow-hidden"
+                :class="{ 'cursor-pointer hover:border-amber-200': stat.action }">
                 <div class="absolute top-0 right-0 p-5 opacity-40 group-hover:opacity-80 transition-all">
                     <div class="w-10 h-10 rounded-xl flex items-center justify-center" :class="`bg-${stat.color}-50`">
                         <svg class="w-5 h-5" :class="`text-${stat.color}-500`" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -460,14 +502,24 @@ watch(activeSection, (val) => {
             <!-- SEO Page Table (2/3) -->
             <div class="xl:col-span-2 bg-white border border-slate-100 rounded-[2rem] overflow-hidden shadow-sm">
                 <!-- Table header -->
-                <div class="flex items-center justify-between px-8 py-6 border-b border-slate-50">
+                <div class="flex flex-col md:flex-row items-center justify-between px-8 py-6 border-b border-slate-50 gap-4">
                     <div class="flex items-center gap-3">
                         <span class="w-1.5 h-6 bg-indigo-600 rounded-full"></span>
                         <h3 class="text-sm font-black text-slate-900 uppercase tracking-tight">Page SEO Report</h3>
                     </div>
-                    <span class="text-[10px] font-black text-slate-400 uppercase tracking-widest">
-                        {{ webAnalysisResponse.analysis_links?.length || 0 }} pages
-                    </span>
+                    
+                    <div class="flex items-center gap-4 w-full md:w-auto">
+                        <div class="relative flex-1 md:w-64">
+                            <input v-model="searchInput" @keyup.enter="handleSearch" placeholder="Search by URL or Title..." 
+                                class="w-full bg-slate-50 border-slate-200 focus:border-indigo-500 focus:ring-0 rounded-xl text-[11px] font-bold text-slate-800 py-2.5 px-4 pr-10" />
+                            <button @click="handleSearch" class="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-indigo-600 transition-colors">
+                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
+                            </button>
+                        </div>
+                        <span class="text-[10px] font-black text-slate-400 uppercase tracking-widest whitespace-nowrap">
+                            {{ webAnalysisResponse.pagination?.total || 0 }} pages
+                        </span>
+                    </div>
                 </div>
 
                 <!-- Loading skeleton -->
@@ -546,6 +598,29 @@ watch(activeSection, (val) => {
                             </tr>
                         </tbody>
                     </table>
+
+                    <!-- Pagination -->
+                    <div v-if="webAnalysisResponse.pagination?.last_page > 1" class="px-8 py-6 border-t border-slate-50 flex items-center justify-between">
+                        <p class="text-[10px] font-black text-slate-400 uppercase tracking-widest">
+                            Showing page {{ webAnalysisResponse.pagination.current_page }} of {{ webAnalysisResponse.pagination.last_page }}
+                        </p>
+                        <div class="flex items-center gap-1.5">
+                            <button @click="goToPage(currentPage - 1)" :disabled="currentPage === 1"
+                                class="w-8 h-8 flex items-center justify-center rounded-xl border border-slate-200 text-slate-400 hover:text-slate-900 disabled:opacity-30 disabled:cursor-not-allowed transition-all">
+                                <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M15 19l-7-7 7-7"/></svg>
+                            </button>
+                            <button v-for="p in webAnalysisResponse.pagination.last_page" :key="p"
+                                @click="goToPage(p)"
+                                class="w-8 h-8 rounded-xl text-[10px] font-black transition-all"
+                                :class="currentPage === p ? 'bg-slate-900 text-white shadow-lg' : 'text-slate-500 hover:bg-slate-50 border border-transparent'">
+                                {{ p }}
+                            </button>
+                            <button @click="goToPage(currentPage + 1)" :disabled="currentPage === webAnalysisResponse.pagination.last_page"
+                                class="w-8 h-8 flex items-center justify-center rounded-xl border border-slate-200 text-slate-400 hover:text-slate-900 disabled:opacity-30 disabled:cursor-not-allowed transition-all">
+                                <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M9 5l7 7-7 7"/></svg>
+                            </button>
+                        </div>
+                    </div>
                 </div>
             </div>
 
@@ -1089,6 +1164,73 @@ watch(activeSection, (val) => {
                 </div>
             </div>
         </div>
+
+        <!-- ── Terminal Modal (JS Events Forensic) ────────────────────────── -->
+        <Teleport to="body">
+            <div v-if="showTerminalModal" class="fixed inset-0 z-[100] flex items-center justify-center p-4 md:p-12 animate-fade-in">
+                <div class="absolute inset-0 bg-slate-950/80 backdrop-blur-md" @click="showTerminalModal = false"></div>
+                
+                <div class="relative w-full max-w-5xl bg-black rounded-[2.5rem] border border-white/10 shadow-3xl overflow-hidden flex flex-col h-[80vh]">
+                <!-- Header -->
+                <div class="flex items-center justify-between px-8 py-6 border-b border-white/5 bg-zinc-900/50">
+                    <div class="flex items-center gap-4">
+                        <div class="flex gap-1.5 items-center">
+                            <span class="w-3 h-3 rounded-full bg-rose-500"></span>
+                            <span class="w-3 h-3 rounded-full bg-amber-500"></span>
+                            <span class="w-3 h-3 rounded-full bg-emerald-500"></span>
+                        </div>
+                        <h2 class="text-sm font-black text-white uppercase tracking-widest ml-4">Forensic Signal Terminal</h2>
+                    </div>
+                    <button @click="showTerminalModal = false" class="text-white/40 hover:text-white transition-colors">
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M6 18L18 6M6 6l12 12"/></svg>
+                    </button>
+                </div>
+
+                <!-- Console Output -->
+                <div class="flex-1 overflow-y-auto p-8 font-mono text-[11px] space-y-2 selection:bg-emerald-500 selection:text-black">
+                    <div v-if="isLoadingLogs" class="text-emerald-500 animate-pulse flex items-center gap-3">
+                        <span class="inline-block w-2.5 h-4 bg-emerald-500 animate-terminal-cursor"></span>
+                        Establishing secure connection to telemetry stream...
+                    </div>
+                    <div v-else-if="!terminalLogs.length" class="text-zinc-600 italic">
+                        [ SYSTEM ] No signal activity detected in the current window.
+                    </div>
+                    <div v-else v-for="(log, i) in terminalLogs" :key="i" class="flex gap-4 group">
+                        <span class="text-zinc-700 select-none w-12 flex-shrink-0 text-right">[{{ i + 1 }}]</span>
+                        <div class="flex-1">
+                            <div class="flex items-center gap-3 flex-wrap">
+                                <span class="text-zinc-500">[{{ log.created_at }}]</span>
+                                <span class="px-1.5 py-0.5 rounded text-[9px] font-black uppercase"
+                                    :class="log.type === 'error' ? 'bg-rose-900 text-rose-300' : 'bg-emerald-900 text-emerald-300'">
+                                    {{ log.type || 'HIT' }}
+                                </span>
+                                <span class="text-emerald-400 font-bold">$ telemetry.record_signal</span>
+                                <span class="text-emerald-200">"{{ log.event_name || 'page_view' }}"</span>
+                            </div>
+                            <div class="mt-1 pl-4 border-l border-white/10 ml-1 space-y-0.5 opacity-80 group-hover:opacity-100 transition-opacity">
+                                <p class="text-zinc-400"><span class="text-emerald-600">url:</span> {{ log.page_url }}</p>
+                                <p class="text-zinc-400"><span class="text-emerald-600">source:</span> {{ log.referrer || 'direct' }}</p>
+                                <p class="text-zinc-400"><span class="text-emerald-600">client:</span> {{ log.device_type }} · {{ log.country_code }} · {{ log.city || 'Unknown' }}</p>
+                                <p v-if="log.metadata" class="text-zinc-500 text-[10px] break-all"><span class="text-emerald-600">meta:</span> {{ log.metadata }}</p>
+                            </div>
+                        </div>
+                    </div>
+                    <!-- Bottom anchor for terminal cursor -->
+                    <div class="flex items-center gap-3 pt-4">
+                        <span class="text-emerald-500 font-bold tracking-widest">root@v3.1_pixel:~$</span>
+                        <span class="inline-block w-2.5 h-4 bg-emerald-500 animate-terminal-cursor"></span>
+                    </div>
+                </div>
+                
+                <!-- Footer -->
+                <div class="px-8 py-4 bg-zinc-900/50 border-t border-white/5 flex items-center justify-between">
+                    <span class="text-[9px] font-black text-zinc-500 uppercase tracking-widest">Total signals Buffer: {{ terminalLogs.length }}</span>
+                    <div class="flex items-center gap-4">
+                        <span class="text-[9px] font-black text-emerald-500 uppercase animate-pulse">● System Live</span>
+                    </div>
+                </div>
+            </div>
+        </div>
     </Teleport>
 </template>
 
@@ -1099,4 +1241,17 @@ watch(activeSection, (val) => {
 .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
 .custom-scrollbar::-webkit-scrollbar-thumb { background: #e2e8f0; border-radius: 10px; }
 .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: #cbd5e1; }
+.shadow-premium {
+  box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.03);
+}
+.shadow-3xl {
+  box-shadow: 0 35px 60px -15px rgba(0, 0, 0, 0.5);
+}
+@keyframes terminal-cursor {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0; }
+}
+.animate-terminal-cursor {
+  animation: terminal-cursor 1s infinite;
+}
 </style>
