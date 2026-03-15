@@ -178,6 +178,30 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::apiResource('pixel-sites', \App\Http\Controllers\PixelSiteController::class);
         Route::post('pixel-sites/{pixel_site}/regenerate-token', [\App\Http\Controllers\PixelSiteController::class, 'regenerateToken'])->name('pixel-sites.regenerate-token');
     });
+
+    // Keyword Management
+    Route::get('/keywords/trending', [\App\Http\Controllers\KeywordController::class, 'trending'])->name('keywords.trending');
+    Route::get('/keywords/research', [\App\Http\Controllers\KeywordController::class, 'research'])->name('keywords.research');
+    Route::get('/keywords/intelligence', [\App\Http\Controllers\KeywordController::class, 'intelligence'])->name('keywords.intelligence');
+
+    Route::prefix('api')->name('api.')->group(function () {
+        // Keyword Intelligence
+        Route::get('/ki', [\App\Http\Controllers\Api\KeywordIntelligenceController::class, 'index'])->name('ki.index');
+        Route::get('/ki/bookmarks', [\App\Http\Controllers\Api\KeywordIntelligenceController::class, 'bookmarks'])->name('ki.bookmarks');
+        Route::post('/ki/{ki}/bookmark', [\App\Http\Controllers\Api\KeywordIntelligenceController::class, 'bookmark'])->name('ki.bookmark');
+        Route::delete('/ki/bookmark/{ki}', [\App\Http\Controllers\Api\KeywordIntelligenceController::class, 'destroyBookmark'])->name('ki.bookmark.destroy');
+        Route::get('/ki/{ki}/history', [\App\Http\Controllers\Api\KeywordIntelligenceController::class, 'history'])->name('ki.history');
+        Route::post('/ki/{ki}/predict-decay', [\App\Http\Controllers\Api\KeywordIntelligenceController::class, 'predictDecay'])->name('ki.predict-decay');
+
+        // Trending Keywords
+        Route::get('/trending-keywords', [\App\Http\Controllers\CampaignKeywordController::class, 'index'])->name('trending-keywords.index');
+        Route::post('/trending-keywords/discover', [\App\Http\Controllers\CampaignKeywordController::class, 'discover'])->name('trending-keywords.discover');
+
+        // Keyword Wallet
+        Route::get('/keywords/wallet', [\App\Http\Controllers\KeywordWalletController::class, 'index'])->name('keywords.wallet.index');
+        Route::post('/keywords/wallet', [\App\Http\Controllers\KeywordWalletController::class, 'store'])->name('keywords.wallet.store');
+        Route::delete('/keywords/wallet/{savedKeyword}', [\App\Http\Controllers\KeywordWalletController::class, 'destroy'])->name('keywords.wallet.destroy');
+    });
 });
 
 // CDN Tracking (Unauthenticated — external pixel endpoints)
