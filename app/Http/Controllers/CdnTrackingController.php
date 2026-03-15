@@ -1199,6 +1199,10 @@ class CdnTrackingController extends Controller
      */
     public function downloadPdf(Request $request)
     {
+        // Increase limits for potentially heavy PDF generation
+        set_time_limit(300);
+        ini_set('memory_limit', '512M');
+
         $organization = $request->user()->currentOrganization();
         if (!$organization) abort(404);
 
@@ -1217,10 +1221,55 @@ class CdnTrackingController extends Controller
             $analysisLinksQuery->where('url', 'like', "%$domain%");
         }
 
-        $analysisLinks = $analysisLinksQuery->whereNotNull('seo_audit')
+        // 1. Calculate Average SEO Health safely using chunks to avoid memory spikes
+        $totalLinksForScore = 0;
+        $runningScoreSum = 0;
+
+        // Clone query to avoid state corruption during chunking
+        $scoreQuery = (clone $analysisLinksQuery)->whereNotNull('seo_audit')
+            ->select(['id', 'sitemap_id', 'url', 'seo_audit', 'cdn_engagement_score', 'cdn_active']);
+
+        $scoreQuery->chunk(100, function($chunk) use (&$totalLinksForScore, &$runningScoreSum) {
+            foreach ($chunk as $link) {
+                $runningScoreSum += $link->cdn_insight['seo_score'] ?? 0;
+                $totalLinksForScore++;
+            }
+        });
+
+        $overallScore = $totalLinksForScore > 0 ? round($runningScoreSum / $totalLinksForScore) : 0;
+
+        // 2. Fetch the top 100 links for the actual PDF table (High Impact Pages)
+        $analysisLinks = (clone $analysisLinksQuery)->whereNotNull('seo_audit')
             ->orderByDesc('cdn_engagement_score')
-            ->limit(50) // More context for PDF
+            ->limit(100)
             ->get();
+
+        // 3. Acquisition Analytics Aggregation (Matching dashboard logic)
+        $thirtyDaysAgo = now()->subDays(29)->startOfDay();
+        $geoRaw = AdTrackEvent::where('organization_id', $organization->id)
+            ->when($pixelSiteId, fn($q, $id) => $q->where('pixel_site_id', $id))
+            ->where('created_at', '>=', $thirtyDaysAgo)
+            ->selectRaw("country_code, city, device_type, referrer, COUNT(*) as count")
+            ->groupBy('country_code', 'city', 'device_type', 'referrer')
+            ->get();
+
+        $byCountry = $geoRaw->groupBy('country_code')
+            ->map(fn($group, $code) => ['code' => $code ?: 'Unknown', 'count' => $group->sum('count')])
+            ->sortByDesc('count')->values()->take(6);
+
+        $byDevice = $geoRaw->groupBy('device_type')
+            ->map(fn($group, $type) => ['name' => $type ?: 'Desktop', 'count' => $group->sum('count')])
+            ->sortByDesc('count')->values();
+
+        $byCity = $geoRaw->filter(fn($r) => !empty($r->city))
+            ->groupBy('city')
+            ->map(fn($group, $city) => ['name' => $city, 'count' => $group->sum('count')])
+            ->sortByDesc('count')->values()->take(6);
+
+        $topReferrers = $geoRaw->filter(fn($r) => !empty($r->referrer))
+            ->groupBy(fn($r) => strtolower(parse_url($r->referrer, PHP_URL_HOST) ?? $r->referrer))
+            ->map(fn($group, $domain) => ['domain' => $domain, 'count' => $group->sum('count')])
+            ->sortByDesc('count')->values()->take(5);
 
         $errorSummary = CdnError::where('organization_id', $organization->id)
             ->when($pixelSiteId, fn($q) => $q->where('pixel_site_id', $pixelSiteId))
@@ -1230,16 +1279,18 @@ class CdnTrackingController extends Controller
                 COUNT(DISTINCT message) as unique_messages")
             ->first();
 
-        $schemaStats = CdnPageSchema::where('pixel_site_id', $pixelSiteId ?: 0)
-            ->when(!$pixelSiteId, function($q) use ($organization) {
-                $q->whereHas('pixelSite', fn($site) => $site->where('organization_id', $organization->id));
-            })
-            ->selectRaw("COUNT(*) as total_schemas, 
+        // Fix schemaStats query to avoid pixel_site_id = 0 issues
+        $schemaStatsQuery = CdnPageSchema::query();
+        if ($pixelSiteId) {
+            $schemaStatsQuery->where('pixel_site_id', $pixelSiteId);
+        } else {
+            $schemaStatsQuery->whereHas('pixelSite', fn($site) => $site->where('organization_id', $organization->id));
+        }
+
+        $schemaStats = $schemaStatsQuery->selectRaw("COUNT(*) as total_schemas, 
                 SUM(injected_count) as total_injections,
                 SUM(CASE WHEN has_conflict = 1 THEN 1 ELSE 0 END) as conflicts")
             ->first();
-
-        $totalScore = $analysisLinks->avg('cdn_insight.seo_score') ?? 0;
 
         $pdf = Pdf::loadView('pdf.web-analysis', [
             'organization'   => $organization,
@@ -1248,7 +1299,12 @@ class CdnTrackingController extends Controller
             'analysisLinks'  => $analysisLinks,
             'errorSummary'   => $errorSummary,
             'schemaStats'    => $schemaStats,
-            'overallScore'   => round($totalScore),
+            'overallScore'   => $overallScore,
+            'byCountry'      => $byCountry,
+            'byDevice'       => $byDevice,
+            'byCity'         => $byCity,
+            'topReferrers'   => $topReferrers,
+            'totalHits30d'   => $geoRaw->sum('count'),
             'generatedAt'    => now()->format('M d, Y H:i'),
         ]);
 

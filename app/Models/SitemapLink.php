@@ -47,7 +47,7 @@ class SitemapLink extends Model
         return $this->belongsTo(Sitemap::class);
     }
 
-    protected $appends = [];
+    protected $appends = ['cdn_insight'];
 
     public function getCdnInsightAttribute()
     {
