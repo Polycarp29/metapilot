@@ -6,11 +6,11 @@ import ConfirmationModal from '@/Components/ConfirmationModal.vue'
 import {
   Chart as ChartJS, Title, Tooltip, Legend,
   LineElement, PointElement, LinearScale, CategoryScale, Filler,
-  BarElement, BarController
+  BarElement, BarController, ArcElement
 } from 'chart.js'
-import { Line, Bar } from 'vue-chartjs'
+import { Line, Bar, Doughnut } from 'vue-chartjs'
 
-ChartJS.register(Title, Tooltip, Legend, LineElement, PointElement, LinearScale, CategoryScale, Filler, BarElement, BarController)
+ChartJS.register(Title, Tooltip, Legend, LineElement, PointElement, LinearScale, CategoryScale, Filler, BarElement, BarController, ArcElement)
 
 const props = defineProps({
     organization: Object,
@@ -182,6 +182,7 @@ const hitsChartData = computed(() => {
 })
 
 const topCountries = computed(() => {
+    if (analyticsData.value?.by_country) return analyticsData.value.by_country
     const c = {}
     chartEvents.value.forEach(e => { if (e.country_code) c[e.country_code] = (c[e.country_code] || 0) + 1 })
     return Object.entries(c).map(([code, count]) => ({ code, count }))
@@ -189,10 +190,68 @@ const topCountries = computed(() => {
 })
 
 const deviceBreakdown = computed(() => {
+    if (analyticsData.value?.by_device) {
+        const d = { Mobile: 0, Desktop: 0, Tablet: 0 }
+        analyticsData.value.by_device.forEach(item => {
+            if (d[item.name] !== undefined) d[item.name] = item.count
+        })
+        return d
+    }
     const d = { Mobile: 0, Desktop: 0, Tablet: 0 }
     chartEvents.value.forEach(e => { if (e.device_type && d[e.device_type] !== undefined) d[e.device_type]++ })
     return d
 })
+
+const topCities = computed(() => analyticsData.value?.by_city ?? [])
+
+const deviceChartData = computed(() => {
+    const d = deviceBreakdown.value
+    return {
+        labels: ['Mobile', 'Desktop', 'Tablet'],
+        datasets: [{
+            data: [d.Mobile, d.Desktop, d.Tablet],
+            backgroundColor: ['#6366f1', '#10b981', '#f59e0b'],
+            borderWidth: 0,
+            hoverOffset: 15
+        }]
+    }
+})
+
+const deviceChartOptions = {
+    responsive: true,
+    maintainAspectRatio: false,
+    cutout: '75%',
+    plugins: {
+        legend: { display: false },
+        tooltip: {
+            backgroundColor: '#0f172a',
+            padding: 12,
+            cornerRadius: 12,
+            titleFont: { size: 10, weight: 'bold', family: 'Inter' },
+            bodyFont: { size: 12, weight: 'black', family: 'Inter' }
+        }
+    }
+}
+
+const regionNames = new Intl.DisplayNames(['en'], { type: 'region' });
+
+const getCountryName = (code) => {
+    if (!code || code === 'Unknown') return 'Global/Unknown';
+    try {
+        return regionNames.of(code.toUpperCase()) || code;
+    } catch (e) {
+        return code;
+    }
+}
+
+const getCountryFlag = (code) => {
+    if (!code || code === 'Unknown' || code.length !== 2) return '🌍';
+    return code
+        .toUpperCase()
+        .replace(/./g, (char) => 
+            String.fromCodePoint(char.charCodeAt(0) + 127397)
+        );
+}
 
 const avgClicks = computed(() => {
     const ads = chartEvents.value.filter(e => e.gclid || e.utm_campaign || e.google_campaign_id)
@@ -788,29 +847,69 @@ watch(pathFilter, () => { if (!pathFilter.value) fetchEvents() })
             <div class="grid grid-cols-1 lg:grid-cols-12 gap-12">
                 <!-- Top Geographies -->
                 <div class="lg:col-span-8">
-                    <h4 class="text-[11px] font-black text-slate-400 uppercase tracking-widest mb-6">Global Signal Origin</h4>
-                    <div class="flex flex-wrap gap-4">
-                        <div v-for="geo in topCountries" :key="geo.code" class="px-5 py-3 bg-slate-50 rounded-2xl flex items-center gap-3 border border-slate-100/50">
-                            <span class="text-lg">{{ geo.code === 'US' ? '🇺🇸' : geo.code === 'GB' ? '🇬🇧' : geo.code === 'CA' ? '🇨🇦' : geo.code === 'KE' ? '🇰🇪' : '🌍' }}</span>
-                            <div>
-                                <p class="text-[10px] font-black text-slate-900">{{ geo.code }}</p>
-                                <p class="text-[8px] font-black text-slate-400 uppercase">{{ geo.count }} Hits</p>
-                            </div>
+                    <div class="flex items-center justify-between mb-8">
+                        <div>
+                            <h4 class="text-[11px] font-black text-slate-400 uppercase tracking-widest">Global Signal Origin</h4>
+                            <p class="text-[9px] text-slate-400 font-medium mt-1">Acquisition by country and territory (last 30 days)</p>
                         </div>
-                        <div v-if="topCountries.length === 0" class="text-[10px] text-slate-300 italic py-3">Collecting data...</div>
+                    </div>
+                    
+                    <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+                        <div v-for="geo in topCountries" :key="geo.code" 
+                            class="p-4 bg-slate-50/50 rounded-2xl border border-slate-100/50 hover:bg-white hover:shadow-premium hover:border-indigo-100/50 transition-all group">
+                            <div class="flex items-center justify-between mb-3">
+                                <span class="text-2xl group-hover:scale-110 transition-transform">{{ getCountryFlag(geo.code) }}</span>
+                                <span class="text-[9px] font-black text-slate-400 uppercase tracking-widest">
+                                    {{ Math.round((geo.count / (analyticsData?.summary?.last30_hits || chartEvents.length || 1)) * 100) }}%
+                                </span>
+                            </div>
+                            <p class="text-[10px] font-black text-slate-900 leading-tight line-clamp-2 h-7" :title="getCountryName(geo.code)">{{ getCountryName(geo.code) }}</p>
+                            <p class="text-[9px] font-black text-indigo-500 uppercase mt-0.5">{{ geo.count.toLocaleString() }} <span class="text-slate-400">Signals</span></p>
+                        </div>
+                        <div v-if="topCountries.length === 0" class="col-span-full py-12 text-center text-slate-300 italic text-[11px] border-2 border-dashed border-slate-100 rounded-2xl">
+                            Intelligence gathering in progress...
+                        </div>
                     </div>
                 </div>
-                <!-- Device Breakdown -->
-                <div class="lg:col-span-4 border-l border-slate-100 pl-12">
-                    <h4 class="text-[11px] font-black text-slate-400 uppercase tracking-widest mb-6">Client Distribution</h4>
-                    <div class="space-y-4">
-                        <div v-for="(count, type) in deviceBreakdown" :key="type" class="flex items-center justify-between">
-                            <span class="text-[10px] font-black text-slate-600 uppercase">{{ type }}</span>
-                            <div class="flex-1 mx-4 h-1.5 bg-slate-100 rounded-full overflow-hidden">
-                                <div class="h-full bg-indigo-500 rounded-full" :style="{ width: chartEvents.length > 0 ? (count / chartEvents.length * 100) + '%' : '0%' }"></div>
-                            </div>
-                            <span class="text-[10px] font-black text-slate-900">{{ count }}</span>
+
+                <!-- Device Breakdown (Doughnut) -->
+                <div class="lg:col-span-4 border-l border-slate-100 pl-12 flex flex-col">
+                    <h4 class="text-[11px] font-black text-slate-400 uppercase tracking-widest mb-8">Client Distribution</h4>
+                    <div class="flex-1 flex flex-col items-center justify-center relative min-h-[200px]">
+                        <!-- Total Center Display -->
+                        <div class="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
+                            <span class="text-2xl font-black text-slate-900">{{ (deviceBreakdown.Mobile + deviceBreakdown.Desktop + deviceBreakdown.Tablet).toLocaleString() }}</span>
+                            <span class="text-[8px] font-black text-slate-400 uppercase tracking-tighter">Unique Devices</span>
                         </div>
+                        <div class="w-full h-full max-h-[180px]">
+                            <Doughnut :data="deviceChartData" :options="deviceChartOptions" />
+                        </div>
+                    </div>
+                    
+                    <!-- Premium Legend -->
+                    <div class="mt-8 grid grid-cols-3 gap-2">
+                        <div v-for="(color, idx) in ['#6366f1', '#10b981', '#f59e0b']" :key="idx" class="flex flex-col items-center p-2 rounded-xl bg-slate-50 border border-slate-100/50">
+                            <span class="w-2 h-2 rounded-full mb-1" :style="{ backgroundColor: color }"></span>
+                            <span class="text-[8px] font-black text-slate-400 uppercase">{{ deviceChartData.labels[idx] }}</span>
+                            <span class="text-[10px] font-black text-slate-900 mt-0.5">{{ deviceChartData.datasets[0].data[idx].toLocaleString() }}</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Top Cities / Regions Section (NEW) -->
+            <div v-if="topCities.length > 0" class="mt-12 pt-8 border-t border-slate-50">
+                <div class="flex items-center justify-between mb-8">
+                    <div>
+                        <h4 class="text-[11px] font-black text-slate-400 uppercase tracking-widest">Traffic Fingerprinting</h4>
+                        <p class="text-[9px] text-slate-400 font-medium mt-1">High-intent regional signal clusters</p>
+                    </div>
+                </div>
+                <div class="flex flex-wrap gap-2">
+                    <div v-for="city in topCities" :key="city.name" class="px-4 py-2 bg-indigo-50/30 text-indigo-600 rounded-full text-[10px] font-black border border-indigo-100/50 flex items-center gap-2 hover:bg-indigo-50 transition-colors">
+                        <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"></path></svg>
+                        {{ city.name }}
+                        <span class="px-1.5 py-0.5 bg-white rounded-md text-[8px] border border-indigo-100">{{ city.count }}</span>
                     </div>
                 </div>
             </div>

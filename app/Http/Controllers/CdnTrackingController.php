@@ -153,7 +153,15 @@ class CdnTrackingController extends Controller
         // --- Parse UA and Geo ---
         $ua         = $request->header('User-Agent');
         $deviceData = $this->parseUserAgent($ua);
-        $geo        = $this->getGeoData($request->ip());
+        
+        // Improved IP detection for proxies/CDNs
+        $clientIp = $request->header('CF-Connecting-IP') ?? $request->ip();
+        if (!$request->header('CF-Connecting-IP') && $request->header('X-Forwarded-For')) {
+            $ips = explode(',', $request->header('X-Forwarded-For'));
+            $clientIp = trim($ips[0]);
+        }
+        
+        $geo = $this->getGeoData($clientIp);
 
         // Normalize URL for consistent hashing
         $normalizedUrl = $this->normalizeUrlForHash($request->page_url);
@@ -167,8 +175,11 @@ class CdnTrackingController extends Controller
                 'organization_id'    => $organization->id,
                 'pixel_site_id'      => $pixelSite->id,
                 'site_token'         => $request->token,
-                'country_code'       => $geo['country_code'] ?? $request->header('CF-IPCountry'),
-                'city'               => $geo['city']         ?? null,
+                'country_code'       => ($geo['country_code'] ?? null) 
+                                        ?? $request->header('CF-IPCountry')
+                                        ?? $request->header('X-Vercel-IP-Country')
+                                        ?? $request->header('X-App-Country'),
+                'city'               => $geo['city'] ?? null,
                 'browser'            => $deviceData['browser'],
                 'platform'           => $deviceData['platform'],
                 'device_type'        => $deviceData['device_type'],
@@ -872,11 +883,41 @@ class CdnTrackingController extends Controller
         $rising  = $velocityRows->filter(fn($r) => $r['delta_pct'] > 0)->take(3)->values();
         $falling = $velocityRows->filter(fn($r) => $r['delta_pct'] < 0)->sortBy('delta_pct')->take(3)->values();
 
+        // ── 6. Geography & Device Breakdown ──────────────────────────
+        $geoRaw = AdTrackEvent::where('organization_id', $orgId)
+            ->when($request->pixel_site_id, fn($q, $id) => $q->where('pixel_site_id', $id))
+            ->where('created_at', '>=', $thirtyDaysAgo)
+            ->selectRaw("country_code, city, device_type, COUNT(*) as count")
+            ->groupBy('country_code', 'city', 'device_type')
+            ->get();
+
+        $byCountry = $geoRaw->groupBy('country_code')
+            ->map(fn($group, $code) => [
+                'code' => $code ?: 'Unknown',
+                'count' => $group->sum('count')
+            ])->sortByDesc('count')->values()->take(10);
+
+        $byDevice = $geoRaw->groupBy('device_type')
+            ->map(fn($group, $type) => [
+                'name' => $type ?: 'Desktop',
+                'count' => $group->sum('count')
+            ])->sortByDesc('count')->values();
+
+        $byCity = $geoRaw->filter(fn($r) => !empty($r->city))
+            ->groupBy('city')
+            ->map(fn($group, $city) => [
+                'name' => $city,
+                'count' => $group->sum('count')
+            ])->sortByDesc('count')->values()->take(10);
+
         return response()->json([
             'daily_history'  => $dailyHistory,
             'top_pages'      => $topPages,
             'top_referrers'  => $topReferrers,
             'trend_velocity' => ['rising' => $rising, 'falling' => $falling],
+            'by_country'     => $byCountry,
+            'by_device'      => $byDevice,
+            'by_city'        => $byCity,
             'summary'        => [
                 'today_hits'     => $todayHits,
                 'yesterday_hits' => $yesterdayHits,
@@ -884,6 +925,7 @@ class CdnTrackingController extends Controller
                 'last7_hits'     => $last7,
                 'prev7_hits'     => $prev7,
                 'week_delta'     => $weekDelta,
+                'last30_hits'    => $geoRaw->sum('count'),
             ],
         ]);
     }
@@ -921,23 +963,31 @@ class CdnTrackingController extends Controller
 
     protected function getGeoData($ip): ?array
     {
-        if ($ip === '127.0.0.1' || $ip === '::1') return null;
+        if (!$ip || $ip === '127.0.0.1' || $ip === '::1') return null;
 
         return Cache::remember("geoip_{$ip}", 86400, function () use ($ip) {
+            // Priority 1: ipapi.co (1000/day, HTTPS)
             try {
-                // Switch to ipapi.co for free HTTPS support (1000/day)
-                $response = Http::timeout(2)
-                    ->get("https://ipapi.co/{$ip}/json/");
-
-                if ($response->successful()) {
+                $response = Http::timeout(2)->get("https://ipapi.co/{$ip}/json/");
+                if ($response->successful() && $response->json('country_code')) {
                     return [
-                        'country_code' => $response->json('country_code'),
+                        'country_code' => strtoupper($response->json('country_code')),
                         'city'         => $response->json('city'),
                     ];
                 }
-            } catch (\Exception $e) {
-                // Silently fail — geo is non-critical
-            }
+            } catch (\Exception $e) {}
+
+            // Priority 2: ip-api.com (Reliable secondary, HTTP but backend-safe)
+            try {
+                $response = Http::timeout(2)->get("http://ip-api.com/json/{$ip}");
+                if ($response->successful() && $response->json('status') === 'success') {
+                    return [
+                        'country_code' => strtoupper($response->json('countryCode')),
+                        'city'         => $response->json('city'),
+                    ];
+                }
+            } catch (\Exception $e) {}
+
             return null;
         });
     }
