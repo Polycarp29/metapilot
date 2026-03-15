@@ -45,10 +45,14 @@ const searchQuery          = ref('')
 const searchInput          = ref('')
 const currentPage          = ref(1)
 
-// Terminal Modal
+// Terminal Modals
 const showTerminalModal    = ref(false)
 const terminalLogs         = ref([])
 const isLoadingLogs        = ref(false)
+
+const showSchemaTerminal   = ref(false)
+const schemaTerminalLogs   = ref([])
+const isLoadingSchemaLogs  = ref(false)
 
 let refreshInterval = null
 
@@ -220,6 +224,21 @@ const openTerminal = async () => {
         toast.add('Failed to fetch event logs', 'error')
     } finally {
         isLoadingLogs.value = false
+    }
+}
+
+const openSchemaTerminal = async () => {
+    showSchemaTerminal.value = true
+    isLoadingSchemaLogs.value = true
+    try {
+        const { data } = await axios.get(route('google-ads.schema-debug'), {
+            params: { pixel_site_id: selectedSiteId.value }
+        })
+        schemaTerminalLogs.value = data || []
+    } catch (e) {
+        toast.add('Failed to fetch schema logs', 'error')
+    } finally {
+        isLoadingSchemaLogs.value = false
     }
 }
 
@@ -476,7 +495,7 @@ watch(activeSection, (val) => {
             <!-- 4 Stat Cards -->
             <div v-for="stat in [
                 { label: 'Sitemaps', value: webAnalysisResponse.sitemaps?.length || 0, color: 'indigo', icon: 'M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z', sub: 'Indexed coverage', action: null },
-                { label: 'AI Injections', value: webAnalysisResponse.schema_stats?.total_injections || 0, color: 'emerald', icon: 'M13 10V3L4 14h7v7l9-11h-7z', sub: 'JSON-LD served', action: null },
+                { label: 'AI Injections', value: webAnalysisResponse.schema_stats?.total_injections || 0, color: 'emerald', icon: 'M13 10V3L4 14h7v7l9-11h-7z', sub: 'JSON-LD served', action: openSchemaTerminal },
                 { label: 'JS Events', value: webAnalysisResponse.error_summary?.total || 0, color: 'amber', icon: 'M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z', sub: '7-day window', action: openTerminal },
                 { label: 'SEO Conflicts', value: webAnalysisResponse.schema_stats?.conflicts || 0, color: 'rose', icon: 'M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z', sub: 'Duplicate schema', action: null },
             ]" :key="stat.label"
@@ -1164,6 +1183,64 @@ watch(activeSection, (val) => {
                 </div>
             </div>
         </div>
+        </Teleport>
+
+        <!-- ── Terminal Modal (AI Injection Intelligence) ────────────────── -->
+        <Teleport to="body">
+            <div v-if="showSchemaTerminal" class="fixed inset-0 z-[100] flex items-center justify-center p-4 md:p-12 animate-fade-in">
+                <div class="absolute inset-0 bg-slate-950/80 backdrop-blur-md" @click="showSchemaTerminal = false"></div>
+                <div class="relative w-full max-w-5xl bg-black rounded-[2.5rem] border border-white/10 shadow-3xl overflow-hidden flex flex-col h-[80vh]">
+                    <!-- Header -->
+                    <div class="flex items-center justify-between px-8 py-6 border-b border-white/5 bg-zinc-900/50">
+                        <div class="flex items-center gap-4">
+                            <div class="flex gap-1.5 items-center">
+                                <span class="w-3 h-3 rounded-full bg-indigo-500"></span>
+                                <span class="w-3 h-3 rounded-full bg-violet-500"></span>
+                                <span class="w-3 h-3 rounded-full bg-emerald-500"></span>
+                            </div>
+                            <h2 class="text-sm font-black text-white uppercase tracking-widest ml-4">AI Injection Live Stream</h2>
+                        </div>
+                        <button @click="showSchemaTerminal = false" class="text-white/40 hover:text-white transition-colors">
+                            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M6 18L18 6M6 6l12 12"/></svg>
+                        </button>
+                    </div>
+
+                    <!-- Console Output -->
+                    <div class="flex-1 overflow-y-auto p-8 font-mono text-[11px] space-y-2 selection:bg-indigo-500 selection:text-white">
+                        <div v-if="isLoadingSchemaLogs" class="text-indigo-400 animate-pulse flex items-center gap-3">
+                            <span class="inline-block w-2.5 h-4 bg-indigo-500 animate-terminal-cursor"></span>
+                            Indexing automated schema graph...
+                        </div>
+                        <div v-else-if="!schemaTerminalLogs.length" class="text-zinc-600 italic">
+                            [ SYSTEM ] No AI injections recorded in the last 72 hours.
+                        </div>
+                        <div v-else v-for="(log, i) in schemaTerminalLogs" :key="i" class="flex gap-4 group">
+                            <span class="text-zinc-700 select-none w-12 flex-shrink-0 text-right">[{{ i + 1 }}]</span>
+                            <div class="flex-1">
+                                <div class="flex items-center gap-3 flex-wrap">
+                                    <span class="text-zinc-500">[{{ log.last_injected_at }}]</span>
+                                    <span class="px-1.5 py-0.5 rounded text-[9px] font-black uppercase bg-indigo-900 text-indigo-300">
+                                        {{ log.schema_type }}
+                                    </span>
+                                    <span class="text-indigo-400 font-bold">$ schema.inject_graph</span>
+                                    <span class="text-emerald-400">SUCCESS</span>
+                                </div>
+                                <div class="mt-1 pl-4 border-l border-white/10 ml-1 space-y-1 opacity-80 group-hover:opacity-100 transition-opacity">
+                                    <p class="text-zinc-400"><span class="text-indigo-600">target:</span> {{ log.url }}</p>
+                                    <p class="text-zinc-500"><span class="text-indigo-600">hits:</span> {{ log.injected_count }} historical injections</p>
+                                    <div class="bg-zinc-900/50 p-3 rounded-xl border border-white/5 mt-2">
+                                        <pre class="text-[9px] text-indigo-200/70 overflow-x-auto">{{ log.schema_preview }}</pre>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="flex items-center gap-3 pt-4">
+                            <span class="text-indigo-500 font-bold tracking-widest">root@ai_engine:~$</span>
+                            <span class="inline-block w-2.5 h-4 bg-indigo-500 animate-terminal-cursor"></span>
+                        </div>
+                    </div>
+                </div>
+            </div>
         </Teleport>
 
         <!-- ── Terminal Modal (JS Events Forensic) ────────────────────────── -->

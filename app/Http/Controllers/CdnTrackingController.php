@@ -1264,7 +1264,10 @@ class CdnTrackingController extends Controller
         $organization = $request->user()->currentOrganization();
         if (!$organization) return response()->json(['error' => 'Organization not found'], 404);
 
+        $pixelSiteId = $request->input('pixel_site_id');
+
         $schemas = CdnPageSchema::whereHas('pixelSite', fn($q) => $q->where('organization_id', $organization->id))
+            ->when($pixelSiteId, fn($q) => $q->where('pixel_site_id', $pixelSiteId))
             ->where('is_auto_generated', true)
             ->orderByDesc('last_injected_at')
             ->limit(20)
