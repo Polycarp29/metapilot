@@ -46,11 +46,11 @@
     "/build/assets/LegalLayout-CrwjPA-c.css"
   ],
   "resources/js/Pages/Analytics/Dashboard.vue": [
-    "/build/assets/Dashboard-B2r8IEac.js",
+    "/build/assets/Dashboard-zesgxh48.js",
     "/build/assets/Dashboard-Cb8T0Alf.css"
   ],
   "resources/js/Pages/Analytics/Dashboard.vue?vue&type=style&index=0&scoped=3f602d42&lang.css": [
-    "/build/assets/Dashboard-B2r8IEac.js",
+    "/build/assets/Dashboard-zesgxh48.js",
     "/build/assets/Dashboard-Cb8T0Alf.css"
   ],
   "resources/js/Pages/Analytics/Partials/AdPredictionsCard.vue": [
@@ -68,12 +68,12 @@
     "/build/assets/PredictionsTab-D2eNkLru.css"
   ],
   "resources/js/Pages/Analytics/Partials/WebAnalysisTab.vue": [
-    "/build/assets/WebAnalysisTab-OhMKT7Qh.js",
-    "/build/assets/WebAnalysisTab-AXlIY2-7.css"
+    "/build/assets/WebAnalysisTab-CizHYi0B.js",
+    "/build/assets/WebAnalysisTab-DPaXoLoj.css"
   ],
-  "resources/js/Pages/Analytics/Partials/WebAnalysisTab.vue?vue&type=style&index=0&scoped=da4639fb&lang.css": [
-    "/build/assets/WebAnalysisTab-OhMKT7Qh.js",
-    "/build/assets/WebAnalysisTab-AXlIY2-7.css"
+  "resources/js/Pages/Analytics/Partials/WebAnalysisTab.vue?vue&type=style&index=0&scoped=e5786c43&lang.css": [
+    "/build/assets/WebAnalysisTab-CizHYi0B.js",
+    "/build/assets/WebAnalysisTab-DPaXoLoj.css"
   ],
   "resources/js/Pages/Auth/AcceptInvitation.vue": [
     "/build/assets/AcceptInvitation-e9PnTVGo.js",

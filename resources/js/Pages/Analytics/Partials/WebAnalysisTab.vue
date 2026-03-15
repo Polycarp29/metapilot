@@ -1164,6 +1164,7 @@ watch(activeSection, (val) => {
                 </div>
             </div>
         </div>
+        </Teleport>
 
         <!-- ── Terminal Modal (JS Events Forensic) ────────────────────────── -->
         <Teleport to="body">
