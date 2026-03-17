@@ -195,7 +195,8 @@ class CdnTrackingController extends Controller
                 'utm_medium'         => $request->utm_medium,
                 'utm_campaign'       => $request->utm_campaign,
                 'ip_hash'            => hash('sha256', $request->ip()),
-                'metadata'           => $request->metadata, // Casted to JSON in model? Need to check.
+                'metadata'           => $request->metadata,
+                'is_bot'             => $deviceData['is_bot'] ?? false,
             ]
         );
 
@@ -449,6 +450,17 @@ class CdnTrackingController extends Controller
             $query->where('google_campaign_id', $request->campaign_id);
         }
 
+        // Bot Filtering
+        if ($request->boolean('exclude_bots')) {
+            $query->where('is_bot', false);
+        }
+
+        // Attribution Filtering
+        if ($request->filled('utm_source'))   $query->where('utm_source', 'like', '%' . $request->utm_source . '%');
+        if ($request->filled('utm_medium'))   $query->where('utm_medium', 'like', '%' . $request->utm_medium . '%');
+        if ($request->filled('utm_campaign')) $query->where('utm_campaign', 'like', '%' . $request->utm_campaign . '%');
+        if ($request->filled('gclid'))        $query->where('gclid', $request->gclid);
+
         // Filter by Traffic Type
         if ($request->filled('type')) {
             if ($request->type === 'ads') {
@@ -540,9 +552,22 @@ class CdnTrackingController extends Controller
               ->orWhere('city', 'like', "%$s%");
         });
     }
+
+    if ($request->boolean('exclude_bots')) {
+        $query->where('is_bot', false);
+    }
+    if ($request->filled('utm_source'))   $query->where('utm_source', 'like', '%' . $request->utm_source . '%');
+    if ($request->filled('utm_medium'))   $query->where('utm_medium', 'like', '%' . $request->utm_medium . '%');
+    if ($request->filled('utm_campaign')) $query->where('utm_campaign', 'like', '%' . $request->utm_campaign . '%');
+    if ($request->filled('gclid'))        $query->where('gclid', $request->gclid);
     
 
         $events = $query->orderBy('created_at', 'desc')->limit(5000)->get();
+
+        $columns = [
+            'ID', 'Timestamp', 'Session ID', 'Campaign ID', 'GCLID', 
+            'Page URL', 'Device', 'Location', 'Clicks', 'Duration (s)', 'Is Bot'
+        ];
 
         $headers = [
             "Content-type"        => "text/csv",
@@ -567,7 +592,8 @@ class CdnTrackingController extends Controller
                     $e->device_type,
                     $e->city . ', ' . $e->country_code,
                     $e->click_count,
-                    $e->duration_seconds
+                    $e->duration_seconds,
+                    $e->is_bot ? 'YES' : 'NO'
                 ]);
             }
             fclose($file);
@@ -713,8 +739,17 @@ class CdnTrackingController extends Controller
 
         $thirtyDaysAgo = now()->subDays(29)->startOfDay();
 
-        $rawDaily = AdTrackEvent::where('organization_id', $orgId)
-            ->when($request->pixel_site_id, fn($q, $id) => $q->where('pixel_site_id', $id))
+        $queryBase = AdTrackEvent::where('organization_id', $orgId)
+            ->when($request->pixel_site_id, fn($q, $id) => $q->where('pixel_site_id', $id));
+
+        // Filters
+        if ($request->boolean('exclude_bots')) $queryBase->where('is_bot', false);
+        if ($request->filled('utm_source'))   $queryBase->where('utm_source', 'like', '%' . $request->utm_source . '%');
+        if ($request->filled('utm_medium'))   $queryBase->where('utm_medium', 'like', '%' . $request->utm_medium . '%');
+        if ($request->filled('utm_campaign')) $queryBase->where('utm_campaign', 'like', '%' . $request->utm_campaign . '%');
+        if ($request->filled('gclid'))        $queryBase->where('gclid', $request->gclid);
+
+        $rawDaily = (clone $queryBase)
             ->where('created_at', '>=', $thirtyDaysAgo)
             ->selectRaw("DATE(created_at) as date, COUNT(*) as total,
                 SUM(CASE WHEN (gclid IS NOT NULL OR utm_campaign IS NOT NULL OR google_campaign_id IS NOT NULL) THEN 1 ELSE 0 END) as ad_hits")
@@ -749,9 +784,21 @@ class CdnTrackingController extends Controller
             ? round((($todayHits - $yesterdayHits) / $yesterdayHits) * 100, 1)
             : null;
 
+        // --- Bounce Rate Calculation (Sessions with only 1 event) ---
+        $bouncesByPage = (clone $queryBase)
+            ->where('created_at', '>=', $thirtyDaysAgo)
+            ->selectRaw("page_url, session_id, COUNT(*) as session_count")
+            ->groupBy('page_url', 'session_id')
+            ->get()
+            ->groupBy('page_url')
+            ->map(function($sessions) {
+                $totalSessions = $sessions->count();
+                $bounces = $sessions->filter(fn($s) => $s->session_count === 1)->count();
+                return $totalSessions > 0 ? round(($bounces / $totalSessions) * 100, 1) : 0;
+            });
+
         // ── 3. Top pages with 14-day sparkline & delta ───────────────────────
-        $topPageRows = AdTrackEvent::where('organization_id', $orgId)
-            ->when($request->pixel_site_id, fn($q, $id) => $q->where('pixel_site_id', $id))
+        $topPageRows = (clone $queryBase)
             ->whereNotNull('page_url')
             ->selectRaw("page_url,
                 COUNT(*) as total_hits,
@@ -781,7 +828,7 @@ class CdnTrackingController extends Controller
         // ── 4. Keyword ↔ Page Intent Linkage ──────────────────────────────
         $keywords = KeywordResearch::where('organization_id', $orgId)->get();
 
-        $topPages = $topPageRows->map(function ($row) use ($sparklineRaw, $keywords) {
+        $topPages = $topPageRows->map(function ($row) use ($sparklineRaw, $keywords, $bouncesByPage) {
             $todayC     = (int) $row->today_count;
             $yesterdayC = (int) $row->yesterday_count;
             $deltaPct   = $yesterdayC > 0
@@ -791,13 +838,16 @@ class CdnTrackingController extends Controller
             // ── Engagement Scoring (0-100) ──
             $avgDuration = $row->avg_duration ?? 0;
             $avgClicks   = $row->avg_clicks ?? 0;
+            $bounceRate  = $bouncesByPage[$row->page_url] ?? 0;
             
-            // Dwell factor (0-50): 60s+ = max
-            $dwellScore = min(($avgDuration / 60) * 50, 50);
-            // Interaction factor (0-50): 5+ clicks = max
-            $interactionScore = min(($avgClicks / 5) * 50, 50);
-            
-            $engagementScore = round($dwellScore + $interactionScore);
+            // Dwell factor (0-40): 60s+ = max
+            $dwellScore = min(($avgDuration / 60) * 40, 40);
+            // Interaction factor (0-40): 5+ clicks = max
+            $interactionScore = min(($avgClicks / 5) * 40, 40);
+            // Bounce factor (0-20): 0% bounce = 20, 100% bounce = 0
+            $bounceScore = (1 - ($bounceRate / 100)) * 20;
+
+            $engagementScore = round($dwellScore + $interactionScore + $bounceScore);
             
             // Ad Ready if score >= 70 and has decent traffic
             $isAdReady = $engagementScore >= 70 && $row->total_hits >= 5;
@@ -841,6 +891,7 @@ class CdnTrackingController extends Controller
                 'sparkline'        => $series,
                 'matched_keywords' => $matchedKeywords,
                 'top_intent'       => $topIntent,
+                'bounce_rate'      => $bounceRate,
             ];
         })->values();
 
@@ -946,6 +997,19 @@ class CdnTrackingController extends Controller
             $device = 'Tablet';
         }
 
+        $botSignals = [
+            'Googlebot', 'Bingbot', 'Slurp', 'DuckDuckBot', 'Baiduspider', 'YandexBot', 
+            'Sogou', 'Exabot', 'facebot', 'ia_archiver', 'AdsBot-Google', 'Mediapartners-Google',
+            'Twitterbot', 'facebookexternalhit', 'LinkedInBot'
+        ];
+        $isBot = false;
+        foreach ($botSignals as $signal) {
+            if (stripos($ua, $signal) !== false) {
+                $isBot = true;
+                break;
+            }
+        }
+
         if (stripos($ua, 'Firefox') !== false) $browser = 'Firefox';
         elseif (stripos($ua, 'Edg')    !== false) $browser = 'Edge';
         elseif (stripos($ua, 'Chrome') !== false) $browser = 'Chrome';
@@ -958,7 +1022,7 @@ class CdnTrackingController extends Controller
         elseif (stripos($ua, 'Android') !== false)  $platform = 'Android';
         elseif (stripos($ua, 'iPhone')  !== false || stripos($ua, 'iPad') !== false) $platform = 'iOS';
 
-        return ['browser' => $browser, 'platform' => $platform, 'device_type' => $device];
+        return ['browser' => $browser, 'platform' => $platform, 'device_type' => $device, 'is_bot' => $isBot];
     }
 
     protected function getGeoData($ip): ?array
@@ -1194,9 +1258,18 @@ class CdnTrackingController extends Controller
             ->get()
             ->pluck('count', 'date');
 
+        // Global Health Score (All organization's sitemap links)
+        $sitemapService = app(\App\Services\SitemapService::class);
+        $totalLinks = SitemapLink::whereHas('sitemap', function($q) use ($organization) {
+            $q->where('organization_id', $organization->id);
+        })->with('sitemap')->get();
+        
+        $healthScore = $totalLinks->avg(fn($l) => $sitemapService->calculateSeoScore($l));
+
         return response()->json([
             'sitemaps'       => $sitemaps,
             'analysis_links' => $analysisLinks,
+            'health_score'   => round($healthScore),
             'pagination'     => [
                 'current_page' => $paginatedLinks->currentPage(),
                 'last_page'    => $paginatedLinks->lastPage(),

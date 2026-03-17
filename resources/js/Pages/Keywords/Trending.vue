@@ -71,7 +71,7 @@
             class="group bg-white rounded-3xl p-6 border border-slate-100 hover:border-blue-200 transition-all duration-300 relative overflow-hidden shadow-sm"
           >
             <div class="flex items-center justify-between mb-4">
-              <span class="px-3 py-1 bg-blue-50 text-blue-600 rounded-lg text-[10px] font-black uppercase">{{ kw.recommendation_type.replace('_', ' ') }}</span>
+              <span class="px-3 py-1 bg-blue-50 text-blue-600 rounded-lg text-[10px] font-black uppercase">{{ (kw.recommendation_type || 'discovery').replace('_', ' ') }}</span>
               <span class="text-slate-400 text-xs font-bold">{{ kw.country_code }}</span>
             </div>
             <h3 class="text-xl font-bold text-slate-900 mb-2 truncate group-hover:text-blue-600 transition-colors">{{ kw.keyword }}</h3>

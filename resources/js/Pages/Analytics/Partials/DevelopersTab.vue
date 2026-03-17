@@ -69,7 +69,12 @@ const filters = ref({
     start_date: '',
     end_date: '',
     per_page: 25,
-    page: 1
+    page: 1,
+    exclude_bots: true,
+    utm_source: '',
+    utm_medium: '',
+    utm_campaign: '',
+    gclid: ''
 })
 
 let eventsInterval     = null
@@ -410,7 +415,6 @@ const fetchEvents = async () => {
         const params = {
             ...filters.value,
             search: pathFilter.value || searchQuery.value,
-            campaign_id: filters.value.campaign_id,
             pixel_site_id: selectedSiteId.value
         }
         const r = await axios.get(route('google-ads.pixel-events'), { params })
@@ -433,7 +437,10 @@ const fetchAnalytics = async () => {
     isLoadingAnalytics.value = true
     try {
         const r = await axios.get(route('google-ads.analytics'), {
-            params: { pixel_site_id: selectedSiteId.value }
+            params: { 
+                ...filters.value,
+                pixel_site_id: selectedSiteId.value 
+            }
         })
         analyticsData.value = r.data
     } catch (e) {
@@ -492,6 +499,7 @@ const applyFilters = () => {
 const downloadCsv = () => {
     const params = new URLSearchParams({
         ...filters.value,
+        pixel_site_id: selectedSiteId.value,
         search: searchQuery.value
     }).toString()
     window.location.href = route('google-ads.pixel-events.csv') + '?' + params
@@ -968,6 +976,7 @@ watch(pathFilter, () => { if (!pathFilter.value) fetchEvents() })
                             <th class="py-5 px-6 text-[9px] font-black text-slate-400 uppercase tracking-widest text-center">Intent Score</th>
                             <th class="py-5 px-6 text-[9px] font-black text-slate-400 uppercase tracking-widest text-center">Total Hits</th>
                             <th class="py-5 px-6 text-[9px] font-black text-slate-400 uppercase tracking-widest text-center">Engagement</th>
+                            <th class="py-5 px-6 text-[9px] font-black text-slate-400 uppercase tracking-widest text-center">Bounce Rate</th>
                             <th class="py-5 px-6 text-[9px] font-black text-slate-400 uppercase tracking-widest text-center">14-Day Trend</th>
                             <th class="py-5 px-10 text-[9px] font-black text-slate-400 uppercase tracking-widest text-right">Δ vs Yesterday</th>
                         </tr>
@@ -1021,6 +1030,12 @@ watch(pathFilter, () => { if (!pathFilter.value) fetchEvents() })
                                 <div class="flex flex-col items-center">
                                     <span class="text-xs font-black text-slate-700">{{ page.avg_duration }}s Dwell</span>
                                     <span class="text-[9px] text-slate-400 font-bold mt-1">{{ page.avg_clicks }} Avg Clicks</span>
+                                </div>
+                            </td>
+                            <td class="py-7 px-6 text-center">
+                                <span class="text-xs font-black" :class="page.bounce_rate > 50 ? 'text-rose-500' : 'text-emerald-500'">{{ page.bounce_rate }}%</span>
+                                <div class="w-12 h-1 bg-slate-100 rounded-full mt-1 mx-auto overflow-hidden">
+                                    <div class="h-full" :class="page.bounce_rate > 50 ? 'bg-rose-500' : 'bg-emerald-500'" :style="{ width: page.bounce_rate + '%' }"></div>
                                 </div>
                             </td>
                             <td class="py-7 px-6">
@@ -1326,6 +1341,33 @@ watch(pathFilter, () => { if (!pathFilter.value) fetchEvents() })
                         <span class="text-slate-300">→</span>
                         <input type="date" v-model="filters.end_date" @change="applyFilters" class="flex-1 bg-slate-50 border-slate-100 rounded-xl text-[11px] font-bold text-slate-700 py-3 px-4 focus:ring-0" />
                     </div>
+                </div>
+
+                <div class="w-full h-px bg-slate-50 my-2"></div>
+
+                <!-- Advanced Attribution Filters -->
+                <div class="flex-1 min-w-[150px] space-y-2">
+                    <label class="text-[9px] font-black text-slate-400 uppercase tracking-widest ml-1">UTM Source</label>
+                    <input v-model="filters.utm_source" @input="applyFilters" placeholder="google" class="w-full bg-slate-50 border-slate-100 rounded-xl text-[11px] font-bold text-slate-700 py-3 px-4 focus:ring-0" />
+                </div>
+                <div class="flex-1 min-w-[150px] space-y-2">
+                    <label class="text-[9px] font-black text-slate-400 uppercase tracking-widest ml-1">UTM Medium</label>
+                    <input v-model="filters.utm_medium" @input="applyFilters" placeholder="cpc" class="w-full bg-slate-50 border-slate-100 rounded-xl text-[11px] font-bold text-slate-700 py-3 px-4 focus:ring-0" />
+                </div>
+                <div class="flex-1 min-w-[150px] space-y-2">
+                    <label class="text-[9px] font-black text-slate-400 uppercase tracking-widest ml-1">GCLID</label>
+                    <input v-model="filters.gclid" @input="applyFilters" placeholder="EAIaIQob..." class="w-full bg-slate-50 border-slate-100 rounded-xl text-[11px] font-bold text-slate-700 py-3 px-4 focus:ring-0" />
+                </div>
+                <!-- Exclude Bots Toggle -->
+                <div class="flex items-center gap-3 bg-slate-50 px-5 py-4 rounded-2xl border border-slate-100">
+                    <label class="text-[9px] font-black text-slate-400 uppercase tracking-widest cursor-pointer" for="bot-toggle">Exclude Bots</label>
+                    <button @click="filters.exclude_bots = !filters.exclude_bots; applyFilters()" 
+                        id="bot-toggle"
+                        class="w-10 h-5 rounded-full transition-all relative"
+                        :class="filters.exclude_bots ? 'bg-indigo-600' : 'bg-slate-200'"
+                    >
+                        <div class="absolute top-1 left-1 w-3 h-3 bg-white rounded-full transition-all" :class="{ 'translate-x-5': filters.exclude_bots }"></div>
+                    </button>
                 </div>
             </div>
 

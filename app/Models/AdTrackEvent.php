@@ -30,10 +30,12 @@ class AdTrackEvent extends Model
         'utm_campaign',
         'ip_hash',
         'metadata',
+        'is_bot',
     ];
 
     protected $casts = [
         'metadata' => 'json',
+        'is_bot' => 'boolean',
     ];
 
     public function organization(): BelongsTo

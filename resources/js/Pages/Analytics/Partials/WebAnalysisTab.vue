@@ -114,10 +114,7 @@ const siteStatusInfo = computed(() => {
 
 // Derived health score (0–100) from available signals
 const overallHealthScore = computed(() => {
-    const links = webAnalysisResponse.value.analysis_links || []
-    if (!links.length) return null
-    const avg = links.reduce((sum, l) => sum + (l.seo_score || 0), 0) / links.length
-    return Math.round(avg)
+    return webAnalysisResponse.value.health_score ?? null
 })
 
 const healthColor = computed(() => {
