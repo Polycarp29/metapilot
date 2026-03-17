@@ -632,6 +632,11 @@ const copySnippet = () => {
     toast.success('Snippet copied to clipboard!', 'Copied')
 }
 
+const copyText = (text, label = 'Content') => {
+    navigator.clipboard.writeText(text)
+    toast.success(`${label} copied to clipboard!`, 'Copied')
+}
+
 const safeHostname = (url) => {
     if (!url) return ''
     try {
@@ -1484,40 +1489,72 @@ watch(pathFilter, () => { if (!pathFilter.value) fetchEvents() })
         <transition enter-active-class="transition duration-300 ease-out" enter-from-class="opacity-0" enter-to-class="opacity-100" leave-active-class="transition duration-200 ease-in" leave-from-class="opacity-100" leave-to-class="opacity-0">
             <div v-if="selectedSession" class="fixed inset-0 z-[60] flex items-center justify-center p-6 md:p-12">
                 <div class="absolute inset-0 bg-slate-900/60 backdrop-blur-2xl" @click="selectedSession = null"></div>
-                <div class="relative w-full max-w-6xl bg-white rounded-[4rem] shadow-premium-modal overflow-hidden flex flex-col max-h-[95vh] border border-white/20">
+                <div class="relative w-full max-w-6xl bg-white/80 backdrop-blur-3xl rounded-[4rem] shadow-premium-modal overflow-hidden flex flex-col max-h-[95vh] border border-white/40">
                     <!-- Modal Header -->
-                    <div class="p-14 border-b border-slate-100/50 flex items-center justify-between bg-white">
+                    <div class="p-14 border-b border-slate-100/50 flex items-center justify-between bg-white/40">
                         <div>
                             <div class="flex items-center gap-5">
-                                <h3 class="text-4xl font-black text-slate-900 tracking-tight italic">Forensic Journey</h3>
-                                <span class="px-5 py-1.5 bg-indigo-600 text-white text-[11px] font-black rounded-full uppercase tracking-widest shadow-2xl">
-                                    {{ selectedSession?.session_id?.substring(0, 16) || 'ANONYMOUS' }}
-                                </span>
+                                <h3 class="text-4xl font-black text-slate-900 tracking-tight">Session Journey</h3>
+                                <button @click="copyText(selectedSession?.session_id, 'Session ID')" 
+                                    class="group flex items-center gap-3 px-5 py-2 bg-slate-900 text-white text-[11px] font-black rounded-2xl uppercase tracking-widest shadow-2xl hover:bg-indigo-600 transition-all active:scale-95">
+                                    {{ selectedSession?.session_id?.substring(0, 12) || 'ANONYMOUS' }}...
+                                    <svg class="w-3.5 h-3.5 opacity-40 group-hover:opacity-100" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M8 5H6a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2v-1M8 5a2 2 0 002 2h2a2 2 0 002-2M8 5a2 2 0 012-2h2a2 2 0 012 2m0 0h2a2 2 0 012 2v3m2 4H10m0 0l3-3m-3 3l3 3"/></svg>
+                                </button>
                             </div>
-                            <p class="text-slate-400 font-bold mt-3 text-xs uppercase tracking-widest">Digital forensics for attribution verification.</p>
+                            <p class="text-slate-400 font-bold mt-3 text-xs uppercase tracking-widest">Digital attribution verification & step-by-step signals.</p>
                         </div>
-                        <button @click="selectedSession = null" class="w-16 h-16 bg-slate-50 hover:bg-slate-100 text-slate-400 rounded-3xl transition-all flex items-center justify-center active:scale-90">
+                        <button @click="selectedSession = null" class="w-16 h-16 bg-white/40 hover:bg-white text-slate-400 rounded-3xl transition-all flex items-center justify-center active:scale-90 border border-white/40 shadow-sm">
                             <svg class="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M6 18L18 6M6 6l12 12"/></svg>
                         </button>
                     </div>
 
-                    <div class="flex-1 overflow-y-auto p-14 bg-white">
+                    <div class="flex-1 overflow-y-auto p-14 bg-white/20 no-scrollbar">
                         <div class="grid grid-cols-1 lg:grid-cols-12 gap-16">
                             <!-- Left: Journey -->
                             <div class="lg:col-span-5 space-y-12">
                                 <h4 class="text-[11px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-4">
-                                    <span class="w-10 h-0.5 bg-indigo-600"></span>Step-by-Step Signals
+                                    <span class="w-10 h-0.5 bg-indigo-600"></span>Step-by-Step Visualization
                                 </h4>
+                                
                                 <div class="space-y-10 relative before:absolute before:left-[19px] before:top-6 before:bottom-6 before:w-px before:bg-slate-100">
-                                    <div v-for="entry in sessionTimeline" :key="entry.id" class="relative pl-14 group">
-                                        <div class="absolute left-0 top-1 w-10 h-10 bg-white border-2 border-slate-100 group-hover:border-indigo-600 rounded-2xl flex items-center justify-center z-10 transition-all shadow-sm">
-                                            <div class="w-2 h-2 bg-slate-200 group-hover:bg-indigo-600 rounded-full transition-all"></div>
+                                    <div v-for="(entry, idx) in sessionTimeline" :key="entry.id" class="relative pl-14 group">
+                                        <!-- Node -->
+                                        <div class="absolute left-0 top-1 w-10 h-10 bg-white border-2 border-slate-100 group-hover:border-indigo-600 rounded-2xl flex items-center justify-center z-10 transition-all shadow-sm group-hover:shadow-indigo-100 group-hover:-translate-y-0.5">
+                                            <span class="text-[10px] font-black text-slate-400 group-hover:text-indigo-600">{{ idx + 1 }}</span>
                                         </div>
-                                        <p class="text-sm font-black text-slate-900 uppercase italic truncate" :title="entry.page_url">{{ entry.page_url?.split('/').pop() || 'Root Index' }}</p>
-                                        <div class="flex items-center gap-4 mt-2">
-                                            <span class="text-[10px] text-slate-400 font-black uppercase">{{ new Date(entry.created_at).toLocaleTimeString() }}</span>
-                                            <span class="px-2 py-0.5 bg-slate-50 text-slate-500 text-[9px] font-black rounded uppercase">{{ entry.duration_seconds }}s Stay</span>
-                                            <span v-if="entry.click_count > 0" class="text-emerald-600 text-[9px] font-black uppercase tracking-widest">{{ entry.click_count }} Clicks</span>
+
+                                        <!-- Browser Simulation & Link -->
+                                        <div class="space-y-3">
+                                            <!-- Browser Bar Simulation -->
+                                            <div class="bg-slate-50 border border-slate-200 rounded-2xl p-3 flex items-center gap-4 transition-all group-hover:bg-white group-hover:border-indigo-100 group-hover:shadow-premium-sm relative overflow-hidden">
+                                                <!-- Action dots -->
+                                                <div class="flex gap-1.5 px-1.5 opacity-40 group-hover:opacity-100 transition-opacity">
+                                                    <div class="w-2 h-2 rounded-full bg-rose-400"></div>
+                                                    <div class="w-2 h-2 rounded-full bg-amber-400"></div>
+                                                    <div class="w-2 h-2 rounded-full bg-emerald-400"></div>
+                                                </div>
+
+                                                <!-- Address Bar -->
+                                                <div class="flex-1 bg-white border border-slate-200/60 rounded-lg px-3 py-1.5 flex items-center justify-between group/bar">
+                                                    <div class="flex items-center gap-2 overflow-hidden">
+                                                        <svg class="w-3 h-3 text-slate-300" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M12 11c0 3.517-1.009 6.799-2.753 9.571m-3.44-2.04l.054-.09A10.003 10.003 0 0014 3c1.259 0 2.455.232 3.559.651m.517 1.352A9.993 9.993 0 0115.357 15l-.43.515"/></svg>
+                                                        <span class="text-[9px] font-bold text-slate-500 truncate lowercase">{{ entry.page_url }}</span>
+                                                    </div>
+                                                    <button @click="copyText(entry.page_url, 'URL')" class="text-slate-300 hover:text-indigo-600 transition-colors p-1 rounded-md hover:bg-indigo-50">
+                                                        <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M8 5H6a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2v-1M8 5a2 2 0 002 2h2a2 2 0 002-2M8 5a2 2 0 012-2h2a2 2 0 012 2m0 0h2a2 2 0 012 2v3m2 4H10m0 0l3-3m-3 3l3 3"/></svg>
+                                                    </button>
+                                                </div>
+                                            </div>
+
+                                            <div class="flex items-center gap-4 px-2">
+                                                <span class="text-[10px] text-slate-400 font-extrabold uppercase tracking-tight">{{ new Date(entry.created_at).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) }}</span>
+                                                <div class="h-1 w-1 rounded-full bg-slate-200"></div>
+                                                <span class="px-2 py-0.5 bg-indigo-50 text-indigo-600 text-[9px] font-black rounded uppercase">{{ entry.duration_seconds }}s Engagement</span>
+                                                <span v-if="entry.click_count > 0" class="flex items-center gap-1.5 text-emerald-600 text-[9px] font-black uppercase tracking-widest">
+                                                    <span class="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
+                                                    {{ entry.click_count }} Interactions
+                                                </span>
+                                            </div>
                                         </div>
                                     </div>
                                 </div>
@@ -1560,12 +1597,15 @@ watch(pathFilter, () => { if (!pathFilter.value) fetchEvents() })
                                         </div>
                                     </div>
                                 </div>
-                                <div class="p-8 bg-emerald-50/50 rounded-3xl border border-emerald-100/50">
-                                    <p class="text-[10px] font-black text-emerald-400 uppercase tracking-widest mb-2">Google Ads Verification</p>
-                                    <p v-if="selectedSession.gclid" class="text-xs font-bold text-emerald-700 break-all leading-relaxed">
-                                        Verified Google Ads lead with GCLID: <span class="font-black italic bg-white/50 px-1">{{ selectedSession.gclid }}</span>
+                                <div class="p-8 bg-emerald-500/10 rounded-3xl border border-emerald-500/20 backdrop-blur-md">
+                                    <p class="text-[10px] font-black text-emerald-600 uppercase tracking-widest mb-3 flex items-center gap-2">
+                                        <span class="w-2 h-2 rounded-full bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.6)]"></span>
+                                        Google Ads Verification
                                     </p>
-                                    <p v-else class="text-xs font-bold text-slate-400 italic uppercase tracking-tighter">No GCLID detected for this session.</p>
+                                    <p v-if="selectedSession.gclid" class="text-xs font-bold text-emerald-800 break-all leading-relaxed">
+                                        Verified Google Ads lead with GCLID: <span class="font-black bg-emerald-100/50 px-1.5 py-0.5 rounded-md">{{ selectedSession.gclid }}</span>
+                                    </p>
+                                    <p v-else class="text-xs font-bold text-slate-400 uppercase tracking-tighter">No GCLID detected for this session.</p>
                                 </div>
                             </div>
                         </div>
