@@ -54,7 +54,10 @@ class RunScheduledCrawlsCommand extends Command
                     $sitemap->id,
                     $startUrl,
                     $schedule->max_depth,
-                    ['job_id' => $jobId]
+                    [
+                        'job_id' => $jobId,
+                        'render_js' => $schedule->render_js,
+                    ]
                 );
 
                 if ($result) {

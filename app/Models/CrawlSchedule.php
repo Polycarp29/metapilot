@@ -15,6 +15,7 @@ class CrawlSchedule extends Model
         'day_of_week',
         'is_active',
         'max_depth',
+        'render_js',
         'last_run_at',
         'next_run_at',
         'last_run_status',
@@ -26,6 +27,7 @@ class CrawlSchedule extends Model
         'next_run_at' => 'datetime',
         'max_depth' => 'integer',
         'day_of_week' => 'integer',
+        'render_js' => 'boolean',
     ];
 
     public function sitemap()

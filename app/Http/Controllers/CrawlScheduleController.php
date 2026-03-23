@@ -43,6 +43,7 @@ class CrawlScheduleController extends Controller
             'run_at' => 'nullable|date_format:H:i',
             'day_of_week' => 'nullable|integer|min:0|max:6',
             'max_depth' => 'nullable|integer|min:1|max:10',
+            'render_js' => 'nullable|boolean',
         ]);
 
         // Verify sitemap belongs to org
@@ -62,11 +63,13 @@ class CrawlScheduleController extends Controller
             'run_at' => $validated['run_at'] ?? '02:00',
             'day_of_week' => $validated['day_of_week'],
             'max_depth' => $validated['max_depth'] ?? 3,
+            'render_js' => $validated['render_js'] ?? false,
             'is_active' => true,
-            'next_run_at' => now(),
+            'next_run_at' => now(), // Initial run scheduled for now (next 5-min cycle)
         ]);
 
-        $schedule->update(['next_run_at' => $schedule->computeNextRunAt()]);
+        // REMOVED: immediate computeNextRunAt update. 
+        // We let it run once first, then the command will update next_run_at.
 
         auth()->user()->logActivity('schedule_create', "Created crawl schedule for: {$sitemap->name}", [
             'schedule_id' => $schedule->id,
@@ -89,6 +92,7 @@ class CrawlScheduleController extends Controller
             'run_at' => 'nullable|date_format:H:i',
             'day_of_week' => 'nullable|integer|min:0|max:6',
             'max_depth' => 'nullable|integer|min:1|max:10',
+            'render_js' => 'sometimes|boolean',
             'is_active' => 'sometimes|boolean',
         ]);
 

@@ -35,7 +35,7 @@ class CrawlerManager
             'max_depth' => $maxDepth,
             'callback_url' => $callbackUrl,
             'options' => array_merge([
-                'render_js' => true,
+                'render_js' => false,
                 'individual_results' => false,
             ], $options)
         ];
