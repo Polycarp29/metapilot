@@ -141,10 +141,14 @@ class AnalyticsAggregatorService
             }
         }
 
-        // 4. Get all Search Console records for the range to aggregate breakdowns
+        // 4. Get Search Console records for the range to aggregate breakdowns.
+        // PERF: select only the JSON breakdown columns + date; apply a 90-row cap
+        // to prevent OOM when a property has many months of daily snapshots.
         $gscRecords = \App\Models\SearchConsoleMetric::where('analytics_property_id', $propertyId)
             ->whereBetween('snapshot_date', [$startDate, $endDate])
             ->orderBy('snapshot_date', 'desc')
+            ->select(['snapshot_date', 'top_queries', 'top_pages', 'sitemaps'])
+            ->limit(90)
             ->get();
 
         $latestGscRecord = $gscRecords->first();
@@ -186,6 +190,8 @@ class AnalyticsAggregatorService
                 unset($q['count']);
             }
             usort($aggregatedQueries, fn($a, $b) => $b['clicks'] <=> $a['clicks']);
+            // Cap to top 100 to keep the response payload and memory bounded
+            $aggregatedQueries = array_slice($aggregatedQueries, 0, 100);
             
             // Finalize averages and sort Pages
             foreach ($aggregatedPages as &$p) {
@@ -193,6 +199,8 @@ class AnalyticsAggregatorService
                 unset($p['count']);
             }
             usort($aggregatedPages, fn($a, $b) => $b['clicks'] <=> $a['clicks']);
+            // Cap to top 100 to keep the response payload and memory bounded
+            $aggregatedPages = array_slice($aggregatedPages, 0, 100);
         }
 
         $latestGscBreakdowns = null;

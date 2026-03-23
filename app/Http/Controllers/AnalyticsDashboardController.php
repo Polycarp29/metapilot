@@ -90,8 +90,6 @@ class AnalyticsDashboardController extends Controller
 
         $overview = $this->aggregator->getOverviewWithComparison($property->id, $startDate, $endDate);
         $overview['syncing_queued'] = $syncingQueued;
-        
-        Log::debug("Analytics overview data for property {$property->id}: " . json_encode($overview));
 
         return response()->json($overview);
     }
@@ -130,8 +128,6 @@ class AnalyticsDashboardController extends Controller
         Log::info("Fetching analytics trends for property {$property->id}, metric: {$metric}, from {$startDate} to {$endDate}.");
 
         $trends = $this->aggregator->getTrendData($property->id, $startDate, $endDate);
-        
-        Log::debug("Analytics trend data for property {$property->id} ({$metric}): " . json_encode($trends));
 
         return response()->json($trends);
     }
@@ -231,22 +227,32 @@ class AnalyticsDashboardController extends Controller
         $campaigns = $this->ga4Service->fetchCampaigns($property, $startDate, $endDate);
         
         // --- Merge Local Pixel Data for "Live" feel and fallback ---
-        $pixelEvents = AdTrackEvent::where('organization_id', $property->organization_id)
+        // PERF: Use a DB aggregation query instead of loading all rows into PHP.
+        // This avoids OOM when there are large numbers of pixel events.
+        $pixelCampaigns = AdTrackEvent::where('organization_id', $property->organization_id)
             ->whereBetween('created_at', [$startDate . ' 00:00:00', $endDate . ' 23:59:59'])
+            ->select([
+                DB::raw('COALESCE(utm_campaign, google_campaign_id, \'unknown\') as campaign_name'),
+                'utm_source',
+                'utm_medium',
+                DB::raw('SUM(click_count) as clicks'),
+                DB::raw('COUNT(DISTINCT session_id) as sessions'),
+                DB::raw('COUNT(DISTINCT ip_hash) as users'),
+            ])
+            ->groupBy('campaign_name', 'utm_source', 'utm_medium')
             ->get();
 
-        $pixelCampaigns = $pixelEvents->groupBy(function($item) {
-            return $item->utm_campaign ?: ($item->google_campaign_id ?: 'unknown');
-        });
+        foreach ($pixelCampaigns as $row) {
+            $name     = $row->campaign_name;
+            $clicks   = (int) $row->clicks;
+            $sessions = (int) $row->sessions;
 
-        foreach ($pixelCampaigns as $name => $events) {
-            $clicks = $events->sum('click_count');
-            $sessions = $events->unique('session_id')->count();
-            
+            if ($name === 'unknown') continue;
+
             if (isset($campaigns[$name])) {
-                $campaigns[$name]['pixel_clicks'] = $clicks;
+                $campaigns[$name]['pixel_clicks']   = $clicks;
                 $campaigns[$name]['pixel_sessions'] = $sessions;
-                
+
                 // If GA4 values are 0, use pixel values to power insights
                 if (($campaigns[$name]['sessions'] ?? 0) === 0) {
                     $campaigns[$name]['sessions'] = $sessions;
@@ -255,24 +261,22 @@ class AnalyticsDashboardController extends Controller
                     $campaigns[$name]['ad_clicks'] = $clicks;
                 }
             } else {
-                if ($name === 'unknown') continue;
-                
                 $campaigns[$name] = [
-                    'source_medium' => ($events->first()->utm_source ?? 'direct') . ' / ' . ($events->first()->utm_medium ?? 'none'),
-                    'campaign'      => $name,
-                    'sessions'      => $sessions,
-                    'users'         => $events->unique('ip_hash')->count(),
-                    'conversions'   => 0,
+                    'source_medium'   => ($row->utm_source ?? 'direct') . ' / ' . ($row->utm_medium ?? 'none'),
+                    'campaign'        => $name,
+                    'sessions'        => $sessions,
+                    'users'           => (int) $row->users,
+                    'conversions'     => 0,
                     'engagement_rate' => 0,
-                    'ad_clicks'      => $clicks,
-                    'ad_cost'        => 0,
-                    'ad_impressions' => 0,
-                    'roas'           => 0,
-                    'is_pixel_only'  => true,
+                    'ad_clicks'       => $clicks,
+                    'ad_cost'         => 0,
+                    'ad_impressions'  => 0,
+                    'roas'            => 0,
+                    'is_pixel_only'   => true,
                 ];
             }
         }
-        
+
         return response()->json(array_values($campaigns));
     }
 
