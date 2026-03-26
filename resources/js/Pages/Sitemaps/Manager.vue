@@ -827,6 +827,26 @@
         </button>
       </div>
     </div>
+    <!-- Cancellation Toast -->
+    <div v-if="showCancelToast" class="fixed bottom-10 right-10 z-[200] animate-slide-up">
+      <div class="bg-slate-900 text-white p-6 rounded-[2rem] shadow-2xl border border-white/10 flex items-center gap-6">
+        <div class="w-12 h-12 bg-red-500 rounded-2xl flex items-center justify-center text-white">
+          <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+          </svg>
+        </div>
+        <div>
+          <h4 class="text-sm font-black tracking-tight">Crawl Terminated</h4>
+          <p class="text-[10px] text-slate-400 font-medium whitespace-nowrap">The crawler has been stopped and discarded.</p>
+        </div>
+        <button @click="showCancelToast = false" class="text-slate-500 hover:text-white transition-colors p-2">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+          </svg>
+        </button>
+      </div>
+    </div>
+
     <!-- Error Toast -->
     <div v-show="showErrorToast" class="fixed bottom-10 right-10 z-[200] animate-slide-up">
       <div class="bg-red-600 text-white p-6 rounded-[2rem] shadow-2xl border border-white/10 flex items-center gap-6">
@@ -909,6 +929,7 @@ const showRecrawlModal = ref(false)
 const showCrawlModeModal = ref(false)
 const manualCrawling = ref(false)
 const showCompletionToast = ref(false)
+const showCancelToast = ref(false)
 const showErrorToast = ref(false)
 const errorToastMessage = ref('')
 const showLinkToast = ref(false)
@@ -1253,20 +1274,22 @@ const triggerCrawl = async () => {
   }
 }
 
-const cancelCrawl = () => {
+const cancelCrawl = async () => {
   if (!confirm('This will immediately terminate the crawler and stop discovery. Continue?')) return
-  
-  router.post(route('sitemaps.cancel-crawl', props.sitemap.id), {}, {
-    onSuccess: () => {
-      stopPolling()
-      showProgressModal.value = false
-      crawling.value = false
-    },
-    onError: () => {
-      // Even on error, we might want to close UI
-      showProgressModal.value = false
-    }
-  })
+
+  try {
+    await axios.post(route('sitemaps.cancel-crawl', props.sitemap.id), {}, {
+      headers: { 'Accept': 'application/json' }
+    })
+  } catch (e) {
+    console.error('Cancel crawl error:', e)
+  } finally {
+    stopPolling()
+    showProgressModal.value = false
+    crawling.value = false
+    showCancelToast.value = true
+    setTimeout(() => { showCancelToast.value = false }, 6000)
+  }
 }
 
 const analyzeLink = (link) => {
