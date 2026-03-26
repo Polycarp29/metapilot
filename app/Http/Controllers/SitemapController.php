@@ -1082,6 +1082,10 @@ class SitemapController extends Controller
             'last_crawl_status' => 'cancelled'
         ]);
 
+        if (request()->header('X-Inertia')) {
+            return back()->with('message', 'Crawl cancellation signal sent successfully.');
+        }
+
         return response()->json([
             'message' => 'Crawl cancellation signal sent successfully.',
             'status' => 'cancelled'
