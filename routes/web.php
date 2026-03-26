@@ -115,6 +115,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
     // Team Management
     Route::resource('team-members', \App\Http\Controllers\TeamMemberController::class)->only(['index', 'update', 'destroy']);
     Route::post('team-invitations', [\App\Http\Controllers\OrganizationInvitationController::class, 'store'])->name('team-invitations.store');
+    Route::post('team-invitations/{invitation}/resend', [\App\Http\Controllers\OrganizationInvitationController::class, 'resend'])->name('team-invitations.resend');
     Route::delete('team-invitations/{invitation}', [\App\Http\Controllers\OrganizationInvitationController::class, 'destroy'])->name('team-invitations.destroy');
 
     // Profile

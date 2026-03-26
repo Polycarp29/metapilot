@@ -1275,11 +1275,12 @@ const triggerCrawl = async () => {
 }
 
 const cancelCrawl = async () => {
-  if (!confirm('This will immediately terminate the crawler and stop discovery. Continue?')) return
-
   try {
     await axios.post(route('sitemaps.cancel-crawl', props.sitemap.id), {}, {
-      headers: { 'Accept': 'application/json' }
+      headers: {
+        'Accept': 'application/json',
+        'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') ?? ''
+      }
     })
   } catch (e) {
     console.error('Cancel crawl error:', e)

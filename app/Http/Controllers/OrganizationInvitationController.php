@@ -50,7 +50,7 @@ class OrganizationInvitationController extends Controller
             'email' => $validated['email'],
             'role' => $validated['role'],
             'project_id' => $validated['project_id'] ?? null,
-            'token' => Str::random(32),
+            'token' => OrganizationInvitation::generateToken(),
             'expires_at' => now()->addDays(7),
         ]);
 
@@ -80,6 +80,10 @@ class OrganizationInvitationController extends Controller
             abort(403, 'You do not have permission to manage invitations.');
         }
 
+        if ($invitation->accepted_at) {
+            return back()->with('error', 'Cannot cancel an invitation that has already been accepted.');
+        }
+
         $email = $invitation->email;
         $invitation->delete();
 
@@ -88,5 +92,40 @@ class OrganizationInvitationController extends Controller
         ], $organization->id);
 
         return back()->with('message', 'Invitation cancelled.');
+    }
+
+    /**
+     * Resend an invitation.
+     */
+    public function resend(OrganizationInvitation $invitation)
+    {
+        $organization = auth()->user()->currentOrganization();
+
+        if ($invitation->organization_id !== $organization->id) {
+            abort(403);
+        }
+
+        if (auth()->user()->getRoleIn($organization) === 'member') {
+            abort(403, 'You do not have permission to manage invitations.');
+        }
+
+        if ($invitation->accepted_at) {
+            return back()->with('error', 'This invitation has already been accepted.');
+        }
+
+        // Refresh token and expiry
+        $invitation->update([
+            'token' => OrganizationInvitation::generateToken(),
+            'expires_at' => now()->addDays(7),
+        ]);
+
+        Mail::to($invitation->email)->queue(new InvitationMailable($invitation));
+
+        auth()->user()->logActivity('invitation_resent', "Resent invitation to {$invitation->email}", [
+            'email' => $invitation->email,
+            'role' => $invitation->role
+        ], $organization->id);
+
+        return back()->with('message', 'Invitation resent successfully.');
     }
 }
