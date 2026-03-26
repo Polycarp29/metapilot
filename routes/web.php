@@ -219,7 +219,7 @@ Route::prefix('cdn')->name('cdn.')->middleware('throttle:120,1')->group(function
 
 // Invitation Acceptance (Public/Guest or Auth)
 Route::get('invitations/{token}', [\App\Http\Controllers\Auth\InvitationAcceptanceController::class, 'show'])->name('invitations.accept');
-Route::post('invitations/{token}', [\App\Http\Controllers\Auth\InvitationAcceptanceController::class, 'store']);
+Route::post('invitations/{token}', [\App\Http\Controllers\Auth\InvitationAcceptanceController::class, 'store'])->name('invitations.accept.store');
 
 // Email Verification Routes
 Route::middleware('auth')->group(function () {

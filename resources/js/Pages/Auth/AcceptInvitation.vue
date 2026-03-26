@@ -133,7 +133,7 @@ const form = useForm({
 });
 
 const submit = () => {
-  form.post(route('invitations.accept', { token: props.invitation.token }));
+  form.post(route('invitations.accept.store', { token: props.invitation.token }));
 };
 
 const logout = () => {
