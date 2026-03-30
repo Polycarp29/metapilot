@@ -797,13 +797,48 @@
                >
                  Keep Scanning in Background
                </button>
-               <button 
-                 @click="cancelCrawl"
-                 class="w-full bg-red-50 text-red-600 py-4 rounded-2xl font-black text-[10px] uppercase tracking-widest transition-standard hover:bg-red-100 active:scale-95 border border-red-100/50"
-               >
-                 Terminate Sync & Discard
-               </button>
+                <button 
+                  @click="showCancelConfirmModal = true"
+                  class="w-full bg-red-50 text-red-600 py-4 rounded-2xl font-black text-[10px] uppercase tracking-widest transition-standard hover:bg-red-100 active:scale-95 border border-red-100/50"
+                >
+                  Terminate Sync & Discard
+                </button>
             </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Cancellation Confirmation Modal -->
+    <div v-if="showCancelConfirmModal" class="fixed inset-0 z-[300] flex items-center justify-center p-6 bg-slate-900/60 backdrop-blur-md">
+      <div class="bg-white w-full max-w-md rounded-[3rem] shadow-2xl p-10 relative scale-in-center border border-slate-100">
+        <div class="text-center space-y-6">
+          <div class="w-20 h-20 bg-red-50 rounded-[2rem] flex items-center justify-center text-red-500 mx-auto mb-2">
+            <svg class="w-10 h-10" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+            </svg>
+          </div>
+          
+          <div>
+            <h3 class="text-2xl font-black text-slate-900 tracking-tight">Confirm Termination</h3>
+            <p class="text-slate-500 font-medium text-sm mt-2 leading-relaxed">
+              This will immediately stop the crawler. Any unsaved link discoveries will be lost and the sync process will be discarded.
+            </p>
+          </div>
+
+          <div class="flex flex-col gap-3 pt-2">
+            <button 
+              @click="performCancelCrawl"
+              class="w-full bg-red-600 text-white py-4 rounded-2xl font-black text-sm transition-standard hover:bg-red-700 active:scale-95 shadow-xl shadow-red-200"
+            >
+              Yes, Terminate & Discard
+            </button>
+            <button 
+              @click="showCancelConfirmModal = false"
+              class="w-full bg-slate-100 text-slate-600 py-4 rounded-2xl font-black text-[10px] uppercase tracking-widest transition-standard hover:bg-slate-200 active:scale-95"
+            >
+              No, Continue Scanning
+            </button>
+          </div>
         </div>
       </div>
     </div>
@@ -928,8 +963,8 @@ const showProgressModal = ref(false)
 const showRecrawlModal = ref(false)
 const showCrawlModeModal = ref(false)
 const manualCrawling = ref(false)
-const showCompletionToast = ref(false)
 const showCancelToast = ref(false)
+const showCancelConfirmModal = ref(false)
 const showErrorToast = ref(false)
 const errorToastMessage = ref('')
 const showLinkToast = ref(false)
@@ -1274,7 +1309,9 @@ const triggerCrawl = async () => {
   }
 }
 
-const cancelCrawl = async () => {
+const performCancelCrawl = async () => {
+  showCancelConfirmModal.value = false
+  
   try {
     await axios.post(route('sitemaps.cancel-crawl', props.sitemap.id), {}, {
       headers: {

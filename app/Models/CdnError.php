@@ -20,6 +20,9 @@ class CdnError extends Model
         'filename',
         'user_agent',
         'ip_hash',
+        'load_time_ms',
+        'error_type',
+        'http_status',
     ];
 
     public function organization(): BelongsTo

@@ -81,6 +81,17 @@ let eventsInterval     = null
 let connInterval       = null
 let analyticsInterval  = null
 
+// Path Intelligence pagination
+const pagesPage      = ref(1)
+const pagesPerPage   = ref(10)
+const pagesTotalCount = ref(0)
+
+// Attribution unified search
+const attributionSearch = ref('')
+
+// Expanded row for bottleneck details (stores page_url or null)
+const expandedPage = ref(null)
+
 // ─── Computed ─────────────────────────────────────────────────────────────────
 const siteToken = computed(() => props.organization?.ads_site_token)
 
@@ -336,9 +347,37 @@ const historyChartOptions = {
 }
 
 const topPages   = computed(() => analyticsData.value?.top_pages      ?? [])
+const pagesTotal = computed(() => analyticsData.value?.pages_total     ?? 0)
 const topReferers = computed(() => analyticsData.value?.top_referrers ?? [])
 const rising     = computed(() => analyticsData.value?.trend_velocity?.rising  ?? [])
 const falling    = computed(() => analyticsData.value?.trend_velocity?.falling ?? [])
+const siteHealth = computed(() => analyticsData.value?.site_health ?? null)
+
+// Session lead qualification
+const sessionIsLead = computed(() => {
+    if (!selectedSession.value) return false
+    const total = sessionTimeline.value.reduce((s, e) => s + (e.duration_seconds || 0), 0)
+    const hasHotPage = sessionTimeline.value.some(e => (e.duration_seconds || 0) >= 60)
+    return total >= 90 || hasHotPage
+})
+
+const copyJourney = () => {
+    const urls = sessionTimeline.value.map(e => e.page_url).filter(Boolean).join('\n')
+    navigator.clipboard.writeText(urls)
+    toast.success('Full journey copied!', 'Copied')
+}
+
+// Bottleneck helpers
+const bottleneckIcon = (sev) => ({ critical: '🔴', warning: '🟡', good: '🟢' }[sev] ?? '⚪')
+const bottleneckLabel = (sev) => ({ critical: 'Critical', warning: 'Warning', good: 'Good' }[sev] ?? 'N/A')
+const bottleneckBg = (sev) => ({ critical: 'bg-rose-50 text-rose-700 border-rose-200', warning: 'bg-amber-50 text-amber-700 border-amber-200', good: 'bg-emerald-50 text-emerald-700 border-emerald-200' }[sev] ?? 'bg-slate-50 text-slate-500')
+
+// Format ms → human
+const fmtMs = (ms) => {
+    if (!ms || ms === 0) return '—'
+    if (ms < 1000) return `${ms}ms`
+    return `${(ms / 1000).toFixed(1)}s`
+}
 
 const safePathLabel = (url) => {
     if (!url) return '—'
@@ -439,15 +478,53 @@ const fetchAnalytics = async () => {
         const r = await axios.get(route('google-ads.analytics'), {
             params: { 
                 ...filters.value,
-                pixel_site_id: selectedSiteId.value 
+                pixel_site_id: selectedSiteId.value,
+                pages_page:     pagesPage.value,
+                pages_per_page: pagesPerPage.value,
             }
         })
         analyticsData.value = r.data
+        pagesTotalCount.value = r.data.pages_total ?? 0
     } catch (e) {
         console.error('Failed to fetch analytics', e)
     } finally {
         isLoadingAnalytics.value = false
     }
+}
+
+const nextPagesPage = () => {
+    const lastPage = Math.ceil(pagesTotal.value / pagesPerPage.value)
+    if (pagesPage.value < lastPage) {
+        pagesPage.value++
+        fetchAnalytics()
+    }
+}
+
+const prevPagesPage = () => {
+    if (pagesPage.value > 1) {
+        pagesPage.value--
+        fetchAnalytics()
+    }
+}
+
+const applyAttributionSearch = () => {
+    const q = attributionSearch.value.trim()
+    // Broadcast to all attribution filters simultaneously
+    filters.value.utm_source   = q
+    filters.value.utm_medium   = q
+    filters.value.utm_campaign = q
+    filters.value.page = 1
+    fetchEvents()
+}
+
+const clearAttributionSearch = () => {
+    attributionSearch.value    = ''
+    filters.value.utm_source   = ''
+    filters.value.utm_medium   = ''
+    filters.value.utm_campaign = ''
+    filters.value.gclid        = ''
+    filters.value.page = 1
+    fetchEvents()
 }
 
 const drillToPath = (pageUrl) => {
@@ -978,7 +1055,7 @@ watch(pathFilter, () => { if (!pathFilter.value) fetchEvents() })
                     <thead>
                         <tr class="bg-slate-50/60">
                             <th class="py-5 px-12 text-[9px] font-black text-slate-400 uppercase tracking-widest">Page / Path</th>
-                            <th class="py-5 px-6 text-[9px] font-black text-slate-400 uppercase tracking-widest text-center">Intent Score</th>
+                            <th class="py-5 px-6 text-[9px] font-black text-slate-400 uppercase tracking-widest text-center">Health</th>
                             <th class="py-5 px-6 text-[9px] font-black text-slate-400 uppercase tracking-widest text-center">Total Hits</th>
                             <th class="py-5 px-6 text-[9px] font-black text-slate-400 uppercase tracking-widest text-center">Engagement</th>
                             <th class="py-5 px-6 text-[9px] font-black text-slate-400 uppercase tracking-widest text-center">Bounce Rate</th>
@@ -990,88 +1067,140 @@ watch(pathFilter, () => { if (!pathFilter.value) fetchEvents() })
                         <tr v-if="isLoadingAnalytics && !topPages.length">
                             <td colspan="7" class="py-16 text-center text-slate-300 text-[10px] font-black uppercase tracking-widest">Loading path data...</td>
                         </tr>
-                        <tr v-for="(page, idx) in topPages" :key="page.page_url"
-                            @click="drillToPath(page.page_url)"
-                            class="group hover:bg-indigo-50/30 cursor-pointer transition-all"
-                            :class="{ 'bg-indigo-50/20 border-l-4 border-indigo-500': pathFilter === page.page_url }">
-                            <td class="py-7 px-12">
-                                <div class="flex items-center gap-4">
-                                    <span class="w-7 h-7 flex items-center justify-center rounded-xl bg-slate-100 text-slate-400 text-[10px] font-black group-hover:bg-indigo-100 group-hover:text-indigo-600 transition-all">{{ idx + 1 }}</span>
-                                    <div class="min-w-0">
-                                        <div class="flex items-center gap-2 mb-1">
-                                            <p class="text-xs font-black text-slate-900 truncate max-w-xs" :title="page.page_url">
-                                                {{ safePathLabel(page.page_url) }}
-                                            </p>
-                                            <span v-if="page.is_ad_ready" class="px-2 py-0.5 bg-emerald-500 text-white text-[8px] font-black rounded-lg uppercase tracking-tighter shadow-sm shadow-emerald-100">Ad Ready</span>
-                                            <span v-if="page.top_intent" 
-                                                class="px-2 py-0.5 text-[8px] font-black rounded-lg uppercase tracking-tighter border shadow-sm"
-                                                :class="{
-                                                    'bg-indigo-50 text-indigo-600 border-indigo-100': page.top_intent === 'Transactional',
-                                                    'bg-blue-50 text-blue-600 border-blue-100': page.top_intent === 'Commercial',
-                                                    'bg-slate-50 text-slate-500 border-slate-100': page.top_intent === 'Informational',
-                                                }"
-                                            >{{ page.top_intent }} Intent</span>
+                        <template v-for="(page, idx) in topPages" :key="page.page_url">
+                            <tr @click="drillToPath(page.page_url)"
+                                class="group hover:bg-slate-50 cursor-pointer transition-all border-l-4"
+                                :class="pathFilter === page.page_url ? 'bg-indigo-50/20 border-indigo-500' : 'border-transparent'">
+                                <td class="py-7 px-12">
+                                    <div class="flex items-center gap-4">
+                                        <div class="w-8 h-8 flex items-center justify-center rounded-xl bg-slate-100 text-slate-400 text-[10px] font-black group-hover:bg-indigo-600 group-hover:text-white transition-all shadow-sm">
+                                            {{ ((pagesPage - 1) * pagesPerPage) + idx + 1 }}
                                         </div>
-                                        <div class="flex items-center gap-2">
-                                            <span v-for="k in page.matched_keywords.slice(0, 3)" :key="k.query" class="text-[8px] font-bold text-slate-400">#{{ k.query.replace(/\s+/g, '') }}</span>
-                                            <span v-if="!page.matched_keywords.length" class="text-[9px] text-slate-300 font-bold truncate max-w-xs">{{ safeHostname(page.page_url) }}</span>
+                                        <div class="min-w-0">
+                                            <div class="flex items-center gap-2 mb-1">
+                                                <p class="text-[11px] font-black text-slate-900 truncate max-w-xs" :title="page.page_url">
+                                                    {{ safePathLabel(page.page_url) }}
+                                                </p>
+                                                <span v-if="page.is_ad_ready" class="px-2 py-0.5 bg-emerald-500 text-white text-[8px] font-black rounded-lg uppercase tracking-tighter shadow-sm">Ad Ready</span>
+                                                <button @click.stop="page.showRecs = !page.showRecs" class="p-1 text-slate-300 hover:text-indigo-600 transition-colors">
+                                                    <svg class="w-3.5 h-3.5" :class="{ 'rotate-180': page.showRecs }" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M19 9l-7 7-7-7"/></svg>
+                                                </button>
+                                            </div>
+                                            <div class="flex items-center gap-2">
+                                                <span v-for="k in page.matched_keywords.slice(0, 3)" :key="k.query" class="text-[8px] font-bold text-slate-400">#{{ k.query.replace(/\s+/g, '') }}</span>
+                                                <span v-if="!page.matched_keywords.length" class="text-[9px] text-slate-300 font-bold truncate max-w-xs">{{ safeHostname(page.page_url) }}</span>
+                                            </div>
                                         </div>
                                     </div>
-                                </div>
-                            </td>
-                            <td class="py-7 px-6 text-center">
-                                <div class="inline-flex flex-col items-center">
-                                    <span class="text-sm font-black" :class="page.engagement_score >= 70 ? 'text-indigo-600' : 'text-slate-900'">{{ page.engagement_score }}</span>
-                                    <div class="w-12 h-1 bg-slate-100 rounded-full mt-1 overflow-hidden">
-                                        <div class="h-full bg-indigo-500" :style="{ width: page.engagement_score + '%' }"></div>
+                                </td>
+                                <td class="py-7 px-6 text-center">
+                                    <div class="inline-flex px-3 py-1 rounded-full text-[9px] font-black uppercase tracking-tight border shadow-sm"
+                                        :class="getHealthClass(page.bottleneck_score)">
+                                        {{ getHealthLabel(page.bottleneck_score) }}
                                     </div>
-                                </div>
-                            </td>
-                            <td class="py-7 px-6 text-center">
-                                <span class="text-sm font-black text-slate-900">{{ page.total_hits }}</span>
-                                <p class="text-[9px] text-slate-400 font-bold mt-1">{{ page.ad_hits }} Ad Hits</p>
-                            </td>
-                            <td class="py-7 px-6 text-center">
-                                <div class="flex flex-col items-center">
-                                    <span class="text-xs font-black text-slate-700">{{ page.avg_duration }}s Dwell</span>
-                                    <span class="text-[9px] text-slate-400 font-bold mt-1">{{ page.avg_clicks }} Avg Clicks</span>
-                                </div>
-                            </td>
-                            <td class="py-7 px-6 text-center">
-                                <span class="text-xs font-black" :class="page.bounce_rate > 50 ? 'text-rose-500' : 'text-emerald-500'">{{ page.bounce_rate }}%</span>
-                                <div class="w-12 h-1 bg-slate-100 rounded-full mt-1 mx-auto overflow-hidden">
-                                    <div class="h-full" :class="page.bounce_rate > 50 ? 'bg-rose-500' : 'bg-emerald-500'" :style="{ width: page.bounce_rate + '%' }"></div>
-                                </div>
-                            </td>
-                            <td class="py-7 px-6">
-                                <!-- SVG sparkline -->
-                                <div class="flex items-center justify-center">
-                                    <svg width="80" height="28" class="overflow-visible">
-                                        <defs>
-                                            <linearGradient :id="'sg'+idx" x1="0" y1="0" x2="0" y2="1">
-                                                <stop offset="0%" stop-color="#6366f1" stop-opacity="0.3"/>
-                                                <stop offset="100%" stop-color="#6366f1" stop-opacity="0"/>
-                                            </linearGradient>
-                                        </defs>
-                                        <path v-if="sparklinePath(page.sparkline)" :d="sparklinePath(page.sparkline) + ' L80,28 L0,28 Z'"
-                                            :fill="'url(#sg'+idx+')'" />
-                                        <path :d="sparklinePath(page.sparkline)" fill="none" stroke="#6366f1" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-                                    </svg>
-                                </div>
-                            </td>
-                            <td class="py-7 px-10 text-right">
-                                <span class="inline-flex items-center px-3 py-1.5 rounded-xl text-[10px] font-black"
-                                    :class="deltaBadgeClass(page.delta_pct)">
-                                    {{ deltaIcon(page.delta_pct) }}
-                                </span>
-                                <p class="text-[9px] text-slate-400 font-bold mt-1.5 text-right">Today: {{ page.today_count }} / Yday: {{ page.yesterday_count }}</p>
-                            </td>
-                        </tr>
+                                </td>
+                                <td class="py-7 px-6 text-center">
+                                    <span class="text-sm font-black text-slate-900">{{ page.total_hits }}</span>
+                                    <p class="text-[9px] text-slate-400 font-bold mt-1">{{ page.ad_hits }} Ad Hits</p>
+                                </td>
+                                <td class="py-7 px-6 text-center">
+                                    <div class="flex flex-col items-center">
+                                        <span class="text-xs font-black text-slate-700">{{ page.avg_duration }}s Dwell</span>
+                                        <span class="text-[9px] text-slate-400 font-bold mt-1">{{ page.avg_clicks }} Avg Clicks</span>
+                                    </div>
+                                </td>
+                                <td class="py-7 px-6 text-center">
+                                    <span class="text-xs font-black" :class="page.bounce_rate > 50 ? 'text-rose-500' : 'text-emerald-500'">{{ page.bounce_rate }}%</span>
+                                    <div class="w-12 h-1 bg-slate-100 rounded-full mt-1 mx-auto overflow-hidden">
+                                        <div class="h-full" :class="page.bounce_rate > 50 ? 'bg-rose-500' : 'bg-emerald-500'" :style="{ width: page.bounce_rate + '%' }"></div>
+                                    </div>
+                                </td>
+                                <td class="py-7 px-6">
+                                    <!-- SVG sparkline -->
+                                    <div class="flex items-center justify-center">
+                                        <svg width="60" height="20" class="overflow-visible">
+                                            <path v-if="sparklinePath(page.sparkline)" :d="sparklinePath(page.sparkline)" fill="none" stroke="#6366f1" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                                        </svg>
+                                    </div>
+                                </td>
+                                <td class="py-7 px-10 text-right">
+                                    <span class="inline-flex items-center px-3 py-1.5 rounded-xl text-[10px] font-black font-mono shadow-sm"
+                                        :class="deltaBadgeClass(page.delta_pct)">
+                                        {{ deltaIcon(page.delta_pct) }}{{ Math.abs(page.delta_pct) }}%
+                                    </span>
+                                </td>
+                            </tr>
+                            <!-- Recommendation Row -->
+                            <tr v-if="page.showRecs" class="bg-slate-50/80 border-l-4 border-indigo-200">
+                                <td colspan="7" class="py-8 px-12">
+                                    <div class="grid grid-cols-1 md:grid-cols-3 gap-8">
+                                        <div class="col-span-1 space-y-4">
+                                            <h5 class="text-[9px] font-black text-slate-400 uppercase tracking-widest">Diagnostic Meta</h5>
+                                            <div class="space-y-2">
+                                                <div class="flex items-center justify-between p-3 bg-white rounded-xl border border-slate-100 shadow-sm">
+                                                    <span class="text-[9px] font-bold text-slate-500">Avg Load Time</span>
+                                                    <span class="text-[10px] font-black" :class="page.avg_load_time > 3000 ? 'text-rose-500' : 'text-slate-900'">{{ (page.avg_load_time / 1000).toFixed(2) }}s</span>
+                                                </div>
+                                                <div class="flex items-center justify-between p-3 bg-white rounded-xl border border-slate-100 shadow-sm">
+                                                    <span class="text-[9px] font-bold text-slate-500">Issue Count (24h)</span>
+                                                    <span class="text-[10px] font-black" :class="page.error_count > 0 ? 'text-rose-500' : 'text-slate-900'">{{ page.error_count }}</span>
+                                                </div>
+                                            </div>
+                                        </div>
+                                        <div class="col-span-2 space-y-4">
+                                             <h5 class="text-[9px] font-black text-slate-400 uppercase tracking-widest">MetaPilot Optimization Logic</h5>
+                                             <div class="p-6 bg-white rounded-2xl border border-slate-100 shadow-premium-sm relative overflow-hidden">
+                                                 <div class="absolute right-4 top-4 text-xs opacity-20">🤖</div>
+                                                 <p class="text-xs font-bold text-slate-800 leading-relaxed italic whitespace-pre-wrap">"{{ page.recommendation }}"</p>
+                                                 <div class="mt-6 flex items-center gap-4">
+                                                     <button class="px-4 py-2 bg-indigo-600 text-white text-[9px] font-black rounded-lg uppercase tracking-tight shadow-md hover:indigo-500 transition-all active:scale-95">Auto-Inject Schema</button>
+                                                     <button class="px-4 py-2 bg-white text-slate-600 border border-slate-200 text-[9px] font-black rounded-lg uppercase tracking-tight hover:bg-slate-50 transition-all active:scale-95">View Page Source</button>
+                                                 </div>
+                                             </div>
+                                        </div>
+                                    </div>
+                                </td>
+                            </tr>
+                        </template>
                     </tbody>
                 </table>
             </div>
             <div v-if="topPages.length === 0 && !isLoadingAnalytics" class="p-16 text-center">
                 <p class="text-slate-300 text-[11px] font-black uppercase tracking-widest italic">No page data yet — signals will appear as your pixel fires.</p>
+            </div>
+
+            <!-- Path Intelligence Pagination -->
+            <div class="px-12 py-8 bg-slate-50/50 border-t border-slate-50 flex items-center justify-between">
+                <div class="flex items-center gap-6">
+                    <p class="text-[10px] font-black text-slate-400 uppercase tracking-widest">
+                        Total Pages Tracked: <span class="text-slate-900">{{ pagesTotalCount }}</span>
+                    </p>
+                    <div class="flex items-center gap-3">
+                        <label class="text-[9px] font-black text-slate-400 uppercase tracking-widest">Per Page</label>
+                        <select v-model="pagesPerPage" @change="pagesPage = 1; fetchAnalytics()" class="bg-white border-slate-200 rounded-lg text-[10px] font-black py-1 px-3 focus:ring-0">
+                            <option :value="10">10</option>
+                            <option :value="25">25</option>
+                            <option :value="50">50</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="flex items-center gap-4">
+                    <button 
+                        @click="pagesPage--; fetchAnalytics()" 
+                        :disabled="pagesPage === 1 || isLoadingAnalytics"
+                        class="px-5 py-2.5 bg-white border border-slate-200 rounded-xl text-[10px] font-black uppercase tracking-widest disabled:opacity-30 disabled:cursor-not-allowed hover:bg-slate-50 transition-all shadow-sm"
+                    >
+                        Prev
+                    </button>
+                    <span class="text-[10px] font-black text-slate-900 font-mono">Page {{ pagesPage }} of {{ Math.ceil(pagesTotalCount / pagesPerPage) || 1 }}</span>
+                    <button 
+                        @click="pagesPage++; fetchAnalytics()" 
+                        :disabled="pagesPage >= Math.ceil(pagesTotalCount / pagesPerPage) || isLoadingAnalytics"
+                        class="px-5 py-2.5 bg-white border border-slate-200 rounded-xl text-[10px] font-black uppercase tracking-widest disabled:opacity-30 disabled:cursor-not-allowed hover:bg-slate-50 transition-all shadow-sm"
+                    >
+                        Next
+                    </button>
+                </div>
             </div>
         </div>
 
@@ -1276,26 +1405,45 @@ watch(pathFilter, () => { if (!pathFilter.value) fetchEvents() })
         </div>
 
         <!-- ── Signal Intelligence Log ──────────────────────────────────── -->
-        <div id="intel-log" class="space-y-8">
-            <div class="flex items-end justify-between gap-8">
+        <div id="intel-log" class="space-y-8 pt-12">
+            <div class="flex flex-col md:flex-row md:items-end justify-between gap-8">
                 <div class="flex-1">
-                    <h3 class="text-3xl font-black text-slate-900 tracking-tight">Intelligence Log</h3>
+                    <!-- Tab Switcher -->
+                    <div class="flex items-center gap-8 mb-6 border-b border-slate-100">
+                        <button @click="activeTab = 'signals'" 
+                            class="text-[11px] font-black uppercase tracking-widest transition-all pb-4 border-b-2 flex items-center gap-2"
+                            :class="activeTab === 'signals' ? 'text-indigo-600 border-indigo-600' : 'text-slate-400 border-transparent hover:text-slate-600'">
+                            Signals Log
+                            <span class="px-2 py-0.5 bg-slate-100 text-slate-500 rounded-md text-[9px]">{{ logResponse.total }}</span>
+                        </button>
+                        <button @click="activeTab = 'performance'" 
+                            class="text-[11px] font-black uppercase tracking-widest transition-all pb-4 border-b-2 flex items-center gap-2"
+                            :class="activeTab === 'performance' ? 'text-indigo-600 border-indigo-600' : 'text-slate-400 border-transparent hover:text-slate-600'">
+                            Performance & Health
+                            <span v-if="siteHealth?.alerts_last_24h?.length" class="px-2 py-0.5 bg-rose-500 text-white rounded-md text-[9px] animate-pulse">
+                                {{ siteHealth.alerts_last_24h.length }} alerts
+                            </span>
+                        </button>
+                    </div>
+
+                    <h3 class="text-3xl font-black text-slate-900 tracking-tight">Signal Intelligence</h3>
                     <p class="text-slate-500 font-medium">Real-time attribution and behavioral forensics</p>
                 </div>
+                
                 <div class="flex items-center gap-3">
-                    <button v-if="activeTab === 'signals'" @click="downloadCsv" class="px-6 py-4 bg-white border border-slate-200 text-slate-600 rounded-2xl text-[10px] font-black uppercase tracking-widest hover:bg-slate-50 transition-all flex items-center gap-3">
+                    <button v-if="activeTab === 'signals'" @click="downloadCsv" class="px-6 py-4 bg-white border border-slate-200 text-slate-600 rounded-2xl text-[10px] font-black uppercase tracking-widest hover:bg-slate-50 transition-all flex items-center gap-3 shadow-sm">
                         <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
                         Export CSV
                     </button>
-                    <div class="w-80 relative">
+                    <div class="w-80 relative group" v-if="activeTab === 'signals'">
                         <div class="absolute inset-y-0 left-0 pl-6 flex items-center pointer-events-none">
-                            <svg class="w-4 h-4 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
+                            <svg class="w-4 h-4 text-slate-400 group-focus-within:text-indigo-500 transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
                         </div>
-                        <input v-if="activeTab === 'signals'"
+                        <input 
                             type="text" 
                             v-model="searchQuery" 
-                            placeholder="Search sessions, URLs, cities..." 
-                            class="w-full bg-white border-slate-200 rounded-[2rem] text-[11px] font-bold text-slate-700 py-4 pl-14 pr-6 focus:ring-4 focus:ring-indigo-50 transition-all" />
+                            placeholder="Find ID, URL, City..." 
+                            class="w-full bg-white border-slate-200 rounded-[2rem] text-[11px] font-bold text-slate-700 py-4 pl-14 pr-6 focus:ring-4 focus:ring-indigo-50 transition-all shadow-sm" />
                     </div>
                 </div>
             </div>
@@ -1312,13 +1460,22 @@ watch(pathFilter, () => { if (!pathFilter.value) fetchEvents() })
                         <option value="organic">🌿 Organic Only</option>
                     </select>
                 </div>
-                <!-- Campaign -->
-                <div class="flex-1 min-w-[200px] space-y-2">
-                    <label class="text-[9px] font-black text-slate-400 uppercase tracking-widest ml-1">Campaign ID</label>
-                    <select v-model="filters.campaign_id" @change="applyFilters" class="w-full bg-slate-50 border-slate-100 rounded-xl text-[11px] font-bold text-slate-700 py-3 px-4 focus:ring-0">
-                        <option value="all">🏷️ All Campaigns</option>
-                        <option v-for="cap in availableCampaigns" :key="cap" :value="cap">{{ cap }}</option>
-                    </select>
+                <!-- Unified Attribution Search -->
+                <div class="flex-[2] min-w-[300px] space-y-2">
+                    <label class="text-[9px] font-black text-slate-400 uppercase tracking-widest ml-1">Attribution Search (UTM/GCLID)</label>
+                    <div class="relative group">
+                        <div class="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
+                            <svg class="w-3.5 h-3.5 text-slate-400 group-focus-within:text-indigo-500 transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
+                        </div>
+                        <input 
+                            v-model="attributionSearch" 
+                            @input="applyAttributionSearch" 
+                            placeholder="Find by source, medium, campaign or GCLID..." 
+                            class="w-full bg-slate-50 border-slate-100 rounded-xl text-[11px] font-bold text-slate-700 py-3 pl-11 pr-4 focus:ring-2 focus:ring-indigo-100 focus:bg-white transition-all shadow-sm" />
+                        <button v-if="attributionSearch || filters.gclid" @click="clearAttributionSearch" class="absolute inset-y-0 right-0 pr-4 flex items-center text-slate-400 hover:text-rose-500">
+                             <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M6 18L18 6M6 6l12 12"/></svg>
+                        </button>
+                    </div>
                 </div>
                 <!-- Device -->
                 <div class="flex-1 min-w-[140px] space-y-2">
@@ -1328,14 +1485,6 @@ watch(pathFilter, () => { if (!pathFilter.value) fetchEvents() })
                         <option value="Mobile">Mobile</option>
                         <option value="Desktop">Desktop</option>
                         <option value="Tablet">Tablet</option>
-                    </select>
-                </div>
-                <!-- Country -->
-                <div class="flex-1 min-w-[140px] space-y-2">
-                    <label class="text-[9px] font-black text-slate-400 uppercase tracking-widest ml-1">Country</label>
-                    <select v-model="filters.country" @change="applyFilters" class="w-full bg-slate-50 border-slate-100 rounded-xl text-[11px] font-bold text-slate-700 py-3 px-4 focus:ring-0">
-                        <option value="all">🌍 Global</option>
-                        <option v-for="c in topCountries" :key="c.code" :value="c.code">{{ c.code }}</option>
                     </select>
                 </div>
                 <!-- Date Range -->
@@ -1350,30 +1499,38 @@ watch(pathFilter, () => { if (!pathFilter.value) fetchEvents() })
 
                 <div class="w-full h-px bg-slate-50 my-2"></div>
 
-                <!-- Advanced Attribution Filters -->
-                <div class="flex-1 min-w-[150px] space-y-2">
-                    <label class="text-[9px] font-black text-slate-400 uppercase tracking-widest ml-1">UTM Source</label>
-                    <input v-model="filters.utm_source" @input="applyFilters" placeholder="google" class="w-full bg-slate-50 border-slate-100 rounded-xl text-[11px] font-bold text-slate-700 py-3 px-4 focus:ring-0" />
+                <!-- Attribution Chips -->
+                <div class="w-full flex flex-wrap gap-2 min-h-[32px]">
+                    <div v-if="!filters.utm_source && !filters.utm_medium && !filters.utm_campaign && !filters.gclid" class="text-[9px] text-slate-300 font-bold uppercase py-2">No active attribution filters</div>
+                    <div v-if="filters.utm_source" class="flex items-center gap-2 px-3 py-1.5 bg-indigo-50 border border-indigo-100 rounded-full">
+                        <span class="text-[9px] font-black text-slate-400 uppercase">Source:</span>
+                        <span class="text-[10px] font-black text-indigo-600 uppercase">{{ filters.utm_source }}</span>
+                    </div>
+                    <div v-if="filters.utm_medium" class="flex items-center gap-2 px-3 py-1.5 bg-indigo-50 border border-indigo-100 rounded-full">
+                        <span class="text-[9px] font-black text-slate-400 uppercase">Medium:</span>
+                        <span class="text-[10px] font-black text-indigo-600 uppercase">{{ filters.utm_medium }}</span>
+                    </div>
+                    <div v-if="filters.utm_campaign" class="flex items-center gap-2 px-3 py-1.5 bg-indigo-50 border border-indigo-100 rounded-full">
+                        <span class="text-[9px] font-black text-slate-400 uppercase">Campaign:</span>
+                        <span class="text-[10px] font-black text-indigo-600 uppercase">{{ filters.utm_campaign }}</span>
+                    </div>
+                    <div v-if="filters.gclid" class="flex items-center gap-2 px-3 py-1.5 bg-amber-50 border border-amber-100 rounded-full">
+                        <span class="text-[9px] font-black text-slate-400 uppercase">GCLID:</span>
+                        <span class="text-[10px] font-black text-amber-700 uppercase">Active</span>
+                    </div>
+                    <!-- Exclude Bots Toggle -->
+                    <div class="ml-auto flex items-center gap-3 bg-slate-50 px-5 py-4 rounded-2xl border border-slate-100">
+                        <label class="text-[9px] font-black text-slate-400 uppercase tracking-widest cursor-pointer" for="bot-toggle">Exclude Bots</label>
+                        <button @click="filters.exclude_bots = !filters.exclude_bots; applyFilters()" 
+                            id="bot-toggle"
+                            class="w-10 h-5 rounded-full transition-all relative"
+                            :class="filters.exclude_bots ? 'bg-indigo-600' : 'bg-slate-200'"
+                        >
+                            <div class="absolute top-1 left-1 w-3 h-3 bg-white rounded-full transition-all" :class="{ 'translate-x-5': filters.exclude_bots }"></div>
+                        </button>
+                    </div>
                 </div>
-                <div class="flex-1 min-w-[150px] space-y-2">
-                    <label class="text-[9px] font-black text-slate-400 uppercase tracking-widest ml-1">UTM Medium</label>
-                    <input v-model="filters.utm_medium" @input="applyFilters" placeholder="cpc" class="w-full bg-slate-50 border-slate-100 rounded-xl text-[11px] font-bold text-slate-700 py-3 px-4 focus:ring-0" />
-                </div>
-                <div class="flex-1 min-w-[150px] space-y-2">
-                    <label class="text-[9px] font-black text-slate-400 uppercase tracking-widest ml-1">GCLID</label>
-                    <input v-model="filters.gclid" @input="applyFilters" placeholder="EAIaIQob..." class="w-full bg-slate-50 border-slate-100 rounded-xl text-[11px] font-bold text-slate-700 py-3 px-4 focus:ring-0" />
-                </div>
-                <!-- Exclude Bots Toggle -->
-                <div class="flex items-center gap-3 bg-slate-50 px-5 py-4 rounded-2xl border border-slate-100">
-                    <label class="text-[9px] font-black text-slate-400 uppercase tracking-widest cursor-pointer" for="bot-toggle">Exclude Bots</label>
-                    <button @click="filters.exclude_bots = !filters.exclude_bots; applyFilters()" 
-                        id="bot-toggle"
-                        class="w-10 h-5 rounded-full transition-all relative"
-                        :class="filters.exclude_bots ? 'bg-indigo-600' : 'bg-slate-200'"
-                    >
-                        <div class="absolute top-1 left-1 w-3 h-3 bg-white rounded-full transition-all" :class="{ 'translate-x-5': filters.exclude_bots }"></div>
-                    </button>
-                </div>
+            </div>
             </div>
 
             <div class="bg-white shadow-premium rounded-[3.5rem] border border-slate-100/50 overflow-hidden">
@@ -1482,8 +1639,104 @@ watch(pathFilter, () => { if (!pathFilter.value) fetchEvents() })
             </div>
         </div>
 
-            <!-- Signal Logic continued -->
-    </div>
+            <!-- ── Performance & Health Tab (NEW) ────────────────────────── -->
+            <div v-show="activeTab === 'performance'" class="space-y-12 pb-24">
+                <!-- Health Overview Cards -->
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-8">
+                    <div class="bg-white p-10 rounded-[3rem] border border-slate-100 shadow-premium flex flex-col justify-between overflow-hidden relative group">
+                        <div class="z-10">
+                            <p class="text-[11px] font-black text-slate-400 uppercase tracking-widest mb-1">Health Alerts (24h)</p>
+                            <h4 class="text-4xl font-black" :class="siteHealth?.alerts_last_24h?.length > 0 ? 'text-rose-500' : 'text-emerald-500'">
+                                {{ siteHealth?.alerts_last_24h?.length || 0 }}
+                            </h4>
+                        </div>
+                        <div class="absolute -right-8 -bottom-8 w-32 h-32 bg-slate-50 group-hover:bg-rose-50 group-hover:scale-110 transition-all blur-3xl rounded-full"></div>
+                        <p class="text-[10px] font-medium text-slate-500 mt-4 leading-relaxed z-10">
+                            Critical issues detected across your tracked properties in the last 24 hours.
+                        </p>
+                    </div>
+
+                    <div class="bg-white p-10 rounded-[3rem] border border-slate-100 shadow-premium">
+                        <p class="text-[11px] font-black text-slate-400 uppercase tracking-widest mb-6">Error Distribution</p>
+                        <div class="space-y-4">
+                            <div v-for="err in siteHealth?.error_type_breakdown" :key="err.type" class="flex items-center justify-between">
+                                <span class="text-[10px] font-black text-slate-600 uppercase">{{ err.type.replace('_', ' ') }}</span>
+                                <div class="flex-1 mx-4 h-1.5 bg-slate-50 rounded-full overflow-hidden">
+                                     <div class="h-full bg-indigo-500" :style="{ width: siteHealth?.error_type_breakdown?.[0]?.count ? Math.min(100, (err.count / siteHealth.error_type_breakdown[0].count) * 100) + '%' : '0%' }"></div>
+                                </div>
+                                <span class="text-[10px] font-black text-slate-900">{{ err.count }}</span>
+                            </div>
+                            <div v-if="!siteHealth?.error_type_breakdown?.length" class="text-center py-4 text-[10px] font-black text-slate-300 uppercase italic">No errors logged</div>
+                        </div>
+                    </div>
+
+                    <div class="bg-indigo-600 p-10 rounded-[3rem] shadow-2xl relative overflow-hidden group">
+                        <div class="absolute -right-8 -bottom-8 w-32 h-32 bg-white/10 blur-3xl rounded-full group-hover:scale-150 transition-transform duration-700"></div>
+                        <p class="text-[11px] font-black text-indigo-200 uppercase tracking-widest mb-1">Performance Baseline</p>
+                        <h4 class="text-4xl font-black text-white">
+                            {{ siteHealth?.slow_pages?.[0]?.avg_load_ms ? (siteHealth.slow_pages[0].avg_load_ms / 1000).toFixed(1) + 's' : '—' }}
+                        </h4>
+                        <p class="text-[10px] font-black text-indigo-200 mt-4 uppercase tracking-tighter">Slowest Peak Page Load</p>
+                    </div>
+                </div>
+
+                <!-- Slow Pages Table -->
+                <div class="bg-white shadow-premium rounded-[3.5rem] border border-slate-100/50 overflow-hidden">
+                    <div class="p-10 border-b border-slate-50 flex items-center justify-between">
+                        <h4 class="text-xs font-black text-slate-900 uppercase tracking-widest flex items-center gap-3">
+                            <span class="w-2 h-2 rounded-full bg-amber-400"></span>
+                            Performance Bottlenecks
+                        </h4>
+                    </div>
+                    <div class="overflow-x-auto">
+                        <table class="w-full text-left border-collapse">
+                            <thead>
+                                <tr class="bg-slate-50/50">
+                                    <th class="py-8 px-10 text-[9px] font-black text-slate-400 uppercase tracking-widest">Target URL</th>
+                                    <th class="py-8 px-6 text-[9px] font-black text-slate-400 uppercase tracking-widest text-center">Avg Load</th>
+                                    <th class="py-8 px-6 text-[9px] font-black text-slate-400 uppercase tracking-widest text-center">Incidents</th>
+                                    <th class="py-8 px-10 text-[9px] font-black text-slate-400 uppercase tracking-widest text-right">Last Peak</th>
+                                </tr>
+                            </thead>
+                            <tbody class="divide-y divide-slate-50">
+                                <tr v-for="page in siteHealth?.slow_pages" :key="page.url" class="hover:bg-slate-50 transition-all group cursor-pointer" @click="drillToPath(page.url)">
+                                    <td class="py-6 px-10">
+                                        <p class="text-xs font-black text-slate-900 truncate max-w-md">{{ page.url }}</p>
+                                    </td>
+                                    <td class="py-6 px-6 text-center">
+                                        <span class="text-xs font-black text-rose-500">{{ (page.avg_load_ms / 1000).toFixed(2) }}s</span>
+                                    </td>
+                                    <td class="py-6 px-6 text-center">
+                                         <span class="px-2.5 py-1 bg-amber-50 text-amber-600 rounded-lg text-[10px] font-black border border-amber-100">{{ page.count }}</span>
+                                    </td>
+                                    <td class="py-6 px-10 text-right">
+                                        <span class="text-[10px] font-black text-slate-400">{{ fmt(page.last_seen) }}</span>
+                                    </td>
+                                </tr>
+                                <tr v-if="!siteHealth?.slow_pages?.length">
+                                    <td colspan="4" class="py-20 text-center text-[11px] font-black text-slate-300 uppercase italic">Great news! No slow page loads detected (>3s).</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <!-- Recent Alerts -->
+                <div v-if="siteHealth?.alerts_last_24h?.length" class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div v-for="(alert, idx) in siteHealth.alerts_last_24h" :key="idx" class="p-8 bg-rose-50 border border-rose-100 rounded-[2.5rem] flex items-start gap-6 relative group overflow-hidden">
+                        <div class="absolute -right-4 -bottom-4 w-24 h-24 bg-rose-500/5 rounded-full blur-2xl group-hover:bg-rose-500/10 transition-colors"></div>
+                        <div class="w-12 h-12 rounded-2xl bg-white shadow-sm flex items-center justify-center text-rose-500 shrink-0">
+                             <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 17c-.77 1.333.192 3 1.732 3z"/></svg>
+                        </div>
+                        <div class="flex-1 min-w-0">
+                            <p class="text-[10px] font-black text-rose-600 uppercase tracking-widest mb-1">{{ alert.error_type.replace('_', ' ') }} Alert</p>
+                            <p class="text-sm font-black text-slate-900 truncate" :title="alert.url">{{ alert.url }}</p>
+                            <p class="text-[10px] font-bold text-slate-500 mt-2">{{ alert.count }} occurrences in the last 24 hours.</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
 
     <!-- ── Session Detail Modal ─────────────────────────────────────── -->
         <transition enter-active-class="transition duration-300 ease-out" enter-from-class="opacity-0" enter-to-class="opacity-100" leave-active-class="transition duration-200 ease-in" leave-from-class="opacity-100" leave-to-class="opacity-0">
@@ -1495,17 +1748,28 @@ watch(pathFilter, () => { if (!pathFilter.value) fetchEvents() })
                         <div>
                             <div class="flex items-center gap-5">
                                 <h3 class="text-4xl font-black text-slate-900 tracking-tight">Session Journey</h3>
-                                <button @click="copyText(selectedSession?.session_id, 'Session ID')" 
-                                    class="group flex items-center gap-3 px-5 py-2 bg-slate-900 text-white text-[11px] font-black rounded-2xl uppercase tracking-widest shadow-2xl hover:bg-indigo-600 transition-all active:scale-95">
-                                    {{ selectedSession?.session_id?.substring(0, 12) || 'ANONYMOUS' }}...
-                                    <svg class="w-3.5 h-3.5 opacity-40 group-hover:opacity-100" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M8 5H6a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2v-1M8 5a2 2 0 002 2h2a2 2 0 002-2M8 5a2 2 0 012-2h2a2 2 0 012 2m0 0h2a2 2 0 012 2v3m2 4H10m0 0l3-3m-3 3l3 3"/></svg>
-                                </button>
+                                <div class="flex items-center gap-3">
+                                    <button @click="copyText(selectedSession?.session_id, 'Session ID')" 
+                                        class="group flex items-center gap-3 px-5 py-2 bg-slate-900 text-white text-[11px] font-black rounded-2xl uppercase tracking-widest shadow-2xl hover:bg-indigo-600 transition-all active:scale-95">
+                                        {{ selectedSession?.session_id?.substring(0, 12) || 'ANONYMOUS' }}...
+                                        <svg class="w-3.5 h-3.5 opacity-40 group-hover:opacity-100" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M8 5H6a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2v-1M8 5a2 2 0 002 2h2a2 2 0 002-2M8 5a2 2 0 012-2h2a2 2 0 012 2m0 0h2a2 2 0 012 2v3m2 4H10m0 0l3-3m-3 3l3 3"/></svg>
+                                    </button>
+                                    <span v-if="sessionIsLead" class="px-4 py-2 bg-amber-500 text-white text-[11px] font-black rounded-2xl uppercase tracking-widest shadow-lg flex items-center gap-2">
+                                        ✨ Likely Lead
+                                    </span>
+                                </div>
                             </div>
                             <p class="text-slate-400 font-bold mt-3 text-xs uppercase tracking-widest">Digital attribution verification & step-by-step signals.</p>
                         </div>
-                        <button @click="selectedSession = null" class="w-16 h-16 bg-white/40 hover:bg-white text-slate-400 rounded-3xl transition-all flex items-center justify-center active:scale-90 border border-white/40 shadow-sm">
-                            <svg class="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M6 18L18 6M6 6l12 12"/></svg>
-                        </button>
+                        <div class="flex items-center gap-4">
+                            <button @click="copyFullJourney" class="px-6 py-4 bg-white border border-slate-200 text-slate-600 rounded-3xl text-[10px] font-black uppercase tracking-widest hover:bg-slate-50 transition-all flex items-center gap-3 shadow-premium-sm">
+                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M8 5H6a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2v-1"/></svg>
+                                Copy full Journey
+                            </button>
+                            <button @click="selectedSession = null" class="w-16 h-16 bg-white/40 hover:bg-white text-slate-400 rounded-3xl transition-all flex items-center justify-center active:scale-90 border border-white/40 shadow-sm">
+                                <svg class="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M6 18L18 6M6 6l12 12"/></svg>
+                            </button>
+                        </div>
                     </div>
 
                     <div class="flex-1 overflow-y-auto p-14 bg-white/20 no-scrollbar">
@@ -1549,10 +1813,14 @@ watch(pathFilter, () => { if (!pathFilter.value) fetchEvents() })
                                             <div class="flex items-center gap-4 px-2">
                                                 <span class="text-[10px] text-slate-400 font-extrabold uppercase tracking-tight">{{ new Date(entry.created_at).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) }}</span>
                                                 <div class="h-1 w-1 rounded-full bg-slate-200"></div>
-                                                <span class="px-2 py-0.5 bg-indigo-50 text-indigo-600 text-[9px] font-black rounded uppercase">{{ entry.duration_seconds }}s Engagement</span>
-                                                <span v-if="entry.click_count > 0" class="flex items-center gap-1.5 text-emerald-600 text-[9px] font-black uppercase tracking-widest">
-                                                    <span class="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
+                                                <span class="px-2 py-0.5 bg-indigo-50 text-indigo-600 text-[9px] font-black rounded uppercase flex items-center gap-1.5" :class="{ 'bg-orange-50 text-orange-600': entry.duration_seconds >= 60 }">
+                                                    {{ entry.duration_seconds }}s Engagement
+                                                    <span v-if="entry.duration_seconds >= 60">🔥</span>
+                                                </span>
+                                                <span v-if="entry.click_count > 0" class="flex items-center gap-1.5 text-emerald-600 text-[9px] font-black uppercase tracking-widest" :class="{ 'text-indigo-600': entry.click_count >= 3 }">
+                                                    <span class="w-1.5 h-1.5 rounded-full animate-pulse" :class="entry.click_count >= 3 ? 'bg-indigo-500' : 'bg-emerald-500'"></span>
                                                     {{ entry.click_count }} Interactions
+                                                    <span v-if="entry.click_count >= 3">💡</span>
                                                 </span>
                                             </div>
                                         </div>
@@ -1605,7 +1873,31 @@ watch(pathFilter, () => { if (!pathFilter.value) fetchEvents() })
                                     <p v-if="selectedSession.gclid" class="text-xs font-bold text-emerald-800 break-all leading-relaxed">
                                         Verified Google Ads lead with GCLID: <span class="font-black bg-emerald-100/50 px-1.5 py-0.5 rounded-md">{{ selectedSession.gclid }}</span>
                                     </p>
-                                    <p v-else class="text-xs font-bold text-slate-400 uppercase tracking-tighter">No GCLID detected for this session.</p>
+                                    <p v-else class="text-xs font-bold text-slate-500 leading-relaxed italic">
+                                        Organic attribution signal. No external click ID detected.
+                                    </p>
+                                </div>
+
+                                <!-- Lead Acquisition Summary -->
+                                <div v-if="sessionIsLead" class="p-10 bg-gradient-to-br from-amber-500 to-orange-600 rounded-[3.5rem] text-white shadow-2xl relative overflow-hidden group">
+                                    <div class="absolute -right-10 -bottom-10 w-48 h-48 bg-white/10 blur-3xl rounded-full group-hover:scale-125 transition-transform duration-700"></div>
+                                    <div class="relative z-10">
+                                        <div class="flex items-center justify-between mb-6">
+                                            <h4 class="text-[10px] font-black text-amber-100 uppercase tracking-widest">Lead Qualification Report</h4>
+                                            <span class="px-3 py-1 bg-white/20 rounded-lg text-[9px] font-black uppercase">Confirmed Interest</span>
+                                        </div>
+                                        <p class="text-lg font-black tracking-tight mb-4">High Acquisition Potential Detected</p>
+                                        <div class="grid grid-cols-2 gap-4">
+                                            <div class="p-4 bg-white/10 rounded-2xl">
+                                                <p class="text-[9px] font-black text-amber-100 uppercase mb-1">Total Dwell</p>
+                                                <p class="text-lg font-black">{{ sessionTimeline.reduce((s, x) => s + x.duration_seconds, 0) }}s</p>
+                                            </div>
+                                            <div class="p-4 bg-white/10 rounded-2xl">
+                                                <p class="text-[9px] font-black text-amber-100 uppercase mb-1">Max Dwell</p>
+                                                <p class="text-lg font-black">{{ Math.max(...sessionTimeline.map(x => x.duration_seconds)) }}s</p>
+                                            </div>
+                                        </div>
+                                    </div>
                                 </div>
                             </div>
                         </div>

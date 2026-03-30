@@ -207,6 +207,49 @@
     window.addEventListener('error', (e) => sendError(e, 'window'));
     window.addEventListener('unhandledrejection', (e) => sendError(e, 'promise'));
 
+    // ─── Performance Reporter (slow page load) ────────────────────────────────
+    const reportSlowLoad = async () => {
+        try {
+            const timing = window.performance?.timing;
+            if (!timing || timing.loadEventEnd <= 0) return;
+            const loadTimeMs = timing.loadEventEnd - timing.navigationStart;
+            if (loadTimeMs < 3000) return; // Only report if > 3 seconds
+
+            const ts = Math.floor(Date.now() / 1000);
+            const payload = {
+                token:         siteToken,
+                page_view_id:  pageViewId,
+                url:           window.location.href,
+                message:       `Slow page load: ${loadTimeMs}ms`,
+                error_type:    'slow_load',
+                load_time_ms:  loadTimeMs,
+                source:        'performance',
+                _ts:           ts,
+            };
+            const sig = await signPayload(pageViewId + '_perf', ts);
+            payload._sig = sig;
+
+            if (navigator.sendBeacon) {
+                const blob = new Blob([JSON.stringify(payload)], { type: 'application/json' });
+                navigator.sendBeacon(errorEndpoint, blob);
+            } else {
+                fetch(errorEndpoint, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload),
+                    mode: 'cors'
+                }).catch(() => {});
+            }
+        } catch (e) { /* silent fail */ }
+    };
+
+    // Wait until after load event for accurate timing
+    if (document.readyState === 'complete') {
+        setTimeout(reportSlowLoad, 0);
+    } else {
+        window.addEventListener('load', () => setTimeout(reportSlowLoad, 0));
+    }
+
 
     // ─── Retry queue with exponential backoff ─────────────────────────────────
     const scheduleRetry = (payload) => {

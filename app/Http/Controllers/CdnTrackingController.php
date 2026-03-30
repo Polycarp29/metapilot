@@ -343,6 +343,9 @@ class CdnTrackingController extends Controller
             'filename'        => $request->filename,
             'user_agent'      => $request->header('User-Agent'),
             'ip_hash'         => hash('sha256', $request->ip()),
+            'load_time_ms'    => $request->load_time_ms,
+            'error_type'      => $request->error_type ?? 'js_error',
+            'http_status'     => $request->http_status,
         ]);
 
         return response(null, 204)->withHeaders($this->corsHeaders());
@@ -797,7 +800,14 @@ class CdnTrackingController extends Controller
                 return $totalSessions > 0 ? round(($bounces / $totalSessions) * 100, 1) : 0;
             });
 
-        // ── 3. Top pages with 14-day sparkline & delta ───────────────────────
+        // ── 3. Top pages with 14-day sparkline, delta & bottleneck ──────────────
+        $pagesPage    = max(1, (int) $request->input('pages_page', 1));
+        $pagesPerPage = min(50, max(1, (int) $request->input('pages_per_page', 10)));
+        $pagesOffset  = ($pagesPage - 1) * $pagesPerPage;
+
+        // Count distinct pages first for pagination meta
+        $pagesTotal = (clone $queryBase)->whereNotNull('page_url')->distinct()->count('page_url');
+
         $topPageRows = (clone $queryBase)
             ->whereNotNull('page_url')
             ->selectRaw("page_url,
@@ -809,7 +819,8 @@ class CdnTrackingController extends Controller
                 SUM(CASE WHEN DATE(created_at) = CURDATE() - INTERVAL 1 DAY THEN 1 ELSE 0 END) as yesterday_count")
             ->groupBy('page_url')
             ->orderByDesc('total_hits')
-            ->limit(10)
+            ->offset($pagesOffset)
+            ->limit($pagesPerPage)
             ->get();
 
         // 14-day sparkline per top page
@@ -825,10 +836,19 @@ class CdnTrackingController extends Controller
             ->get()
             ->groupBy('page_url');
 
+        // Error counts per page (from cdn_errors)
+        $errorsByPage = CdnError::where('organization_id', $orgId)
+            ->when($request->pixel_site_id, fn($q, $id) => $q->where('pixel_site_id', $id))
+            ->whereIn('url', $topPageUrls)
+            ->selectRaw("url, COUNT(*) as error_count, AVG(load_time_ms) as avg_load_time")
+            ->groupBy('url')
+            ->get()
+            ->keyBy('url');
+
         // ── 4. Keyword ↔ Page Intent Linkage ──────────────────────────────
         $keywords = KeywordResearch::where('organization_id', $orgId)->get();
 
-        $topPages = $topPageRows->map(function ($row) use ($sparklineRaw, $keywords, $bouncesByPage) {
+        $topPages = $topPageRows->map(function ($row) use ($sparklineRaw, $keywords, $bouncesByPage, $errorsByPage) {
             $todayC     = (int) $row->today_count;
             $yesterdayC = (int) $row->yesterday_count;
             $deltaPct   = $yesterdayC > 0
@@ -839,7 +859,10 @@ class CdnTrackingController extends Controller
             $avgDuration = $row->avg_duration ?? 0;
             $avgClicks   = $row->avg_clicks ?? 0;
             $bounceRate  = $bouncesByPage[$row->page_url] ?? 0;
-            
+            $errorInfo   = $errorsByPage[$row->page_url] ?? null;
+            $errorCount  = $errorInfo ? (int) $errorInfo->error_count : 0;
+            $avgLoadTime = $errorInfo ? round($errorInfo->avg_load_time ?? 0) : 0;
+
             // Dwell factor (0-40): 60s+ = max
             $dwellScore = min(($avgDuration / 60) * 40, 40);
             // Interaction factor (0-40): 5+ clicks = max
@@ -848,7 +871,25 @@ class CdnTrackingController extends Controller
             $bounceScore = (1 - ($bounceRate / 100)) * 20;
 
             $engagementScore = round($dwellScore + $interactionScore + $bounceScore);
-            
+
+            // ── Bottleneck Score (0-100, higher = more problematic) ──
+            // High bounce + low dwell + errors + slow load = bottleneck
+            $bounceBottleneck    = $bounceRate / 100 * 40;        // 0-40
+            $dwellBottleneck     = max(0, (1 - $avgDuration / 60) * 30); // 0-30 (low dwell is bad)
+            $errorBottleneck     = min($errorCount * 5, 20);       // 0-20 (each error adds 5pts)
+            $loadBottleneck      = $avgLoadTime > 3000 ? 10 : ($avgLoadTime > 1500 ? 5 : 0); // 0-10
+            $bottleneckScore     = round($bounceBottleneck + $dwellBottleneck + $errorBottleneck + $loadBottleneck);
+            $bottleneckSeverity  = $bottleneckScore >= 60 ? 'critical' : ($bottleneckScore >= 35 ? 'warning' : 'good');
+
+            // Build improvement recommendations
+            $recommendations = [];
+            if ($bounceRate > 60)    $recommendations[] = 'High bounce rate — improve page relevance or above-fold content';
+            if ($avgDuration < 20)   $recommendations[] = 'Low dwell time — add engaging content or video';
+            if ($avgClicks < 1)      $recommendations[] = 'Low interaction — add clear CTAs or internal links';
+            if ($errorCount > 0)     $recommendations[] = "$errorCount JS error(s) detected — check browser console";
+            if ($avgLoadTime > 3000) $recommendations[] = 'Slow page load (avg '.round($avgLoadTime/1000, 1).'s) — optimise images & scripts';
+            elseif ($avgLoadTime > 1500) $recommendations[] = 'Moderate load time — consider caching or CDN';
+
             // Ad Ready if score >= 70 and has decent traffic
             $isAdReady = $engagementScore >= 70 && $row->total_hits >= 5;
 
@@ -863,35 +904,39 @@ class CdnTrackingController extends Controller
             // Keyword Matching logic
             $path = strtolower(parse_url($row->page_url, PHP_URL_PATH) ?: '');
             $pathNormalized = str_replace(['-', '_', '/'], ' ', $path);
-            
+
             $matchedKeywords = $keywords->filter(function($k) use ($pathNormalized) {
                 return str_contains($pathNormalized, strtolower($k->query));
             })->map(function($k) {
                 return [
-                    'query' => $k->query,
-                    'intent' => $k->intent,
-                    'is_primary' => false 
+                    'query'      => $k->query,
+                    'intent'     => $k->intent,
+                    'is_primary' => false,
                 ];
             })->values();
 
-            // Detect top intent
             $topIntent = $matchedKeywords->countBy('intent')->sortDesc()->keys()->first();
 
             return [
-                'page_url'         => $row->page_url,
-                'total_hits'       => (int) $row->total_hits,
-                'ad_hits'          => (int) $row->ad_hits,
-                'avg_duration'     => round($avgDuration),
-                'avg_clicks'       => round($avgClicks, 1),
-                'engagement_score' => $engagementScore,
-                'is_ad_ready'      => $isAdReady,
-                'today_count'      => $todayC,
-                'yesterday_count'  => $yesterdayC,
-                'delta_pct'        => $deltaPct,
-                'sparkline'        => $series,
-                'matched_keywords' => $matchedKeywords,
-                'top_intent'       => $topIntent,
-                'bounce_rate'      => $bounceRate,
+                'page_url'            => $row->page_url,
+                'total_hits'          => (int) $row->total_hits,
+                'ad_hits'             => (int) $row->ad_hits,
+                'avg_duration'        => round($avgDuration),
+                'avg_clicks'          => round($avgClicks, 1),
+                'engagement_score'    => $engagementScore,
+                'is_ad_ready'         => $isAdReady,
+                'today_count'         => $todayC,
+                'yesterday_count'     => $yesterdayC,
+                'delta_pct'           => $deltaPct,
+                'sparkline'           => $series,
+                'matched_keywords'    => $matchedKeywords,
+                'top_intent'          => $topIntent,
+                'bounce_rate'         => $bounceRate,
+                'error_count'         => $errorCount,
+                'avg_load_time'       => $avgLoadTime,
+                'bottleneck_score'    => $bottleneckScore,
+                'bottleneck_severity' => $bottleneckSeverity,
+                'recommendations'     => $recommendations,
             ];
         })->values();
 
@@ -961,14 +1006,64 @@ class CdnTrackingController extends Controller
                 'count' => $group->sum('count')
             ])->sortByDesc('count')->values()->take(10);
 
+        // ── 7. Site Health (performance + error summary) ───────────────────
+        $last24h = now()->subDay();
+
+        $healthRaw = CdnError::where('organization_id', $orgId)
+            ->when($request->pixel_site_id, fn($q, $id) => $q->where('pixel_site_id', $id))
+            ->selectRaw("url, error_type, AVG(load_time_ms) as avg_load_ms, COUNT(*) as count, MAX(created_at) as last_seen")
+            ->groupBy('url', 'error_type')
+            ->orderByDesc('count')
+            ->get();
+
+        $slowPages = $healthRaw
+            ->where('error_type', 'slow_load')
+            ->sortByDesc('avg_load_ms')
+            ->take(5)
+            ->map(fn($r) => [
+                'url'          => $r->url,
+                'avg_load_ms'  => round($r->avg_load_ms),
+                'count'        => (int) $r->count,
+                'last_seen'    => $r->last_seen,
+            ])->values();
+
+        $errorTypeBreakdown = $healthRaw
+            ->groupBy('error_type')
+            ->map(fn($group, $type) => [
+                'type'  => $type ?: 'js_error',
+                'count' => $group->sum('count'),
+            ])->sortByDesc('count')->values();
+
+        $alertsLast24h = CdnError::where('organization_id', $orgId)
+            ->when($request->pixel_site_id, fn($q, $id) => $q->where('pixel_site_id', $id))
+            ->where('created_at', '>=', $last24h)
+            ->selectRaw("url, error_type, COUNT(*) as count")
+            ->groupBy('url', 'error_type')
+            ->orderByDesc('count')
+            ->limit(5)
+            ->get()
+            ->map(fn($r) => [
+                'url'        => $r->url,
+                'error_type' => $r->error_type ?? 'js_error',
+                'count'      => (int) $r->count,
+            ])->values();
+
         return response()->json([
             'daily_history'  => $dailyHistory,
             'top_pages'      => $topPages,
+            'pages_total'    => $pagesTotal,
+            'pages_page'     => $pagesPage,
+            'pages_per_page' => $pagesPerPage,
             'top_referrers'  => $topReferrers,
             'trend_velocity' => ['rising' => $rising, 'falling' => $falling],
             'by_country'     => $byCountry,
             'by_device'      => $byDevice,
             'by_city'        => $byCity,
+            'site_health'    => [
+                'slow_pages'          => $slowPages,
+                'error_type_breakdown'=> $errorTypeBreakdown,
+                'alerts_last_24h'     => $alertsLast24h,
+            ],
             'summary'        => [
                 'today_hits'     => $todayHits,
                 'yesterday_hits' => $yesterdayHits,
