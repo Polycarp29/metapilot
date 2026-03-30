@@ -883,14 +883,6 @@ const openHealthModal = (site = null) => {
                             }"></span>
                             <svg class="w-3 h-3 transition-transform" :class="{ 'rotate-180': showSiteDropdown }" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M19 9l-7 7-7-7"/></svg>
                         </button>
-
-                        <button v-if="selectedSite" @click="openHealthModal()" class="w-8 h-8 rounded-xl bg-white border border-slate-200 flex items-center justify-center text-slate-400 hover:text-indigo-600 transition-all shadow-sm">
-                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"/></svg>
-                        </button>
-
-                        <button @click="showNewSiteModal = true" class="px-3 py-2 text-slate-400 hover:text-white hover:bg-slate-900 rounded-xl transition-all">
-                            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M12 4v16m8-8H4"/></svg>
-                        </button>
                     </div>
 
                     <!-- Enhanced Dropdown Menu -->
@@ -921,28 +913,8 @@ const openHealthModal = (site = null) => {
                         </div>
                     </div>
                 </div>
-
-                <!-- Global Health Status Indicator -->
-                <div v-if="selectedSite" class="flex items-center gap-2 px-5 py-3 rounded-2xl border font-black text-[11px] uppercase tracking-widest transition-all shadow-sm"
-                :class="{
-                    'bg-emerald-50 border-emerald-200 text-emerald-700': pixelStatusBadge.color === 'emerald',
-                    'bg-amber-50 border-amber-200 text-amber-700': pixelStatusBadge.color === 'amber',
-                    'bg-rose-50 border-rose-200 text-rose-700': pixelStatusBadge.color === 'rose',
-                }">
-                <span class="w-2 h-2 rounded-full"
-                    :class="{
-                        'bg-emerald-500 animate-pulse': pixelStatusBadge.color === 'emerald',
-                        'bg-amber-400': pixelStatusBadge.color === 'amber',
-                        'bg-rose-400': pixelStatusBadge.color === 'rose',
-                    }"></span>
-                {{ pixelStatusBadge.label }}
-            </div>
-            <div v-else class="flex items-center gap-2 px-5 py-3 rounded-2xl border border-indigo-100 bg-indigo-50/50 text-indigo-600 font-black text-[11px] uppercase tracking-widest shadow-sm">
-                <span class="w-2 h-2 rounded-full bg-indigo-500"></span>
-                Aggregate Mode
             </div>
         </div>
-    </div>
 
         <!-- ── Insights Panels (Row 1) ──────────────────────────────── -->
         <div class="grid grid-cols-1 lg:grid-cols-12 gap-8">
@@ -972,7 +944,13 @@ const openHealthModal = (site = null) => {
                         </span>
                     </div>
                 </div>
-                <!-- Engagement -->
+                <div class="bg-indigo-50/30 p-8 rounded-[2.5rem] border border-indigo-100/50 flex flex-col justify-center items-center text-center group hover:bg-white hover:shadow-premium transition-all">
+                    <p class="text-[10px] font-black text-indigo-400 uppercase tracking-widest mb-1">Growth Forecast</p>
+                    <h4 class="text-2xl font-black text-slate-900 tracking-tight">Stable</h4>
+                    <span class="text-[9px] font-bold text-slate-400 mt-2 italic">Based on 7d velocity</span>
+                </div>
+            </div>
+ 
             <!-- Insights Card -->
             <div class="lg:col-span-4 bg-indigo-600 p-10 shadow-indigo-200 shadow-2xl rounded-[3rem] text-white relative overflow-hidden group">
                 <div class="absolute -right-10 -bottom-10 w-40 h-40 bg-white/10 blur-3xl rounded-full group-hover:scale-150 transition-transform"></div>
@@ -1369,6 +1347,8 @@ const openHealthModal = (site = null) => {
 
         <!-- ── Middle: Snippet Generator & Campaign Tools ───────────── -->
         <div class="grid grid-cols-1 lg:grid-cols-12 gap-8">
+            <div class="lg:col-span-12 bg-slate-900 p-12 shadow-2xl rounded-[3.5rem] border border-slate-800 relative overflow-hidden">
+                <div class="absolute -top-10 -right-10 w-64 h-64 bg-indigo-500/10 blur-[100px] rounded-full pointer-events-none"></div>
                 <div class="flex items-center justify-between mb-10">
                     <div class="flex items-center gap-5">
                         <div class="p-4 bg-indigo-600 text-white rounded-2xl shadow-lg relative">
