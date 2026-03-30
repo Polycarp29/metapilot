@@ -169,6 +169,12 @@ class CdnTrackingController extends Controller
         $urlHash = $normalizedUrl ? hash('sha256', $normalizedUrl) : null;
 
 
+        // --- Metadata Enrichment ---
+        $meta = $request->metadata ?? [];
+        if ($request->has('is_engaged')) {
+            $meta['is_engaged'] = (bool) $request->is_engaged;
+        }
+
         // --- Upsert the hit ---
         $hit = AdTrackEvent::updateOrCreate(
             ['page_view_id' => $request->page_view_id],
@@ -196,7 +202,7 @@ class CdnTrackingController extends Controller
                 'utm_medium'         => $request->utm_medium,
                 'utm_campaign'       => $request->utm_campaign,
                 'ip_hash'            => hash('sha256', $request->ip()),
-                'metadata'           => $request->metadata,
+                'metadata'           => $meta,
                 'is_bot'             => $deviceData['is_bot'] ?? false,
             ]
         );

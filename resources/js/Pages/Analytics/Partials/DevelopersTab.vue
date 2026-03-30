@@ -1347,7 +1347,7 @@ const openHealthModal = (site = null) => {
 
         <!-- ── Middle: Snippet Generator & Campaign Tools ───────────── -->
         <div class="grid grid-cols-1 lg:grid-cols-12 gap-8">
-            <div class="lg:col-span-12 bg-slate-900 p-12 shadow-2xl rounded-[3.5rem] border border-slate-800 relative overflow-hidden">
+            <div class="lg:col-span-8 bg-slate-900 p-12 shadow-2xl rounded-[3.5rem] border border-slate-800 relative overflow-hidden">
                 <div class="absolute -top-10 -right-10 w-64 h-64 bg-indigo-500/10 blur-[100px] rounded-full pointer-events-none"></div>
                 <div class="flex items-center justify-between mb-10">
                     <div class="flex items-center gap-5">
@@ -1380,21 +1380,12 @@ const openHealthModal = (site = null) => {
                     </div>
                 </div>
 
-                <div class="grid grid-cols-1 md:grid-cols-12 gap-6 mb-8">
-                    <div class="md:col-span-4 space-y-3">
-                        <label class="block text-[10px] font-black text-slate-500 uppercase tracking-widest ml-1">Traffic Origin (Pinning)</label>
-                        <div class="relative group/input">
-                            <input v-model="allowedDomainInput" placeholder="e.g. site.com" class="w-full bg-slate-800 border-white/10 focus:border-indigo-500 focus:ring-0 rounded-2xl text-[11px] font-bold text-white py-4 px-6 pr-14" />
-                            <button @click="saveAllowedDomain" class="absolute right-3 top-2.5 px-3 py-1.5 bg-indigo-600 hover:bg-indigo-500 text-white text-[9px] font-black rounded-lg opacity-0 group-hover/input:opacity-100 transition-all">
-                                Save
-                            </button>
-                        </div>
-                    </div>
-                    <div class="md:col-span-4 space-y-3">
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
+                    <div class="space-y-3">
                         <label class="block text-[10px] font-black text-slate-500 uppercase tracking-widest ml-1">Lead Attribution ID</label>
                         <input v-model="selectedCampaignId" placeholder="e.g. fb_ads_winter_campaign" class="w-full bg-white/5 border-white/10 focus:border-indigo-500 focus:ring-0 rounded-2xl text-[11px] font-bold text-white py-4 px-6" />
                     </div>
-                    <div class="md:col-span-4 space-y-3">
+                    <div class="space-y-3">
                         <label class="block text-[10px] font-black text-slate-500 uppercase tracking-widest ml-1">Identification Source</label>
                         <select v-model="selectedSiteId" class="w-full bg-slate-800 border-white/10 focus:border-indigo-500 focus:ring-0 rounded-2xl text-[11px] font-bold text-white py-4 px-6 appearance-none cursor-pointer">
                             <option :value="null">System Selection...</option>
@@ -1470,20 +1461,58 @@ const openHealthModal = (site = null) => {
                 </div>
             </div>
 
-            <!-- Developer Console -->
-            <div class="lg:col-span-4 bg-slate-100 p-10 rounded-[3.5rem] border border-slate-200">
-                <h3 class="text-xs font-black text-slate-400 uppercase tracking-widest mb-6">Console Diagnostics</h3>
-                <div class="space-y-6">
-                    <div class="p-5 bg-white rounded-3xl border border-slate-200 shadow-sm">
-                        <p class="text-[9px] font-black text-slate-400 uppercase mb-2">Inspect State</p>
-                        <code class="text-[10px] font-black text-indigo-600 block mb-2">window.MetaPilot</code>
-                        <p class="text-[9px] text-slate-500 italic">Verify handshake status, retry queue, and hit signatures live.</p>
+            <!-- Connection Health & Security Panel (Restored) -->
+            <div class="lg:col-span-4 bg-white p-10 rounded-[3.5rem] border border-slate-200 shadow-premium relative overflow-hidden group">
+                <div class="relative z-10">
+                    <div class="flex items-center justify-between mb-8">
+                        <h3 class="text-xs font-black text-slate-400 uppercase tracking-widest">Connection Health</h3>
+                        <span v-if="selectedSite" class="flex h-2 w-2 rounded-full" :class="{
+                            'bg-emerald-500 animate-pulse': selectedSite.status === 'verified_active',
+                            'bg-amber-400': selectedSite.status === 'connected_inactive',
+                            'bg-slate-300': selectedSite.status === 'not_detected',
+                        }"></span>
                     </div>
-                    <div class="p-5 bg-white rounded-3xl border border-slate-200 shadow-sm">
-                        <p class="text-[9px] font-black text-slate-400 uppercase mb-2">Campaign Isolation</p>
-                        <p class="text-[10px] font-black text-slate-700">MetaPilot Agencies drive traffic using <span class="bg-indigo-50 px-1.5 py-0.5 rounded text-indigo-600">data-campaign</span> to correctly differentiate their ads from organic traffic.</p>
+
+                    <!-- Domain Pinning -->
+                    <div class="mb-8 p-6 bg-slate-50 rounded-3xl border border-slate-100">
+                        <label class="block text-[9px] font-black text-slate-400 uppercase tracking-widest mb-3 ml-1">Traffic Origin Pinning</label>
+                        <div class="relative group/pin">
+                            <input v-model="allowedDomainInput" placeholder="e.g. domain.com" class="w-full bg-white border-slate-200 focus:border-indigo-500 focus:ring-0 rounded-2xl text-[11px] font-bold text-slate-700 py-3.5 px-5 shadow-sm" />
+                            <button @click="saveAllowedDomain" class="absolute right-2 top-2 px-3 py-1.5 bg-slate-900 text-white text-[9px] font-black rounded-lg opacity-0 group-hover/pin:opacity-100 transition-all">Save</button>
+                        </div>
+                        <p class="text-[9px] text-slate-400 font-medium mt-2 leading-relaxed italic">Restricts signals to this domain ONLY.</p>
+                    </div>
+
+                    <!-- Diagnostics & Live Link -->
+                    <div class="space-y-4">
+                        <div class="p-5 bg-white rounded-3xl border border-slate-100 shadow-sm">
+                            <p class="text-[9px] font-black text-slate-400 uppercase mb-2">Service Identity</p>
+                            <div class="flex items-center justify-between">
+                                <span class="text-[10px] font-black text-slate-700 uppercase">{{ selectedSite ? selectedSite.label : 'N/A' }}</span>
+                                <span class="text-[10px] font-mono text-indigo-600 font-black">{{ selectedSite ? selectedSite.ads_site_token.substring(0, 12) + '...' : '---' }}</span>
+                            </div>
+                        </div>
+
+                        <button @click="openHealthModal()" v-if="selectedSite"
+                            class="w-full py-5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-3xl text-xs font-black uppercase tracking-widest shadow-xl shadow-indigo-100 hover:shadow-indigo-200 transition-all flex items-center justify-center gap-3">
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M13 10V3L4 14h7v7l9-11h-7z"/></svg>
+                            Start Live Scan
+                        </button>
+                        <div v-else class="p-5 bg-slate-50 rounded-[2rem] border border-dashed border-slate-200 text-center">
+                            <p class="text-[10px] font-black text-slate-400 uppercase tracking-widest">Select Site to Verify</p>
+                        </div>
+                    </div>
+
+                    <!-- Developer Quick Links -->
+                    <div class="mt-8 pt-8 border-t border-slate-100 flex items-center justify-between">
+                        <button @click="showRegenModal = true" v-if="selectedSite" class="text-[10px] font-black text-rose-500 uppercase tracking-widest hover:text-rose-600 transition-colors">Reset Secret</button>
+                        <div class="flex items-center gap-2">
+                             <div class="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></div>
+                             <span class="text-[9px] font-bold text-slate-400 uppercase tracking-tight">API Identity v3.2</span>
+                        </div>
                     </div>
                 </div>
+                <div class="absolute -right-20 -bottom-20 w-64 h-64 bg-indigo-50 group-hover:bg-indigo-100/50 rounded-full transition-colors duration-700 pointer-events-none"></div>
             </div>
         </div>
 
@@ -1492,16 +1521,16 @@ const openHealthModal = (site = null) => {
             <div class="flex flex-col md:flex-row md:items-end justify-between gap-8">
                 <div class="flex-1">
                     <!-- Tab Switcher -->
-                    <div class="flex items-center gap-8 mb-6 border-b border-slate-100">
+                    <div class="flex items-center gap-8 mb-8 border-b border-slate-100">
                         <button @click="activeTab = 'signals'" 
                             class="text-[11px] font-black uppercase tracking-widest transition-all pb-4 border-b-2 flex items-center gap-2"
-                            :class="activeTab === 'signals' ? 'text-indigo-600 border-indigo-600' : 'text-slate-400 border-transparent hover:text-slate-600'">
+                            :class="activeTab === 'signals' ? 'text-indigo-600 border-indigo-600 font-black' : 'text-slate-400 border-transparent hover:text-slate-600'">
                             Signals Log
                             <span class="px-2 py-0.5 bg-slate-100 text-slate-500 rounded-md text-[9px]">{{ logResponse.total }}</span>
                         </button>
                         <button @click="activeTab = 'performance'" 
                             class="text-[11px] font-black uppercase tracking-widest transition-all pb-4 border-b-2 flex items-center gap-2"
-                            :class="activeTab === 'performance' ? 'text-indigo-600 border-indigo-600' : 'text-slate-400 border-transparent hover:text-slate-600'">
+                            :class="activeTab === 'performance' ? 'text-indigo-600 border-indigo-600 font-black' : 'text-slate-400 border-transparent hover:text-slate-600'">
                             Performance & Health
                             <span v-if="siteHealth?.alerts_last_24h?.length" class="px-2 py-0.5 bg-rose-500 text-white rounded-md text-[9px] animate-pulse">
                                 {{ siteHealth.alerts_last_24h.length }} alerts
@@ -1509,8 +1538,14 @@ const openHealthModal = (site = null) => {
                         </button>
                     </div>
 
-                    <h3 class="text-3xl font-black text-slate-900 tracking-tight">Signal Intelligence</h3>
-                    <p class="text-slate-500 font-medium">Real-time attribution and behavioral forensics</p>
+                    <div v-show="activeTab === 'signals'">
+                        <h3 class="text-3xl font-black text-slate-900 tracking-tight">Signal Intelligence</h3>
+                        <p class="text-slate-500 font-medium">Real-time attribution and behavioral forensics</p>
+                    </div>
+                    <div v-show="activeTab === 'performance'">
+                        <h3 class="text-3xl font-black text-slate-900 tracking-tight">Performance & Health</h3>
+                        <p class="text-slate-500 font-medium">Service delivery and behavioral bottlenecks</p>
+                    </div>
                 </div>
                 
                 <div class="flex items-center gap-3">
@@ -1624,8 +1659,8 @@ const openHealthModal = (site = null) => {
                             <div class="absolute top-1 left-1 w-3 h-3 bg-white rounded-full transition-all" :class="{ 'translate-x-5': filters.exclude_bots }"></div>
                         </button>
                     </div>
+                    </div>
                 </div>
-            </div>
             </div>
 
             <div class="bg-white shadow-premium rounded-[3.5rem] border border-slate-100/50 overflow-hidden">
@@ -1661,7 +1696,10 @@ const openHealthModal = (site = null) => {
                                 <td class="py-8 px-6">
                                     <div class="flex items-center gap-5">
                                         <div>
-                                            <p class="text-xs font-black text-slate-900">{{ event.duration_seconds }}s</p>
+                                            <p class="text-xs font-black text-slate-900 flex items-center gap-2">
+                                                {{ event.duration_seconds }}s
+                                                <span v-if="event.metadata?.is_engaged" class="w-2 h-2 rounded-full bg-indigo-500 animate-pulse" title="Engaged Session"></span>
+                                            </p>
                                             <p class="text-[9px] text-slate-400 uppercase font-black tracking-widest">Dwell</p>
                                         </div>
                                         <div class="w-px h-8 bg-slate-100"></div>
@@ -1757,7 +1795,7 @@ const openHealthModal = (site = null) => {
                             <div v-for="err in siteHealth?.error_type_breakdown" :key="err.type" class="flex items-center justify-between">
                                 <span class="text-[10px] font-black text-slate-600 uppercase">{{ err.type.replace('_', ' ') }}</span>
                                 <div class="flex-1 mx-4 h-1.5 bg-slate-50 rounded-full overflow-hidden">
-                                     <div class="h-full bg-indigo-500" :style="{ width: siteHealth?.error_type_breakdown?.[0]?.count ? Math.min(100, (err.count / siteHealth.error_type_breakdown[0].count) * 100) + '%' : '0%' }"></div>
+                                     <div class="h-full bg-indigo-500" :style="{ width: (siteHealth?.error_type_breakdown?.[0]?.count && err.count) ? Math.min(100, (err.count / siteHealth.error_type_breakdown[0].count) * 100) + '%' : '0%' }"></div>
                                 </div>
                                 <span class="text-[10px] font-black text-slate-900">{{ err.count }}</span>
                             </div>
@@ -2138,6 +2176,10 @@ const openHealthModal = (site = null) => {
                                     <div class="flex items-center justify-between">
                                         <span class="text-[10px] font-black text-slate-500 uppercase">Attribution ID</span>
                                         <span class="text-xs font-bold text-emerald-400">{{ lastHeardSignal.google_campaign_id || 'System Default' }}</span>
+                                    </div>
+                                    <div v-if="lastHeardSignal.metadata?.is_engaged || lastHeardSignal.duration_seconds >= 30" class="flex items-center justify-between pt-2 border-t border-white/5">
+                                        <span class="text-[10px] font-black text-slate-500 uppercase">Qualitative Status</span>
+                                        <span class="px-2 py-0.5 bg-indigo-500 text-white text-[9px] font-black rounded uppercase tracking-widest animate-pulse">Engaged Lead</span>
                                     </div>
                                 </div>
 

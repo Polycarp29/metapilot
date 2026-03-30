@@ -101,33 +101,52 @@
         }
     };
 
-    // ─── State ────────────────────────────────────────────────────────────────
+    // ─── State & Dwell Tracking ─────────────────────────────────────────────
     const pageViewId = (crypto.randomUUID ? crypto.randomUUID() : Math.random().toString(36).slice(2, 15));
-    const startTime = Date.now();
+    
+    let totalActiveTime = 0;
+    let lastStartTime = Date.now();
+    let isCurrentlyActive = !document.hidden;
     let clicks = 0;
     let retryCount = 0;
+
+    document.addEventListener('visibilitychange', () => {
+        if (document.hidden) {
+            if (isCurrentlyActive) totalActiveTime += (Date.now() - lastStartTime);
+            isCurrentlyActive = false;
+        } else {
+            lastStartTime = Date.now();
+            isCurrentlyActive = true;
+        }
+    });
 
     document.addEventListener('click', () => clicks++, { passive: true });
 
     // ─── Hit sender ──────────────────────────────────────────────────────────
-    const buildPayload = (ts) => ({
-        token: siteToken,
-        modules: requestedModules,
-        page_view_id: pageViewId,
-        campaign_id: campaignId,
-        page_url: window.location.href,
-        referrer: document.referrer,
-        session_id: getSessionId(),
-        screen_resolution: `${window.screen.width}x${window.screen.height}`,
-        duration_seconds: Math.floor((Date.now() - startTime) / 1000),
-        click_count: clicks,
-        metadata: getMetadata(),
-        gclid: getParam('gclid'),
-        utm_source: getParam('utm_source'),
-        utm_medium: getParam('utm_medium'),
-        utm_campaign: getParam('utm_campaign'),
-        _ts: ts,
-    });
+    const buildPayload = (ts) => {
+        const currentActive = isCurrentlyActive ? (totalActiveTime + (Date.now() - lastStartTime)) : totalActiveTime;
+        const activeSeconds = Math.floor(currentActive / 1000);
+        
+        return {
+            token: siteToken,
+            modules: requestedModules,
+            page_view_id: pageViewId,
+            campaign_id: campaignId,
+            page_url: window.location.href,
+            referrer: document.referrer,
+            session_id: getSessionId(),
+            screen_resolution: `${window.screen.width}x${window.screen.height}`,
+            duration_seconds: activeSeconds,
+            is_engaged: activeSeconds >= 30,
+            click_count: clicks,
+            metadata: getMetadata(),
+            gclid: getParam('gclid'),
+            utm_source: getParam('utm_source'),
+            utm_medium: getParam('utm_medium'),
+            utm_campaign: getParam('utm_campaign'),
+            _ts: ts,
+        };
+    };
 
     const sendHit = async (isFinal = false) => {
         const ts = Math.floor(Date.now() / 1000);
