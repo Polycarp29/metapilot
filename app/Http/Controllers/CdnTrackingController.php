@@ -91,25 +91,26 @@ class CdnTrackingController extends Controller
             $origin  = $request->header('Origin', '');
             $referer = $request->header('Referer', '');
             $allowed = strtolower(trim($pixelSite->allowed_domain, '/'));
-
+ 
             $originHost  = strtolower(parse_url($origin,  PHP_URL_HOST) ?? '');
             $refererHost = strtolower(parse_url($referer, PHP_URL_HOST) ?? '');
-
+ 
             // Strip www. for comparison
             $normalise = fn($h) => preg_replace('/^www\./', '', $h);
             $cleanAllowed = $normalise($allowed);
-
+ 
             $checkDomain = function($host) use ($cleanAllowed, $normalise) {
                 if (!$host) return false;
                 $host = $normalise($host);
                 return $host === $cleanAllowed || str_ends_with($host, '.' . $cleanAllowed);
             };
-
+ 
             if (!$checkDomain($originHost) && !$checkDomain($refererHost)) {
                 Log::warning('Pixel domain pinning violation', [
                     'expected' => $allowed,
                     'origin'   => $originHost,
                     'referer'  => $refererHost,
+                    'token'    => substr($request->token, 0, 8) . '...',
                 ]);
                 return response()->json(['error' => 'Domain not authorised'], 403)
                     ->withHeaders($this->corsHeaders());
@@ -1238,6 +1239,7 @@ class CdnTrackingController extends Controller
         $sitemapsPerPage = $request->input('sitemaps_per_page', 6);
         
         $paginatedSitemaps = $organization->sitemaps()
+            ->when($pixelSiteId, fn($q) => $q->where('pixel_site_id', $pixelSiteId))
             ->withCount('links')
             ->paginate($sitemapsPerPage, ['*'], 'sitemaps_page', $sitemapsPage);
 
@@ -1603,14 +1605,18 @@ class CdnTrackingController extends Controller
             ], 422);
         }
 
-        // Upsert discovery sitemap with CDN mode
+        // Upsert discovery sitemap with CDN mode (Site-Specific)
         $sitemap = Sitemap::updateOrCreate(
-            ['organization_id' => $organization->id, 'is_discovery' => true],
+            [
+                'organization_id' => $organization->id, 
+                'pixel_site_id'   => $pixelSite->id,
+                'is_discovery'    => true
+            ],
             [
                 'user_id'    => $request->user()->id,
                 'name'       => 'CDN Discovery — ' . ($pixelSite->allowed_domain ?? $pixelSite->label),
                 'site_url'   => $pixelSite->allowed_domain ? 'https://' . $pixelSite->allowed_domain : null,
-                'filename'   => 'cdn-discovery-' . $organization->id . '.xml',
+                'filename'   => 'cdn-discovery-' . $pixelSite->id . '-' . $organization->id . '.xml',
                 'crawl_mode' => 'cdn',
                 'is_index'   => false,
             ]
@@ -1636,12 +1642,15 @@ class CdnTrackingController extends Controller
         $organization = $request->user()->currentOrganization();
         if (!$organization) return response()->json(['error' => 'Organization not found'], 404);
 
+        $pixelSiteId = $request->input('pixel_site_id');
+
         $discoverySitemap = Sitemap::where('organization_id', $organization->id)
             ->where('is_discovery', true)
+            ->when($pixelSiteId, fn($q) => $q->where('pixel_site_id', $pixelSiteId))
             ->first();
 
         if (!$discoverySitemap) {
-            return response()->json(['pages' => [], 'total' => 0, 'sitemap_id' => null]);
+            return response()->json(['pages' => [], 'total' => 0, 'sitemap_id' => null, 'crawl_mode' => 'python']);
         }
 
         $perPage = $request->input('per_page', 10);
@@ -1686,13 +1695,14 @@ class CdnTrackingController extends Controller
         return Sitemap::firstOrCreate(
             [
                 'organization_id' => $organization->id,
+                'pixel_site_id'   => $pixelSite->id,
                 'is_discovery'    => true,
             ],
             [
                 'user_id'    => $organization->users()->first()?->id,
                 'name'       => 'CDN Discovery — ' . ($pixelSite->allowed_domain ?? $pixelSite->label),
                 'site_url'   => $pixelSite->allowed_domain ? 'https://' . $pixelSite->allowed_domain : null,
-                'filename'   => 'cdn-discovery-' . $organization->id . '.xml',
+                'filename'   => 'cdn-discovery-' . $pixelSite->id . '-' . $organization->id . '.xml',
                 'crawl_mode' => 'cdn',   // default: silent; user can switch to aggressive in settings
                 'is_index'   => false,
             ]

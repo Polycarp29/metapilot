@@ -56,6 +56,10 @@ const selectedSiteId     = ref(localStorage.getItem('mp_selected_site_id') ? par
 const isCreatingSite     = ref(false)
 const showNewSiteModal   = ref(false)
 const showSiteDropdown   = ref(false)
+const showHealthModal    = ref(false)
+const healthModalSite    = ref(null)
+const isListening        = ref(false)
+const lastHeardSignal    = ref(null)
 const newSite            = ref({ label: '', allowed_domain: '' })
 const siteSearchQuery    = ref('')
 const selectedModules    = ref(['click', 'schema']) // Default, will be overriden by site config
@@ -801,6 +805,47 @@ watch(activeTab, (val) => {
     localStorage.setItem('mp_dev_active_tab', val)
 })
 watch(pathFilter, () => { if (!pathFilter.value) fetchEvents() })
+
+const startLiveListener = () => {
+    if (isListening.value) return
+    isListening.value = true
+    lastHeardSignal.value = null
+    
+    // Simple polling listener for the health modal
+    const checkSignal = async () => {
+        if (!isListening.value) return
+        try {
+            const r = await axios.get(route('google-ads.pixel-events'), {
+                params: { pixel_site_id: healthModalSite.value?.id, per_page: 1 }
+            })
+            const latest = r.data.data?.[0]
+            if (latest) {
+                const latestTime = new Date(latest.created_at).getTime()
+                const modalOpenTime = new Date().getTime() - 10000 // 10s grace
+                if (latestTime > modalOpenTime) {
+                    lastHeardSignal.value = latest
+                    toast.success('Live signal detected! Connection verified.')
+                }
+            }
+        } catch (e) {}
+        if (isListening.value && !lastHeardSignal.value) {
+            setTimeout(checkSignal, 2000)
+        }
+    }
+    checkSignal()
+}
+
+watch(showHealthModal, (val) => {
+    if (!val) {
+        isListening.value = false
+    }
+})
+
+const openHealthModal = (site = null) => {
+    healthModalSite.value = site || selectedSite.value
+    showHealthModal.value = true
+}
+
 </script>
 
 <template>
@@ -839,6 +884,10 @@ watch(pathFilter, () => { if (!pathFilter.value) fetchEvents() })
                             <svg class="w-3 h-3 transition-transform" :class="{ 'rotate-180': showSiteDropdown }" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M19 9l-7 7-7-7"/></svg>
                         </button>
 
+                        <button v-if="selectedSite" @click="openHealthModal()" class="w-8 h-8 rounded-xl bg-white border border-slate-200 flex items-center justify-center text-slate-400 hover:text-indigo-600 transition-all shadow-sm">
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"/></svg>
+                        </button>
+
                         <button @click="showNewSiteModal = true" class="px-3 py-2 text-slate-400 hover:text-white hover:bg-slate-900 rounded-xl transition-all">
                             <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M12 4v16m8-8H4"/></svg>
                         </button>
@@ -861,9 +910,12 @@ watch(pathFilter, () => { if (!pathFilter.value) fetchEvents() })
                                     }"></div>
                                     <span class="text-[11px] font-black uppercase text-slate-700 group-hover:text-indigo-600">{{ site.label }}</span>
                                 </div>
-                                <span v-if="selectedSiteId === site.id" class="text-indigo-600">
-                                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M5 13l4 4L19 7"/></svg>
-                                </span>
+                                <div v-if="selectedSiteId === site.id" class="flex gap-2">
+                                    <button @click.stop="openHealthModal(site)" class="p-1 px-2 bg-indigo-50 text-indigo-600 rounded text-[8px] font-black uppercase hover:bg-indigo-100 transition-colors">Health</button>
+                                    <span class="text-indigo-600">
+                                        <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="4" d="M5 13l4 4L19 7"/></svg>
+                                    </span>
+                                </div>
                             </button>
                             <div v-if="filteredSiteOptions.length === 0" class="p-8 text-center text-[10px] font-black text-slate-300 uppercase italic">No sites found</div>
                         </div>
@@ -921,30 +973,14 @@ watch(pathFilter, () => { if (!pathFilter.value) fetchEvents() })
                     </div>
                 </div>
                 <!-- Engagement -->
-                <div class="bg-indigo-600 p-8 shadow-indigo-200 shadow-2xl rounded-[2.5rem] text-white">
-                    <p class="text-[11px] font-black text-indigo-200 uppercase tracking-widest mb-1">Engagement Qty</p>
-                    <h4 class="text-4xl font-black tracking-tight">{{ avgClicks }}</h4>
-                    <div class="mt-3 text-[10px] font-black text-indigo-200">Avg Clicks Per Ad Session</div>
-                </div>
-            </div>
-
-            <!-- Connection/Security Panel -->
-            <div class="lg:col-span-4 bg-white p-8 shadow-premium rounded-[2.5rem] border border-slate-100">
-                <div class="flex items-center justify-between mb-6">
-                    <h3 class="text-xs font-black text-slate-900 uppercase tracking-widest">Pixel Health</h3>
-                    <button @click="runConnectionTest" :disabled="isTestingConn" class="text-[9px] font-black uppercase tracking-widest px-3 py-1.5 bg-indigo-50 text-indigo-600 rounded-lg hover:bg-indigo-100 transition-all">
-                        {{ isTestingConn ? 'Testing...' : 'Test Now' }}
-                    </button>
-                </div>
-                <div v-if="selectedSite" class="space-y-4">
-                    <div class="relative">
-                        <label class="text-[8px] font-black text-slate-400 uppercase tracking-widest ml-1 mb-1 block">Traffic Domain Pinning</label>
-                        <input v-model="allowedDomainInput" placeholder="diaminyaesthetics.com" class="w-full bg-slate-50 border-slate-100 focus:border-indigo-500 focus:ring-0 rounded-xl text-[11px] font-bold text-slate-800 py-3 px-4 pr-16" />
-                        <button @click="saveAllowedDomain" class="absolute right-2 bottom-2 bg-slate-900 text-white text-[9px] font-black px-3 py-1.5 rounded-lg active:scale-95 transition-transform">Save</button>
-                    </div>
-                    <div class="flex items-center justify-between p-3 bg-slate-50/50 rounded-xl">
-                        <span class="text-[9px] font-black text-slate-400 uppercase">Subdomain Pinning</span>
-                        <span class="text-[9px] font-black text-emerald-600 uppercase">Active (v3.1)</span>
+            <!-- Insights Card -->
+            <div class="lg:col-span-4 bg-indigo-600 p-10 shadow-indigo-200 shadow-2xl rounded-[3rem] text-white relative overflow-hidden group">
+                <div class="absolute -right-10 -bottom-10 w-40 h-40 bg-white/10 blur-3xl rounded-full group-hover:scale-150 transition-transform"></div>
+                <div class="relative z-10">
+                    <p class="text-[11px] font-black text-indigo-200 uppercase tracking-widest mb-1">Avg Engagement</p>
+                    <h4 class="text-4xl font-black tracking-tight">{{ avgClicks }} <small class="text-lg opacity-60">hits/session</small></h4>
+                    <div class="mt-4 flex items-center gap-2">
+                        <span class="px-2 py-0.5 bg-white/20 rounded text-[9px] font-bold uppercase tracking-tighter">Live Telemetry</span>
                     </div>
                 </div>
             </div>
@@ -1333,36 +1369,56 @@ watch(pathFilter, () => { if (!pathFilter.value) fetchEvents() })
 
         <!-- ── Middle: Snippet Generator & Campaign Tools ───────────── -->
         <div class="grid grid-cols-1 lg:grid-cols-12 gap-8">
-            <div class="lg:col-span-8 bg-slate-900 p-12 shadow-2xl rounded-[3.5rem] border border-slate-800 relative overflow-hidden">
-                <div class="absolute -top-10 -right-10 w-64 h-64 bg-indigo-500/10 blur-[100px] rounded-full pointer-events-none"></div>
                 <div class="flex items-center justify-between mb-10">
-                    <h3 class="text-2xl font-black text-white flex items-center gap-4">
-                        <span class="p-3 bg-indigo-600 text-white rounded-2xl shadow-lg">
-                            <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4"/></svg>
-                        </span>
-                        Tracker Implementation: {{ selectedSite ? selectedSite.label : 'Select a Site' }}
-                    </h3>
-                    <div class="flex items-center gap-3">
-                        <span class="px-3 py-1 bg-white/5 text-indigo-400 text-[9px] font-black rounded-lg border border-white/10 uppercase tracking-widest">v3.1 Secure Handshake</span>
+                    <div class="flex items-center gap-5">
+                        <div class="p-4 bg-indigo-600 text-white rounded-2xl shadow-lg relative">
+                            <svg class="w-7 h-7" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4"/></svg>
+                            <span v-if="selectedSite" class="absolute -top-1 -right-1 w-4 h-4 rounded-full border-4 border-slate-900" :class="{
+                                'bg-emerald-500': selectedSite.status === 'verified_active',
+                                'bg-amber-400': selectedSite.status === 'connected_inactive',
+                                'bg-slate-300': selectedSite.status === 'not_detected',
+                            }"></span>
+                        </div>
+                        <div>
+                            <h3 class="text-2xl font-black text-white tracking-tight">
+                                {{ selectedSite ? selectedSite.label : 'Select Pixel Site' }}
+                            </h3>
+                            <div class="flex items-center gap-3 mt-1">
+                                <span class="text-[10px] font-black text-slate-500 uppercase tracking-widest">{{ selectedSite ? selectedSite.ads_site_token.substring(0, 18) + '...' : 'System Identity v3.2' }}</span>
+                                <button v-if="selectedSite" @click="openHealthModal(selectedSite)" class="text-[9px] font-black text-indigo-400 uppercase tracking-widest hover:text-indigo-300 flex items-center gap-1.5 transition-colors">
+                                    <span class="w-1 h-1 rounded-full bg-indigo-500"></span>
+                                    View Health & Config
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="flex items-center gap-4">
+                        <button @click="showNewSiteModal = true" class="px-5 py-3 bg-white/5 border border-white/10 text-white text-[10px] font-black rounded-2xl flex items-center gap-2 hover:bg-white/10 transition-all shadow-xl">
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M12 4v16m8-8H4"/></svg>
+                            New Identification
+                        </button>
                     </div>
                 </div>
 
-                <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
-                    <div class="space-y-3">
-                        <label class="block text-[10px] font-black text-slate-500 uppercase tracking-widest ml-1">Tracking Site</label>
+                <div class="grid grid-cols-1 md:grid-cols-12 gap-6 mb-8">
+                    <div class="md:col-span-4 space-y-3">
+                        <label class="block text-[10px] font-black text-slate-500 uppercase tracking-widest ml-1">Traffic Origin (Pinning)</label>
+                        <div class="relative group/input">
+                            <input v-model="allowedDomainInput" placeholder="e.g. site.com" class="w-full bg-slate-800 border-white/10 focus:border-indigo-500 focus:ring-0 rounded-2xl text-[11px] font-bold text-white py-4 px-6 pr-14" />
+                            <button @click="saveAllowedDomain" class="absolute right-3 top-2.5 px-3 py-1.5 bg-indigo-600 hover:bg-indigo-500 text-white text-[9px] font-black rounded-lg opacity-0 group-hover/input:opacity-100 transition-all">
+                                Save
+                            </button>
+                        </div>
+                    </div>
+                    <div class="md:col-span-4 space-y-3">
+                        <label class="block text-[10px] font-black text-slate-500 uppercase tracking-widest ml-1">Lead Attribution ID</label>
+                        <input v-model="selectedCampaignId" placeholder="e.g. fb_ads_winter_campaign" class="w-full bg-white/5 border-white/10 focus:border-indigo-500 focus:ring-0 rounded-2xl text-[11px] font-bold text-white py-4 px-6" />
+                    </div>
+                    <div class="md:col-span-4 space-y-3">
+                        <label class="block text-[10px] font-black text-slate-500 uppercase tracking-widest ml-1">Identification Source</label>
                         <select v-model="selectedSiteId" class="w-full bg-slate-800 border-white/10 focus:border-indigo-500 focus:ring-0 rounded-2xl text-[11px] font-bold text-white py-4 px-6 appearance-none cursor-pointer">
-                            <option :value="null" class="bg-slate-900 text-slate-400">Select a Site...</option>
-                            <option v-for="site in pixelSites" :key="site.id" :value="site.id" class="bg-slate-900 text-white">{{ site.label }}</option>
-                        </select>
-                    </div>
-                    <div class="space-y-3">
-                        <label class="block text-[10px] font-black text-slate-500 uppercase tracking-widest ml-1">Traffic Isolation</label>
-                        <input v-model="selectedCampaignId" placeholder="e.g. MetaPilot_Agency_001" class="w-full bg-white/5 border-white/10 focus:border-indigo-500 focus:ring-0 rounded-2xl text-[11px] font-bold text-white py-4 px-6" />
-                    </div>
-                    <div class="space-y-3">
-                        <label class="block text-[10px] font-black text-slate-500 uppercase tracking-widest ml-1">Property Link</label>
-                        <select v-model="selectedPropId" class="w-full bg-slate-800 border-white/10 focus:border-indigo-500 focus:ring-0 rounded-2xl text-[11px] font-bold text-white py-4 px-6 appearance-none cursor-pointer">
-                            <option v-for="prop in properties" :key="prop.id" :value="prop.id" class="bg-slate-900 text-white">{{ prop.name }}</option>
+                            <option :value="null">System Selection...</option>
+                            <option v-for="site in pixelSites" :key="site.id" :value="site.id">{{ site.label }} ({{ site.total_hits }} hits)</option>
                         </select>
                     </div>
                 </div>
@@ -1977,7 +2033,7 @@ watch(pathFilter, () => { if (!pathFilter.value) fetchEvents() })
 
         <!-- ── New Site Modal ────────── -->
         <transition enter-active-class="transition duration-300 ease-out" enter-from-class="opacity-0" enter-to-class="opacity-100" leave-active-class="transition duration-200 ease-in" leave-from-class="opacity-100" leave-to-class="opacity-0">
-            <div v-if="showNewSiteModal" class="fixed inset-0 z-[70] flex items-center justify-center p-6">
+            <div v-if="showNewSiteModal" class="fixed inset-0 z-[75] flex items-center justify-center p-6">
                 <div class="absolute inset-0 bg-slate-100/40 backdrop-blur-md" @click="showNewSiteModal = false"></div>
                 <div class="relative w-full max-w-md bg-white rounded-[2.5rem] shadow-premium p-10 border border-slate-200">
                     <h3 class="text-2xl font-black text-slate-900 mb-2">Add Tracking Site</h3>
@@ -2001,6 +2057,118 @@ watch(pathFilter, () => { if (!pathFilter.value) fetchEvents() })
                             <button type="button" @click="showNewSiteModal = false" class="px-6 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest hover:text-slate-600 transition-colors">Cancel</button>
                         </div>
                     </form>
+                </div>
+            </div>
+        </transition>
+
+        <!-- ── Pixel Health & Live Test Modal ────────── -->
+        <transition enter-active-class="transition duration-300 ease-out" enter-from-class="opacity-0 translate-y-4" enter-to-class="opacity-100 translate-y-0" leave-active-class="transition duration-200 ease-in" leave-from-class="opacity-100 translate-y-0" leave-to-class="opacity-0 translate-y-4">
+            <div v-if="showHealthModal && healthModalSite" class="fixed inset-0 z-[80] flex items-center justify-center p-6">
+                <div class="absolute inset-0 bg-slate-100/50 backdrop-blur-2xl" @click="showHealthModal = false"></div>
+                <div class="relative w-full max-w-4xl bg-white rounded-[3.5rem] shadow-premium-lg border border-slate-200 overflow-hidden">
+                    <div class="grid grid-cols-1 lg:grid-cols-12">
+                        <!-- Left: Site Info & Config -->
+                        <div class="lg:col-span-5 bg-slate-50 p-12 border-r border-slate-100">
+                            <div class="flex items-center gap-4 mb-8">
+                                <div class="w-14 h-14 bg-indigo-600 text-white rounded-2xl flex items-center justify-center text-2xl shadow-lg">
+                                    <svg class="w-7 h-7" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"/></svg>
+                                </div>
+                                <div>
+                                    <h3 class="text-2xl font-black text-slate-900 leading-tight">{{ healthModalSite.label }}</h3>
+                                    <p class="text-[10px] font-black text-slate-400 uppercase tracking-widest mt-1">Domain Identity Health</p>
+                                </div>
+                            </div>
+
+                            <div class="space-y-8">
+                                <div>
+                                    <label class="text-[9px] font-black text-slate-400 uppercase tracking-widest block mb-1.5 ml-1">Traffic Domain Pinning</label>
+                                    <div class="relative group/pin">
+                                        <input v-model="allowedDomainInput" placeholder="e.g. site.com" class="w-full bg-white border-slate-200 rounded-2xl py-3.5 px-5 text-sm font-bold focus:ring-0 focus:border-indigo-500 shadow-sm" />
+                                        <button @click="saveAllowedDomain" class="absolute right-2 top-2 p-1.5 bg-slate-900 text-white rounded-lg text-[9px] font-black uppercase tracking-widest opacity-0 group-hover/pin:opacity-100 transition-opacity">Update</button>
+                                    </div>
+                                    <p class="text-[9px] text-slate-400 font-medium mt-2 leading-relaxed italic">Signals from domains not matching this pattern will be rejected (403).</p>
+                                </div>
+
+                                <div class="p-6 bg-white border border-slate-100 rounded-3xl space-y-4">
+                                    <div class="flex items-center justify-between pb-4 border-b border-slate-50">
+                                        <span class="text-[9px] font-black text-slate-400 uppercase">Verification ID</span>
+                                        <span class="text-[10px] font-mono font-bold text-slate-600 tracking-tighter">{{ healthModalSite.ads_site_token.substring(0, 24) }}...</span>
+                                    </div>
+                                    <div class="flex items-center justify-between">
+                                        <span class="text-[9px] font-black text-slate-400 uppercase">Last Signal</span>
+                                        <span class="text-[10px] font-bold text-slate-900 uppercase">{{ healthModalSite.last_hit_at ? new Date(healthModalSite.last_hit_at).toLocaleTimeString() : 'No hits detected' }}</span>
+                                    </div>
+                                </div>
+
+                                <button @click="showRegenModal = true" class="w-full py-4 text-[10px] font-black text-rose-500 uppercase tracking-widest border border-rose-100 rounded-2xl hover:bg-rose-50 transition-colors">
+                                    Regenerate Tracking token
+                                </button>
+                            </div>
+                        </div>
+
+                        <!-- Right: Live Diagnostic -->
+                        <div class="lg:col-span-7 p-12 relative overflow-hidden">
+                            <div v-if="!isListening && !lastHeardSignal" class="h-full flex flex-col items-center justify-center text-center space-y-6">
+                                <div class="w-24 h-24 bg-slate-50 rounded-full flex items-center justify-center text-4xl shadow-inner border border-slate-100">
+                                    📡
+                                </div>
+                                <div class="max-w-xs">
+                                    <h4 class="text-xl font-black text-slate-900">Live Connection Test</h4>
+                                    <p class="text-sm text-slate-400 font-medium mt-2">Open your website in another tab once the listener is active to verify real-time tracking.</p>
+                                </div>
+                                <button @click="startLiveListener" class="px-8 py-4 bg-indigo-600 text-white rounded-2xl text-xs font-black uppercase tracking-widest shadow-xl shadow-indigo-100 hover:-translate-y-0.5 active:translate-y-0 transition-all">
+                                    Start Live Verification
+                                </button>
+                            </div>
+
+                            <!-- Listening State -->
+                            <div v-else-if="isListening && !lastHeardSignal" class="h-full flex flex-col items-center justify-center text-center space-y-8">
+                                <div class="relative w-32 h-32">
+                                    <div class="absolute inset-0 bg-indigo-500/20 rounded-full animate-ping"></div>
+                                    <div class="absolute inset-4 bg-indigo-500/40 rounded-full animate-ping animation-delay-500"></div>
+                                    <div class="relative w-full h-full bg-white rounded-full flex items-center justify-center text-3xl shadow-premium border-2 border-indigo-500">
+                                        👂
+                                    </div>
+                                </div>
+                                <div class="space-y-2">
+                                    <h4 class="text-2xl font-black text-slate-900">Listening for signals...</h4>
+                                    <p class="text-sm text-indigo-500 font-bold uppercase tracking-widest animate-pulse">Waiting for hit from {{ healthModalSite.allowed_domain || 'any domain' }}</p>
+                                </div>
+                                <p class="text-[10px] text-slate-400 font-medium max-w-xs mt-4">Tip: Refresh your website or click a link to trigger a tracking event.</p>
+                                <button @click="isListening = false" class="text-[10px] font-black text-slate-400 uppercase tracking-widest hover:text-slate-600">Cancel Test</button>
+                            </div>
+
+                            <!-- Success State -->
+                            <div v-else-if="lastHeardSignal" class="h-full flex flex-col items-center justify-center text-center p-8">
+                                <div class="w-32 h-32 bg-emerald-500 text-white rounded-full flex items-center justify-center text-5xl shadow-2xl shadow-emerald-200 mb-8 animate-bounce">
+                                    ✅
+                                </div>
+                                <h4 class="text-3xl font-black text-slate-900 tracking-tight mb-2">Connection Success!</h4>
+                                <p class="text-lg text-emerald-600 font-black uppercase tracking-tight mb-8">Signal Received via Secure Handshake</p>
+                                
+                                <div class="w-full bg-slate-900 rounded-3xl p-8 text-left space-y-4 border border-white/5">
+                                    <div class="flex items-center justify-between">
+                                        <span class="text-[10px] font-black text-slate-500 uppercase">Device</span>
+                                        <span class="text-xs font-bold text-white">{{ lastHeardSignal.browser }} / {{ lastHeardSignal.platform }}</span>
+                                    </div>
+                                    <div class="flex items-center justify-between">
+                                        <span class="text-[10px] font-black text-slate-500 uppercase">Source Path</span>
+                                        <span class="text-xs font-bold text-indigo-300 truncate max-w-[200px]">{{ lastHeardSignal.page_url }}</span>
+                                    </div>
+                                    <div class="flex items-center justify-between">
+                                        <span class="text-[10px] font-black text-slate-500 uppercase">Attribution ID</span>
+                                        <span class="text-xs font-bold text-emerald-400">{{ lastHeardSignal.google_campaign_id || 'System Default' }}</span>
+                                    </div>
+                                </div>
+
+                                <button @click="lastHeardSignal = null; startLiveListener()" class="mt-8 text-[11px] font-black text-indigo-600 uppercase tracking-widest hover:underline">Run Another Test</button>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <button @click="showHealthModal = false" class="absolute top-8 right-8 p-3 text-slate-300 hover:text-slate-900 transition-colors">
+                        <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M6 18L18 6M6 6l12 12"/></svg>
+                    </button>
                 </div>
             </div>
         </transition>

@@ -7,7 +7,7 @@ use Illuminate\Database\Eloquent\Model;
 class Sitemap extends Model
 {
     protected $fillable = [
-        'user_id', 'organization_id', 'name', 'site_url', 'filename',
+        'user_id', 'organization_id', 'pixel_site_id', 'name', 'site_url', 'filename',
         'is_index', 'last_generated_at', 'last_crawl_status', 'last_crawl_job_id',
         'is_discovery', 'crawl_mode',
     ];
@@ -27,6 +27,11 @@ class Sitemap extends Model
     public function organization()
     {
         return $this->belongsTo(Organization::class);
+    }
+
+    public function pixelSite()
+    {
+        return $this->belongsTo(PixelSite::class);
     }
 
     public function links()
