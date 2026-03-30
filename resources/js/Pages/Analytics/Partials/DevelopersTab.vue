@@ -103,8 +103,10 @@ const selectedSite = computed(() =>
     pixelSites.value.find(s => s.id === selectedSiteId.value)
 )
 
+const campaignFilter   = ref('all')  // legacy filter kept for filteredEvents computed
+
 const filteredEvents = computed(() => {
-    let ev = events.value
+    let ev = logResponse.value.data
     if (campaignFilter.value !== 'all') {
         ev = ev.filter(e => e.google_campaign_id === campaignFilter.value)
     }
@@ -367,10 +369,26 @@ const copyJourney = () => {
     toast.success('Full journey copied!', 'Copied')
 }
 
+const copyFullJourney = copyJourney  // alias used in session modal
+
 // Bottleneck helpers
 const bottleneckIcon = (sev) => ({ critical: '🔴', warning: '🟡', good: '🟢' }[sev] ?? '⚪')
 const bottleneckLabel = (sev) => ({ critical: 'Critical', warning: 'Warning', good: 'Good' }[sev] ?? 'N/A')
 const bottleneckBg = (sev) => ({ critical: 'bg-rose-50 text-rose-700 border-rose-200', warning: 'bg-amber-50 text-amber-700 border-amber-200', good: 'bg-emerald-50 text-emerald-700 border-emerald-200' }[sev] ?? 'bg-slate-50 text-slate-500')
+
+// Path Intelligence health column helpers (bottleneck_score 0-100, higher = worse)
+const getHealthLabel = (score) => {
+    if (score == null) return 'Unknown'
+    if (score >= 60) return 'Critical'
+    if (score >= 35) return 'Fair'
+    return 'Healthy'
+}
+const getHealthClass = (score) => {
+    if (score == null) return 'bg-slate-50 text-slate-400 border-slate-100'
+    if (score >= 60) return 'bg-rose-50 text-rose-600 border-rose-200'
+    if (score >= 35) return 'bg-amber-50 text-amber-600 border-amber-200'
+    return 'bg-emerald-50 text-emerald-600 border-emerald-200'
+}
 
 // Format ms → human
 const fmtMs = (ms) => {
@@ -1036,6 +1054,34 @@ watch(pathFilter, () => { if (!pathFilter.value) fetchEvents() })
         </div>
 
         <!-- ══ Path Intelligence Table ════════════════════════════════════ -->
+
+        <!-- Bottleneck Summary Panel -->
+        <div v-if="topPages.filter(p => p.bottleneck_score >= 60).length" class="grid grid-cols-1 md:grid-cols-3 gap-6">
+            <div v-for="page in topPages.filter(p => p.bottleneck_score >= 60).slice(0, 3)" :key="page.page_url"
+                class="group relative flex items-start gap-5 p-8 rounded-[2.5rem] border overflow-hidden cursor-pointer transition-all hover:-translate-y-0.5"
+                :class="page.bottleneck_score >= 80 ? 'bg-rose-50 border-rose-200 hover:shadow-rose-100 hover:shadow-lg' : 'bg-amber-50 border-amber-200 hover:shadow-amber-100 hover:shadow-lg'"
+                @click="drillToPath(page.page_url)"
+            >
+                <div class="absolute -right-6 -bottom-6 w-24 h-24 rounded-full blur-2xl opacity-30 transition-all group-hover:scale-125"
+                    :class="page.bottleneck_score >= 80 ? 'bg-rose-400' : 'bg-amber-400'"></div>
+                <div class="w-11 h-11 shrink-0 rounded-2xl flex items-center justify-center text-xl shadow-sm"
+                    :class="page.bottleneck_score >= 80 ? 'bg-white text-rose-500' : 'bg-white text-amber-500'">
+                    {{ page.bottleneck_score >= 80 ? '🔴' : '🟡' }}
+                </div>
+                <div class="min-w-0 z-10">
+                    <p class="text-[9px] font-black uppercase tracking-widest mb-0.5"
+                        :class="page.bottleneck_score >= 80 ? 'text-rose-500' : 'text-amber-600'"
+                    >{{ page.bottleneck_score >= 80 ? 'Critical' : 'Warning' }} · Score {{ page.bottleneck_score }}</p>
+                    <p class="text-xs font-black text-slate-900 truncate" :title="page.page_url">{{ safePathLabel(page.page_url) }}</p>
+                    <div class="flex flex-wrap gap-3 mt-2">
+                        <span v-if="page.bounce_rate > 50" class="text-[9px] font-bold text-slate-500">↑ Bounce {{ page.bounce_rate }}%</span>
+                        <span v-if="page.avg_load_time > 3000" class="text-[9px] font-bold text-slate-500">⏱ Load {{ (page.avg_load_time / 1000).toFixed(1) }}s</span>
+                        <span v-if="page.error_count > 0" class="text-[9px] font-bold text-slate-500">⚠ {{ page.error_count }} errors/24h</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+
         <div class="bg-white shadow-premium rounded-[3.5rem] border border-slate-100/50 overflow-hidden">
             <div class="px-12 pt-12 pb-8 flex items-end justify-between border-b border-slate-50">
                 <div>
@@ -1151,7 +1197,8 @@ watch(pathFilter, () => { if (!pathFilter.value) fetchEvents() })
                                              <h5 class="text-[9px] font-black text-slate-400 uppercase tracking-widest">MetaPilot Optimization Logic</h5>
                                              <div class="p-6 bg-white rounded-2xl border border-slate-100 shadow-premium-sm relative overflow-hidden">
                                                  <div class="absolute right-4 top-4 text-xs opacity-20">🤖</div>
-                                                 <p class="text-xs font-bold text-slate-800 leading-relaxed italic whitespace-pre-wrap">"{{ page.recommendation }}"</p>
+                                                 <p v-if="page.recommendations?.length" class="text-xs font-bold text-slate-800 leading-relaxed italic whitespace-pre-wrap">"{{ page.recommendations.join(' · ') }}"</p>
+                                                 <p v-else class="text-xs font-bold text-slate-400 leading-relaxed italic">No specific recommendations — this page looks healthy! 🎉</p>
                                                  <div class="mt-6 flex items-center gap-4">
                                                      <button class="px-4 py-2 bg-indigo-600 text-white text-[9px] font-black rounded-lg uppercase tracking-tight shadow-md hover:indigo-500 transition-all active:scale-95">Auto-Inject Schema</button>
                                                      <button class="px-4 py-2 bg-white text-slate-600 border border-slate-200 text-[9px] font-black rounded-lg uppercase tracking-tight hover:bg-slate-50 transition-all active:scale-95">View Page Source</button>
@@ -1502,21 +1549,33 @@ watch(pathFilter, () => { if (!pathFilter.value) fetchEvents() })
                 <!-- Attribution Chips -->
                 <div class="w-full flex flex-wrap gap-2 min-h-[32px]">
                     <div v-if="!filters.utm_source && !filters.utm_medium && !filters.utm_campaign && !filters.gclid" class="text-[9px] text-slate-300 font-bold uppercase py-2">No active attribution filters</div>
-                    <div v-if="filters.utm_source" class="flex items-center gap-2 px-3 py-1.5 bg-indigo-50 border border-indigo-100 rounded-full">
+                    <div v-if="filters.utm_source" class="flex items-center gap-1.5 pl-3 pr-1.5 py-1.5 bg-indigo-50 border border-indigo-100 rounded-full">
                         <span class="text-[9px] font-black text-slate-400 uppercase">Source:</span>
                         <span class="text-[10px] font-black text-indigo-600 uppercase">{{ filters.utm_source }}</span>
+                        <button @click.stop="filters.utm_source = ''; applyFilters()" class="ml-1 w-4 h-4 rounded-full bg-indigo-100 hover:bg-rose-100 flex items-center justify-center text-indigo-400 hover:text-rose-500 transition-colors">
+                            <svg class="w-2.5 h-2.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M6 18L18 6M6 6l12 12"/></svg>
+                        </button>
                     </div>
-                    <div v-if="filters.utm_medium" class="flex items-center gap-2 px-3 py-1.5 bg-indigo-50 border border-indigo-100 rounded-full">
+                    <div v-if="filters.utm_medium" class="flex items-center gap-1.5 pl-3 pr-1.5 py-1.5 bg-indigo-50 border border-indigo-100 rounded-full">
                         <span class="text-[9px] font-black text-slate-400 uppercase">Medium:</span>
                         <span class="text-[10px] font-black text-indigo-600 uppercase">{{ filters.utm_medium }}</span>
+                        <button @click.stop="filters.utm_medium = ''; applyFilters()" class="ml-1 w-4 h-4 rounded-full bg-indigo-100 hover:bg-rose-100 flex items-center justify-center text-indigo-400 hover:text-rose-500 transition-colors">
+                            <svg class="w-2.5 h-2.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M6 18L18 6M6 6l12 12"/></svg>
+                        </button>
                     </div>
-                    <div v-if="filters.utm_campaign" class="flex items-center gap-2 px-3 py-1.5 bg-indigo-50 border border-indigo-100 rounded-full">
+                    <div v-if="filters.utm_campaign" class="flex items-center gap-1.5 pl-3 pr-1.5 py-1.5 bg-indigo-50 border border-indigo-100 rounded-full">
                         <span class="text-[9px] font-black text-slate-400 uppercase">Campaign:</span>
                         <span class="text-[10px] font-black text-indigo-600 uppercase">{{ filters.utm_campaign }}</span>
+                        <button @click.stop="filters.utm_campaign = ''; applyFilters()" class="ml-1 w-4 h-4 rounded-full bg-indigo-100 hover:bg-rose-100 flex items-center justify-center text-indigo-400 hover:text-rose-500 transition-colors">
+                            <svg class="w-2.5 h-2.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M6 18L18 6M6 6l12 12"/></svg>
+                        </button>
                     </div>
-                    <div v-if="filters.gclid" class="flex items-center gap-2 px-3 py-1.5 bg-amber-50 border border-amber-100 rounded-full">
+                    <div v-if="filters.gclid" class="flex items-center gap-1.5 pl-3 pr-1.5 py-1.5 bg-amber-50 border border-amber-100 rounded-full">
                         <span class="text-[9px] font-black text-slate-400 uppercase">GCLID:</span>
                         <span class="text-[10px] font-black text-amber-700 uppercase">Active</span>
+                        <button @click.stop="filters.gclid = ''; applyFilters()" class="ml-1 w-4 h-4 rounded-full bg-amber-100 hover:bg-rose-100 flex items-center justify-center text-amber-500 hover:text-rose-500 transition-colors">
+                            <svg class="w-2.5 h-2.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M6 18L18 6M6 6l12 12"/></svg>
+                        </button>
                     </div>
                     <!-- Exclude Bots Toggle -->
                     <div class="ml-auto flex items-center gap-3 bg-slate-50 px-5 py-4 rounded-2xl border border-slate-100">
