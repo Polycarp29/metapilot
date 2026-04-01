@@ -102,6 +102,36 @@ const fetchingSource = ref(null) // page_url
 const showSourceModal = ref(false)
 const sourceData = ref({ html: '', schema: null, url: '', mode: 'html' })
 
+// Code Highlighting Logic
+const highlightHtml = (code) => {
+    if (!code) return ''
+    return code
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/(&lt;!--.*?--&gt;)/gs, '<span class="text-slate-500 italic">$1</span>') // Comments
+        .replace(/(&lt;\/?[a-z1-6]+)/gi, '<span class="text-rose-400">$1</span>') // Tags
+        .replace(/(&gt;)/gi, '<span class="text-rose-400">$1</span>') // Tag closure
+        .replace(/\s([a-z-]+)(?==)/gi, ' <span class="text-amber-300">$1</span>') // Attributes
+        .replace(/="([^"]*)"/gi, '=<span class="text-emerald-400">"$1"</span>') // Strings
+}
+
+const highlightJson = (code) => {
+    if (!code) return ''
+    return code
+        .replace(/"([^"]+)"(?=:)/g, '<span class="text-indigo-300">"$1"</span>') // Keys
+        .replace(/(?<=: )"([^"]+)"/g, '<span class="text-emerald-300">"$1"</span>') // String Values
+        .replace(/(?<=: )(\d+)/g, '<span class="text-amber-400">$1</span>') // Numbers
+        .replace(/(?<=: )(true|false|null)/g, '<span class="text-rose-400">$1</span>') // Boolean/Null
+}
+
+const sourceLines = computed(() => {
+    const raw = sourceData.value.mode === 'html' 
+        ? sourceData.value.html 
+        : JSON.stringify(sourceData.value.schema, null, 4)
+    return (raw || '').split('\n')
+})
+
 const autoInjectSchema = async (page) => {
     if (!selectedSiteId.value) return toast.error('Please select a pixel site first.', 'Error')
     injectingPage.value = page.page_url
@@ -2282,19 +2312,29 @@ const openHealthModal = (site = null) => {
                     </div>
 
                     <!-- Code Content -->
-                    <div class="flex-1 overflow-auto p-12 custom-scrollbar">
-                        <div v-show="sourceData.mode === 'html'" class="space-y-4">
-                            <pre class="text-[11px] font-mono text-slate-300 leading-relaxed bg-slate-900/50 p-8 rounded-3xl border border-white/5 whitespace-pre-wrap"><code>{{ sourceData.html }}</code></pre>
-                        </div>
-                        <div v-show="sourceData.mode === 'schema'">
-                            <div v-if="sourceData.schema">
-                                <pre class="text-[11px] font-mono text-indigo-300 leading-relaxed bg-slate-900/50 p-8 rounded-3xl border border-indigo-500/10 whitespace-pre-wrap"><code>{{ JSON.stringify(sourceData.schema, null, 4) }}</code></pre>
+                    <div class="flex-1 overflow-auto p-0 bg-[#0f172a] selection:bg-indigo-500/30 custom-scrollbar-dark no-scrollbar">
+                         <div v-if="sourceLines.length > 0 && sourceLines[0] !== ''" class="min-w-full inline-block py-6">
+                            <table class="w-full text-left border-collapse font-mono text-[11px] leading-relaxed">
+                                <tr v-for="(line, idx) in sourceLines" :key="idx" class="group hover:bg-white/5 transition-colors">
+                                    <td class="select-none py-0.5 px-4 text-right align-top w-12 text-slate-600 border-r border-white/5 bg-slate-900/40 sticky left-0 z-10">
+                                        {{ idx + 1 }}
+                                    </td>
+                                    <td class="py-0.5 px-6 whitespace-pre text-slate-300">
+                                        <span v-if="sourceData.mode === 'html'" v-html="highlightHtml(line)"></span>
+                                        <span v-else v-html="highlightJson(line)"></span>
+                                    </td>
+                                </tr>
+                            </table>
+                         </div>
+                         <div v-else class="h-96 flex flex-col items-center justify-center text-center space-y-6">
+                            <div class="w-20 h-20 bg-slate-800 rounded-[2rem] flex items-center justify-center text-3xl shadow-inner border border-white/5">
+                                {{ sourceData.mode === 'html' ? '📄' : '🔍' }}
                             </div>
-                            <div v-else class="h-64 flex flex-col items-center justify-center text-center space-y-4">
-                                <div class="w-16 h-16 bg-slate-800 rounded-full flex items-center justify-center text-2xl">🔍</div>
-                                <p class="text-slate-400 font-black text-[10px] uppercase tracking-widest">No injected schema found for this URL</p>
+                            <div>
+                                <p class="text-white font-black text-xs uppercase tracking-widest mb-1">No Content Detected</p>
+                                <p class="text-slate-500 font-bold text-[10px] uppercase tracking-widest">Waiting for source transmission...</p>
                             </div>
-                        </div>
+                         </div>
                     </div>
 
                     <!-- Footer -->
