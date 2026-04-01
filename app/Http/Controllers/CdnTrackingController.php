@@ -1209,10 +1209,10 @@ class CdnTrackingController extends Controller
                 $schema = [
                     '@context' => 'https://schema.org',
                     '@type' => 'WebPage',
-                    'name' => $metadata['title'] ?? $metadata['h1'],
-                    'description' => $metadata['description'],
+                    'name' => $metadata['title'] ?? ($metadata['h1'] ?? 'Untitled Page'),
+                    'description' => $metadata['description'] ?? '',
                     'url' => $url,
-                    'primaryImageOfPage' => $metadata['og_image']
+                    'primaryImageOfPage' => $metadata['og_image'] ?? null
                 ];
             }
         }
@@ -1688,6 +1688,114 @@ class CdnTrackingController extends Controller
         ]);
     }
 
+
+    /**
+     * Manually trigger JSON-LD schema generation for a specific URL.
+     */
+    public function generateSchemaForUrl(Request $request)
+    {
+        $request->validate([
+            'pixel_site_id' => 'required|integer|exists:pixel_sites,id',
+            'url'           => 'required|url',
+        ]);
+
+        $organization = $request->user()->currentOrganization();
+        $pixelSite = $organization->pixelSites()->findOrFail($request->pixel_site_id);
+
+        // 1. Try to find metadata from recent hits
+        $lastHit = AdTrackEvent::where('pixel_site_id', $pixelSite->id)
+            ->where('page_url', $request->url)
+            ->whereNotNull('metadata')
+            ->orderByDesc('created_at')
+            ->first();
+
+        $metadata = $lastHit?->metadata ?? [];
+
+        // 2. If metadata is missing/incomplete, try to scrape basic tags
+        if (empty($metadata['title']) && empty($metadata['h1'])) {
+            try {
+                $response = Http::timeout(5)->get($request->url);
+                if ($response->successful()) {
+                    $html = $response->body();
+                    preg_match('/<title>(.*?)<\/title>/is', $html, $matches);
+                    $metadata['title'] = $matches[1] ?? null;
+                    
+                    if (preg_match('/<meta name="description" content="(.*?)"/is', $html, $matches)) {
+                        $metadata['description'] = $matches[1];
+                    }
+                    if (preg_match('/<h1>(.*?)<\/h1>/is', $html, $matches)) {
+                        $metadata['h1'] = strip_tags($matches[1]);
+                    }
+                    if (preg_match('/<meta property="og:image" content="(.*?)"/is', $html, $matches)) {
+                        $metadata['og_image'] = $matches[1];
+                    }
+                }
+            } catch (\Exception $e) {
+                Log::warning("Manual Schema Scraping Failure: " . $e->getMessage());
+            }
+        }
+
+        // 3. Generate schema (Internal call)
+        $schema = $this->generateSchemaForPage($pixelSite, $request->url, $metadata);
+
+        return response()->json([
+            'success' => true,
+            'message' => 'AI Schema synthesized and injected successfully.',
+            'schema'  => $schema->schema_json,
+        ]);
+    }
+
+    /**
+     * Fetch the page source and its injected schema for diagnostic purposes.
+     */
+    public function getPageSource(Request $request)
+    {
+        $request->validate([
+            'url' => 'required|url',
+        ]);
+
+        $organization = $request->user()->currentOrganization();
+        
+        // Find a suitable pixel site for context
+        $host = parse_url($request->url, PHP_URL_HOST);
+        $pixelSite = PixelSite::where('organization_id', $organization->id)
+            ->get()
+            ->first(function($site) use ($host) {
+                if (!$site->allowed_domain) return false;
+                $clean = preg_replace('/^www\./', '', strtolower($site->allowed_domain));
+                $hostClean = preg_replace('/^www\./', '', strtolower($host));
+                return $clean === $hostClean || str_ends_with($hostClean, '.' . $clean);
+            });
+
+        $html = "Unable to fetch page source.";
+        try {
+            $response = Http::timeout(10)->withHeaders([
+                'User-Agent' => 'MetaPilot-Diagnostic-Bot/1.0',
+            ])->get($request->url);
+            
+            if ($response->successful()) {
+                $html = $response->body();
+            } else {
+                $html = "Server returned status " . $response->status();
+            }
+        } catch (\Exception $e) {
+            $html = "Error fetching source: " . $e->getMessage();
+        }
+
+        $schema = null;
+        if ($pixelSite) {
+            $urlHash = hash('sha256', $this->normalizeUrlForHash($request->url));
+            $schema = CdnPageSchema::where('pixel_site_id', $pixelSite->id)
+                ->where('url_hash', $urlHash)
+                ->first();
+        }
+
+        return response()->json([
+            'html'   => $html,
+            'schema' => $schema ? $schema->schema_json : null,
+            'url'    => $request->url,
+        ]);
+    }
 
     /**
      * Find or auto-create the organisation's CDN discovery sitemap.

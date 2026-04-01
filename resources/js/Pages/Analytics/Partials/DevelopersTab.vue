@@ -96,6 +96,50 @@ const attributionSearch = ref('')
 // Expanded row for bottleneck details (stores page_url or null)
 const expandedPage = ref(null)
 
+// Diagnostic Actions State
+const injectingPage = ref(null) // page_url
+const fetchingSource = ref(null) // page_url
+const showSourceModal = ref(false)
+const sourceData = ref({ html: '', schema: null, url: '', mode: 'html' })
+
+const autoInjectSchema = async (page) => {
+    if (!selectedSiteId.value) return toast.error('Please select a pixel site first.', 'Error')
+    injectingPage.value = page.page_url
+    try {
+        const res = await axios.post(route('google-ads.generate-schema'), {
+            pixel_site_id: selectedSiteId.value,
+            url: page.page_url
+        })
+        toast.success(res.data.message, 'Schema Generated')
+        // We might want to refresh analytics if it's not too heavy
+        // fetchAnalytics() 
+    } catch (e) {
+        toast.error(e.response?.data?.message || 'Failed to generate schema.', 'Error')
+    } finally {
+        injectingPage.value = null
+    }
+}
+
+const viewPageSource = async (page) => {
+    fetchingSource.value = page.page_url
+    try {
+        const res = await axios.get(route('google-ads.page-source'), {
+            params: { url: page.page_url }
+        })
+        sourceData.value = {
+            html: res.data.html,
+            schema: res.data.schema,
+            url: res.data.url,
+            mode: res.data.schema ? 'schema' : 'html'
+        }
+        showSourceModal.value = true
+    } catch (e) {
+        toast.error('Failed to fetch page source.', 'Error')
+    } finally {
+        fetchingSource.value = null
+    }
+}
+
 // ─── Computed ─────────────────────────────────────────────────────────────────
 const siteToken = computed(() => props.organization?.ads_site_token)
 
@@ -1214,8 +1258,20 @@ const openHealthModal = (site = null) => {
                                                  <p v-if="page.recommendations?.length" class="text-xs font-bold text-slate-800 leading-relaxed italic whitespace-pre-wrap">"{{ page.recommendations.join(' · ') }}"</p>
                                                  <p v-else class="text-xs font-bold text-slate-400 leading-relaxed italic">No specific recommendations — this page looks healthy! 🎉</p>
                                                  <div class="mt-6 flex items-center gap-4">
-                                                     <button class="px-4 py-2 bg-indigo-600 text-white text-[9px] font-black rounded-lg uppercase tracking-tight shadow-md hover:indigo-500 transition-all active:scale-95">Auto-Inject Schema</button>
-                                                     <button class="px-4 py-2 bg-white text-slate-600 border border-slate-200 text-[9px] font-black rounded-lg uppercase tracking-tight hover:bg-slate-50 transition-all active:scale-95">View Page Source</button>
+                                                     <button 
+                                                        @click.stop="autoInjectSchema(page)"
+                                                        :disabled="injectingPage === page.page_url"
+                                                        class="px-4 py-2 bg-indigo-600 text-white text-[9px] font-black rounded-lg uppercase tracking-tight shadow-md hover:bg-indigo-500 transition-all active:scale-95 disabled:opacity-50"
+                                                      >
+                                                          {{ injectingPage === page.page_url ? 'Injecting...' : 'Auto-Inject Schema' }}
+                                                      </button>
+                                                     <button 
+                                                        @click.stop="viewPageSource(page)"
+                                                        :disabled="fetchingSource === page.page_url"
+                                                        class="px-4 py-2 bg-white text-slate-600 border border-slate-200 text-[9px] font-black rounded-lg uppercase tracking-tight hover:bg-slate-50 transition-all active:scale-95 disabled:opacity-30"
+                                                      >
+                                                          {{ fetchingSource === page.page_url ? 'Fetching...' : 'View Page Source' }}
+                                                      </button>
                                                  </div>
                                              </div>
                                         </div>
@@ -2191,6 +2247,64 @@ const openHealthModal = (site = null) => {
                     <button @click="showHealthModal = false" class="absolute top-8 right-8 p-3 text-slate-300 hover:text-slate-900 transition-colors">
                         <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M6 18L18 6M6 6l12 12"/></svg>
                     </button>
+                </div>
+            </div>
+        </transition>
+
+        <!-- ── Source Viewer Modal (NEW) ────────── -->
+        <transition enter-active-class="transition duration-300 ease-out" enter-from-class="opacity-0 scale-95" enter-to-class="opacity-100 scale-100" leave-active-class="transition duration-200 ease-in" leave-from-class="opacity-100 scale-100" leave-to-class="opacity-0 scale-95">
+            <div v-if="showSourceModal" class="fixed inset-0 z-[90] flex items-center justify-center p-6 md:p-12">
+                <div class="absolute inset-0 bg-slate-900/60 backdrop-blur-xl" @click="showSourceModal = false"></div>
+                <div class="relative w-full max-w-5xl bg-[#1e293b] rounded-[3rem] shadow-2xl border border-white/10 overflow-hidden flex flex-col max-h-[85vh]">
+                    <!-- Modal Header -->
+                    <div class="p-10 border-b border-white/5 flex items-center justify-between bg-slate-900/40">
+                        <div>
+                            <h3 class="text-2xl font-black text-white tracking-tight">Source Diagnostic</h3>
+                            <p class="text-slate-400 font-bold text-[10px] uppercase tracking-widest mt-1">{{ sourceData.url }}</p>
+                        </div>
+                        <div class="flex items-center gap-3">
+                            <div class="flex bg-slate-800 p-1 rounded-xl border border-white/5">
+                                <button @click="sourceData.mode = 'html'" 
+                                    class="px-5 py-2 text-[9px] font-black uppercase tracking-widest rounded-lg transition-all"
+                                    :class="sourceData.mode === 'html' ? 'bg-indigo-600 text-white shadow-lg' : 'text-slate-400 hover:text-white'">
+                                    Raw HTML
+                                </button>
+                                <button @click="sourceData.mode = 'schema'" 
+                                    class="px-5 py-2 text-[9px] font-black uppercase tracking-widest rounded-lg transition-all"
+                                    :class="sourceData.mode === 'schema' ? 'bg-indigo-600 text-white shadow-lg' : 'text-slate-400 hover:text-white'">
+                                    Injected Schema
+                                </button>
+                            </div>
+                            <button @click="showSourceModal = false" class="w-12 h-12 bg-white/5 hover:bg-white/10 text-slate-400 rounded-2xl transition-all flex items-center justify-center border border-white/5">
+                                <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M6 18L18 6M6 6l12 12"/></svg>
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Code Content -->
+                    <div class="flex-1 overflow-auto p-12 custom-scrollbar">
+                        <div v-show="sourceData.mode === 'html'" class="space-y-4">
+                            <pre class="text-[11px] font-mono text-slate-300 leading-relaxed bg-slate-900/50 p-8 rounded-3xl border border-white/5 whitespace-pre-wrap"><code>{{ sourceData.html }}</code></pre>
+                        </div>
+                        <div v-show="sourceData.mode === 'schema'">
+                            <div v-if="sourceData.schema">
+                                <pre class="text-[11px] font-mono text-indigo-300 leading-relaxed bg-slate-900/50 p-8 rounded-3xl border border-indigo-500/10 whitespace-pre-wrap"><code>{{ JSON.stringify(sourceData.schema, null, 4) }}</code></pre>
+                            </div>
+                            <div v-else class="h-64 flex flex-col items-center justify-center text-center space-y-4">
+                                <div class="w-16 h-16 bg-slate-800 rounded-full flex items-center justify-center text-2xl">🔍</div>
+                                <p class="text-slate-400 font-black text-[10px] uppercase tracking-widest">No injected schema found for this URL</p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Footer -->
+                    <div class="p-8 border-t border-white/5 bg-slate-900/40 flex items-center justify-between">
+                         <span class="text-[9px] font-black text-slate-500 uppercase tracking-widest">MetaPilot Diagnostic Kernel v1.0</span>
+                         <button @click="copyText(sourceData.mode === 'html' ? sourceData.html : JSON.stringify(sourceData.schema, null, 2), 'Code')" class="px-6 py-3 bg-indigo-600 text-white rounded-xl text-[9px] font-black uppercase tracking-widest shadow-lg hover:bg-indigo-500 transition-all flex items-center gap-2">
+                            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M8 5H6a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2v-1M8 5a2 2 0 002 2h2a2 2 0 002-2"/></svg>
+                            Copy {{ sourceData.mode === 'html' ? 'HTML' : 'Schema' }}
+                         </button>
+                    </div>
                 </div>
             </div>
         </transition>

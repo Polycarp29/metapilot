@@ -174,6 +174,10 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::get('/schema-debug', [\App\Http\Controllers\CdnTrackingController::class, 'schemaDebug'])->name('schema-debug');
         Route::post('/enable-cdn-discovery', [\App\Http\Controllers\CdnTrackingController::class, 'enableCdnDiscovery'])->name('enable-cdn-discovery');
         Route::get('/discovered-pages', [\App\Http\Controllers\CdnTrackingController::class, 'discoveredPages'])->name('discovered-pages');
+        
+        // Manual Diagnostic Actions
+        Route::post('/generate-schema', [\App\Http\Controllers\CdnTrackingController::class, 'generateSchemaForUrl'])->name('generate-schema');
+        Route::get('/page-source', [\App\Http\Controllers\CdnTrackingController::class, 'getPageSource'])->name('page-source');
 
         // Multi-Site Pixel Management
         Route::apiResource('pixel-sites', \App\Http\Controllers\PixelSiteController::class);

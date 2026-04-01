@@ -149,4 +149,77 @@ class CdnTrackingTest extends TestCase
                 'echo' => $challenge
             ]);
     }
+
+    public function test_can_manually_trigger_schema_generation()
+    {
+        $user = User::factory()->create();
+        $org = Organization::factory()->create();
+        $user->organizations()->attach($org, ['role' => 'admin']);
+        $user->update(['current_organization_id' => $org->id]);
+        
+        $pixelSite = PixelSite::create([
+            'organization_id' => $org->id, 
+            'label' => 'Test Site',
+            'ads_site_token' => (string) \Illuminate\Support\Str::uuid()
+        ]);
+        
+        $this->actingAs($user);
+
+        // Mock Http for the internal generateSchemaForPage logic which might call OpenAI or Scraper
+        \Illuminate\Support\Facades\Http::fake();
+        
+        // We also need to satisfy the organization check in controller
+        $response = $this->postJson(route('google-ads.generate-schema'), [
+            'pixel_site_id' => $pixelSite->id,
+            'url' => 'https://example.com/test-page'
+        ]);
+
+        if ($response->status() !== 200) {
+            dump($response->json());
+        }
+
+        $response->assertStatus(200)
+            ->assertJson([
+                'success' => true
+            ]);
+
+        $this->assertDatabaseHas('cdn_page_schemas', [
+            'pixel_site_id' => $pixelSite->id,
+            'url' => 'https://example.com/test-page'
+        ]);
+    }
+
+    public function test_can_fetch_page_source()
+    {
+        $user = User::factory()->create();
+        $org = Organization::factory()->create();
+        $user->organizations()->attach($org, ['role' => 'admin']);
+        $user->update(['current_organization_id' => $org->id]);
+
+        $pixelSite = PixelSite::create([
+            'organization_id' => $org->id, 
+            'label' => 'Example Site',
+            'allowed_domain' => 'example.com',
+            'ads_site_token' => (string) \Illuminate\Support\Str::uuid()
+        ]);
+        
+        $this->actingAs($user);
+
+        $htmlContent = "<html><body><h1>Test Page</h1></body></html>";
+        \Illuminate\Support\Facades\Http::fake([
+            'https://example.com/test-page' => \Illuminate\Support\Facades\Http::response($htmlContent, 200)
+        ]);
+
+        $response = $this->getJson(route('google-ads.page-source', ['url' => 'https://example.com/test-page']));
+
+        if ($response->status() !== 200) {
+            dump($response->json());
+        }
+
+        $response->assertStatus(200)
+            ->assertJson([
+                'html' => $htmlContent,
+                'url' => 'https://example.com/test-page'
+            ]);
+    }
 }
