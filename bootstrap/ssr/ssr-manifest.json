@@ -18,23 +18,23 @@
     "/build/assets/Toaster-7hXSv-ib.css"
   ],
   "resources/js/Components/UserDropdown.vue": [
-    "/build/assets/AppLayout-D17_izsv.js",
+    "/build/assets/AppLayout-Bc8-cOZM.js",
     "/build/assets/AppLayout-BsTgnRgf.css"
   ],
   "resources/js/Components/WorkspaceLoader.vue": [
-    "/build/assets/AppLayout-D17_izsv.js",
+    "/build/assets/AppLayout-Bc8-cOZM.js",
     "/build/assets/AppLayout-BsTgnRgf.css"
   ],
   "resources/js/Components/WorkspaceLoader.vue?vue&type=style&index=0&scoped=f3d6752d&lang.css": [
-    "/build/assets/AppLayout-D17_izsv.js",
+    "/build/assets/AppLayout-Bc8-cOZM.js",
     "/build/assets/AppLayout-BsTgnRgf.css"
   ],
   "resources/js/Layouts/AppLayout.vue": [
-    "/build/assets/AppLayout-D17_izsv.js",
+    "/build/assets/AppLayout-Bc8-cOZM.js",
     "/build/assets/AppLayout-BsTgnRgf.css"
   ],
   "resources/js/Layouts/AppLayout.vue?vue&type=style&index=0&lang.css": [
-    "/build/assets/AppLayout-D17_izsv.js",
+    "/build/assets/AppLayout-Bc8-cOZM.js",
     "/build/assets/AppLayout-BsTgnRgf.css"
   ],
   "resources/js/Layouts/LegalLayout.vue": [
@@ -46,18 +46,18 @@
     "/build/assets/LegalLayout-CrwjPA-c.css"
   ],
   "resources/js/Pages/Analytics/Dashboard.vue": [
-    "/build/assets/Dashboard-bG8p20vz.js",
+    "/build/assets/Dashboard-DUWOsYcG.js",
     "/build/assets/Dashboard-Cb8T0Alf.css"
   ],
   "resources/js/Pages/Analytics/Dashboard.vue?vue&type=style&index=0&scoped=3f602d42&lang.css": [
-    "/build/assets/Dashboard-bG8p20vz.js",
+    "/build/assets/Dashboard-DUWOsYcG.js",
     "/build/assets/Dashboard-Cb8T0Alf.css"
   ],
   "resources/js/Pages/Analytics/Partials/AdPredictionsCard.vue": [
     "/build/assets/AdPredictionsCard-MdOBVO9n.js"
   ],
   "resources/js/Pages/Analytics/Partials/DevelopersTab.vue": [
-    "/build/assets/DevelopersTab-B7y7C2-E.js"
+    "/build/assets/DevelopersTab-CeYDbxHl.js"
   ],
   "resources/js/Pages/Analytics/Partials/PredictionsTab.vue": [
     "/build/assets/PredictionsTab-B6PRzrRH.js",
@@ -132,42 +132,42 @@
     "/build/assets/VerifyEmail-CRVj8Q1l.css"
   ],
   "resources/js/Pages/Campaigns/Create.vue": [
-    "/build/assets/Create--8wgfg8Z.js",
+    "/build/assets/Create-B3fBrj0E.js",
     "/build/assets/Create-BkihiODf.css"
   ],
   "resources/js/Pages/Campaigns/Create.vue?vue&type=style&index=0&scoped=711d9308&lang.css": [
-    "/build/assets/Create--8wgfg8Z.js",
+    "/build/assets/Create-B3fBrj0E.js",
     "/build/assets/Create-BkihiODf.css"
   ],
   "resources/js/Pages/Campaigns/Index.vue": [
-    "/build/assets/Index-DBwygjH_.js",
+    "/build/assets/Index-CsD0lOXd.js",
     "/build/assets/Index-Bc2K7BJ6.css"
   ],
   "resources/js/Pages/Campaigns/Index.vue?vue&type=style&index=0&scoped=d5a62f01&lang.css": [
-    "/build/assets/Index-DBwygjH_.js",
+    "/build/assets/Index-CsD0lOXd.js",
     "/build/assets/Index-Bc2K7BJ6.css"
   ],
   "resources/js/Pages/Campaigns/Partials/GoogleAdsSection.vue": [
     "/build/assets/GoogleAdsSection-B3EmGpeJ.js"
   ],
   "resources/js/Pages/Campaigns/Show.vue": [
-    "/build/assets/Show-CyHIGQ6W.js",
+    "/build/assets/Show-BEpdz202.js",
     "/build/assets/Show-D_1cE7sp.css"
   ],
   "resources/js/Pages/Campaigns/Show.vue?vue&type=style&index=0&scoped=0c225a06&lang.css": [
-    "/build/assets/Show-CyHIGQ6W.js",
+    "/build/assets/Show-BEpdz202.js",
     "/build/assets/Show-D_1cE7sp.css"
   ],
   "resources/js/Pages/Content/Index.vue": [
-    "/build/assets/Index-B9-IOXvV.js",
+    "/build/assets/Index-DL6Soj_c.js",
     "/build/assets/Index-D7v8NeS0.css"
   ],
   "resources/js/Pages/Content/Index.vue?vue&type=style&index=0&lang.css": [
-    "/build/assets/Index-B9-IOXvV.js",
+    "/build/assets/Index-DL6Soj_c.js",
     "/build/assets/Index-D7v8NeS0.css"
   ],
   "resources/js/Pages/Dashboard.vue": [
-    "/build/assets/Dashboard-BvvTxZHn.js"
+    "/build/assets/Dashboard-CcHnVapg.js"
   ],
   "resources/js/Pages/Error.vue": [
     "/build/assets/Error-D9tL7WH1.js",
@@ -190,7 +190,7 @@
     "/build/assets/Zap-6tOPYawN.js"
   ],
   "resources/js/Pages/Keywords/Intelligence.vue": [
-    "/build/assets/Intelligence-CnqB38CZ.js"
+    "/build/assets/Intelligence-Bwg-IYsq.js"
   ],
   "resources/js/Pages/Keywords/Partials/Sparkline.vue": [
     "/build/assets/Sparkline-CM-EizRb.js",
@@ -201,19 +201,19 @@
     "/build/assets/Sparkline-CfOaXMVE.css"
   ],
   "resources/js/Pages/Keywords/Research.vue": [
-    "/build/assets/Research-DAxXc9Hb.js",
+    "/build/assets/Research-Dd-oU2Lf.js",
     "/build/assets/Research-C8AqaXbf.css"
   ],
   "resources/js/Pages/Keywords/Research.vue?vue&type=style&index=0&scoped=31ee4cec&lang.css": [
-    "/build/assets/Research-DAxXc9Hb.js",
+    "/build/assets/Research-Dd-oU2Lf.js",
     "/build/assets/Research-C8AqaXbf.css"
   ],
   "resources/js/Pages/Keywords/Trending.vue": [
-    "/build/assets/Trending-CXb0ZtO1.js",
+    "/build/assets/Trending-7QsBf1OB.js",
     "/build/assets/Trending-6NTY1OWj.css"
   ],
   "resources/js/Pages/Keywords/Trending.vue?vue&type=style&index=0&scoped=71489148&lang.css": [
-    "/build/assets/Trending-CXb0ZtO1.js",
+    "/build/assets/Trending-7QsBf1OB.js",
     "/build/assets/Trending-6NTY1OWj.css"
   ],
   "resources/js/Pages/Legal/Cookies.vue": [
@@ -226,62 +226,62 @@
     "/build/assets/Terms-DKS86sTw.js"
   ],
   "resources/js/Pages/Profile/Edit.vue": [
-    "/build/assets/Edit-DMov_-dE.js"
+    "/build/assets/Edit-g7E9DWO4.js"
   ],
   "resources/js/Pages/Schemas/AutomatedGenerator.vue": [
-    "/build/assets/AutomatedGenerator-DJLotCf-.js",
+    "/build/assets/AutomatedGenerator-RaNu0tFu.js",
     "/build/assets/AutomatedGenerator-BZm3EFi0.css"
   ],
   "resources/js/Pages/Schemas/AutomatedGenerator.vue?vue&type=style&index=0&scoped=a0503ef4&lang.css": [
-    "/build/assets/AutomatedGenerator-DJLotCf-.js",
+    "/build/assets/AutomatedGenerator-RaNu0tFu.js",
     "/build/assets/AutomatedGenerator-BZm3EFi0.css"
   ],
   "resources/js/Pages/Schemas/Components/FieldItem.vue": [
     "/build/assets/FieldItem-Dl4IOwfQ.js"
   ],
   "resources/js/Pages/Schemas/Create.vue": [
-    "/build/assets/Create-L7YWjlMC.js"
+    "/build/assets/Create-sxh6_A0z.js"
   ],
   "resources/js/Pages/Schemas/Edit.vue": [
-    "/build/assets/Edit-Df6kj7Qo.js",
+    "/build/assets/Edit-B7Bj2YQh.js",
     "/build/assets/Edit-Cg6APa9Z.css"
   ],
   "resources/js/Pages/Schemas/Edit.vue?vue&type=style&index=0&lang.css": [
-    "/build/assets/Edit-Df6kj7Qo.js",
+    "/build/assets/Edit-B7Bj2YQh.js",
     "/build/assets/Edit-Cg6APa9Z.css"
   ],
   "resources/js/Pages/Schemas/Index.vue": [
-    "/build/assets/Index-DUwOK7zA.js"
+    "/build/assets/Index-D4Q_9Fmt.js"
   ],
   "resources/js/Pages/Settings/Index.vue": [
-    "/build/assets/Index-CuWh4toY.js"
+    "/build/assets/Index-BBxy63CA.js"
   ],
   "resources/js/Pages/Sitemaps/Index.vue": [
-    "/build/assets/Index-BaJig95S.js",
+    "/build/assets/Index-C3srZTFg.js",
     "/build/assets/Index-DDpbthgT.css"
   ],
   "resources/js/Pages/Sitemaps/Index.vue?vue&type=style&index=0&scoped=4780a5bb&lang.css": [
-    "/build/assets/Index-BaJig95S.js",
+    "/build/assets/Index-C3srZTFg.js",
     "/build/assets/Index-DDpbthgT.css"
   ],
   "resources/js/Pages/Sitemaps/Manager.vue": [
-    "/build/assets/Manager-DDp2t8l5.js",
+    "/build/assets/Manager-nR4A7b4m.js",
     "/build/assets/Manager-BfP4bYyk.css"
   ],
   "resources/js/Pages/Sitemaps/Manager.vue?vue&type=style&index=0&scoped=ae2fff56&lang.css": [
-    "/build/assets/Manager-DDp2t8l5.js",
+    "/build/assets/Manager-nR4A7b4m.js",
     "/build/assets/Manager-BfP4bYyk.css"
   ],
   "resources/js/Pages/Sitemaps/Schedules.vue": [
-    "/build/assets/Schedules-BBgBV-GT.js",
+    "/build/assets/Schedules-bIOj_6eg.js",
     "/build/assets/Schedules-BwJbW_vM.css"
   ],
   "resources/js/Pages/Sitemaps/Schedules.vue?vue&type=style&index=0&scoped=6e57b2bb&lang.css": [
-    "/build/assets/Schedules-BBgBV-GT.js",
+    "/build/assets/Schedules-bIOj_6eg.js",
     "/build/assets/Schedules-BwJbW_vM.css"
   ],
   "resources/js/Pages/Team/Index.vue": [
-    "/build/assets/Index-CuHeF0B1.js"
+    "/build/assets/Index-Bh3JHe-b.js"
   ],
   "resources/js/Pages/Welcome.vue": [
     "/build/assets/Welcome-B00ITXzP.js",
