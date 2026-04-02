@@ -2032,11 +2032,11 @@ const openHealthModal = (site = null) => {
                                             <div class="flex items-center gap-4 px-2">
                                                 <span class="text-[10px] text-slate-400 font-extrabold uppercase tracking-tight">{{ new Date(entry.created_at).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) }}</span>
                                                 <div class="h-1 w-1 rounded-full bg-slate-200"></div>
-                                                <span class="px-2 py-0.5 bg-indigo-50 text-indigo-600 text-[9px] font-black rounded uppercase flex items-center gap-1.5" :class="{ 'bg-orange-50 text-orange-600': entry.duration_seconds >= 60 }">
+                                                <span class="px-2 py-0.5 bg-indigo-50 text-indigo-600 text-[6px] font-black rounded  flex items-center gap-1.5" :class="{ 'bg-orange-50 text-orange-600': entry.duration_seconds >= 60 }">
                                                     {{ entry.duration_seconds }}s Engagement
                                                     <span v-if="entry.duration_seconds >= 60">🔥</span>
                                                 </span>
-                                                <span v-if="entry.click_count > 0" class="flex items-center gap-1.5 text-emerald-600 text-[9px] font-black uppercase tracking-widest" :class="{ 'text-indigo-600': entry.click_count >= 3 }">
+                                                <span v-if="entry.click_count > 0" class="flex items-center gap-1.5 text-emerald-600 text-[5px] font-black  tracking-widest" :class="{ 'text-indigo-600': entry.click_count >= 3 }">
                                                     <span class="w-1.5 h-1.5 rounded-full animate-pulse" :class="entry.click_count >= 3 ? 'bg-indigo-500' : 'bg-emerald-500'"></span>
                                                     {{ entry.click_count }} Interactions
                                                     <span v-if="entry.click_count >= 3">💡</span>
