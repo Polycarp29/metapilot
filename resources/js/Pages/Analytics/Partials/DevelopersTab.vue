@@ -2009,7 +2009,7 @@ const openHealthModal = (site = null) => {
                                         <!-- Browser Simulation & Link -->
                                         <div class="space-y-3">
                                             <!-- Browser Bar Simulation -->
-                                            <div class="bg-slate-50 border border-slate-200 rounded-2xl p-3 flex items-center gap-4 transition-all group-hover:bg-white group-hover:border-indigo-100 group-hover:shadow-premium-sm relative overflow-hidden">
+                                            <div class="bg-slate-50 border border-slate-200 rounded-2xl p-3 flex items-center gap-4 transition-all group-hover:bg-white group-hover:border-indigo-100 group-hover:shadow-premium-sm relative overflow-auto">
                                                 <!-- Action dots -->
                                                 <div class="flex gap-1.5 px-1.5 opacity-40 group-hover:opacity-100 transition-opacity">
                                                     <div class="w-2 h-2 rounded-full bg-rose-400"></div>
@@ -2018,7 +2018,7 @@ const openHealthModal = (site = null) => {
                                                 </div>
 
                                                 <!-- Address Bar -->
-                                                <div class="flex-1 bg-white border border-slate-200/60 rounded-lg px-3 py-1.5 flex items-center justify-between group/bar">
+                                                <div class="flex-1 bg-white border border-slate-200/60 rounded-lg px-3 py-1.5 flex items-center justify-between group/bar overflow-x-auto">
                                                     <div class="flex items-center gap-2 overflow-hidden">
                                                         <svg class="w-3 h-3 text-slate-300" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M12 11c0 3.517-1.009 6.799-2.753 9.571m-3.44-2.04l.054-.09A10.003 10.003 0 0014 3c1.259 0 2.455.232 3.559.651m.517 1.352A9.993 9.993 0 0115.357 15l-.43.515"/></svg>
                                                         <span class="text-[9px] font-bold text-slate-500 truncate lowercase">{{ entry.page_url }}</span>
