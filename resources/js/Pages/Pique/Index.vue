@@ -1,5 +1,5 @@
 <script setup>
-import { ref, onMounted, nextTick, computed } from 'vue';
+import { ref, onMounted, onUnmounted, nextTick, computed } from 'vue';
 import AppLayout from '../../Layouts/AppLayout.vue';
 import { Head, usePage } from '@inertiajs/vue3';
 import axios from 'axios';
@@ -132,6 +132,95 @@ const submitCreateContainer = async () => {
         crawlFormError.value = e.response?.data?.message ?? 'Failed to create container.';
     } finally {
         crawlFormSubmitting.value = false;
+    }
+};
+
+// ─── SEO Report Panel State ───────────────────────────────────────────────
+const reportStep = ref('select'); // 'select' | 'sections' | 'generating' | 'ready'
+const reportProperties = ref([]);
+const reportSelectedProps = ref([]);
+const reportDateRange = ref('30'); // '7' | '30' | '90'
+const reportSections = ref(['overview', 'traffic', 'acquisition', 'seo_intelligence', 'insights', 'forecasts']);
+const reportGenerating = ref(false);
+const reportResult = ref(null);
+const reportError = ref('');
+const reportJobId = ref(null);
+let reportPollInterval = null;
+
+const stopReportPoll = () => {
+    if (reportPollInterval) {
+        clearInterval(reportPollInterval);
+        reportPollInterval = null;
+    }
+};
+
+const startReportPoll = (jobId) => {
+    stopReportPoll();
+    reportJobId.value = jobId;
+    
+    reportPollInterval = setInterval(async () => {
+        try {
+            const res = await axios.get(route('api.pique.report.status', jobId));
+            const status = res.data.status;
+            
+            if (status === 'completed') {
+                reportResult.value = res.data.data;
+                reportStep.value = 'ready';
+                stopReportPoll();
+            } else if (status === 'failed') {
+                reportError.value = res.data.error || 'Report generation failed.';
+                reportStep.value = 'sections';
+                stopReportPoll();
+            } else if (status === 'not_found' || status === 'expired') {
+                reportError.value = 'Report job timed out or not found.';
+                reportStep.value = 'sections';
+                stopReportPoll();
+            }
+        } catch (e) {
+            console.error('Report poll error:', e);
+        }
+    }, 3000);
+};
+
+onUnmounted(() => {
+    stopCrawlPoll();
+    stopReportPoll();
+});
+
+const toggleReportSection = (section) => {
+    const idx = reportSections.value.indexOf(section);
+    if (idx > -1) reportSections.value.splice(idx, 1);
+    else reportSections.value.push(section);
+};
+
+const submitGenerateReport = async () => {
+    if (reportSelectedProps.value.length === 0) {
+        reportError.value = 'Please select at least one property.';
+        return;
+    }
+    try {
+        reportGenerating.value = true;
+        reportError.value = '';
+        reportStep.value = 'generating';
+        
+        const res = await axios.post(route('api.pique.report.generate'), {
+            property_ids: reportSelectedProps.value,
+            days: parseInt(reportDateRange.value),
+            sections: reportSections.value
+        });
+        
+        if (res.data.job_id) {
+            startReportPoll(res.data.job_id);
+        } else {
+             // Fallback for old direct response if any
+            reportResult.value = res.data;
+            reportStep.value = 'ready';
+        }
+    } catch (e) {
+        reportError.value = e.response?.data?.error ?? 'Failed to generate report.';
+        reportStep.value = 'sections'; // Go back to allow fix
+    } finally {
+        reportGenerating.value = false;
     }
 };
 
@@ -279,6 +368,22 @@ const sendMessage = async () => {
                     role: 'agent',
                     content: response.data.response,
                     type: 'crawl_ui',
+                    timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+                });
+            } else if (action?.action === 'report_property_select') {
+                // Initialize report UI state
+                reportProperties.value = action.properties ?? [];
+                reportSelectedProps.value = reportProperties.value.map(p => p.id); // Select all by default
+                reportStep.value = 'select';
+                reportGenerating.value = false;
+                reportResult.value = null;
+                reportError.value = '';
+
+                messages.value.push({
+                    id: Date.now() + 1,
+                    role: 'agent',
+                    content: response.data.response || "Which properties should I include in the SEO report?",
+                    type: 'report_ui',
                     timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
                 });
             } else {
@@ -834,6 +939,137 @@ onMounted(() => {
                                 </div>
                             </div>
                             <!-- ═══ /Crawl UI Panel ═══════════════════════════════════════════ -->
+
+                            <!-- ═══ SEO Report UI Panel ══════════════════════════════════════ -->
+                            <div v-if="msg.type === 'report_ui'" class="mt-4 w-full">
+                                
+                                <!-- STEP 1: Property Selection -->
+                                <div v-if="reportStep === 'select'" class="bg-white border border-slate-100 rounded-2xl shadow-sm overflow-hidden">
+                                    <div class="px-5 py-4 border-b border-slate-50 flex items-center justify-between">
+                                        <div class="flex items-center gap-2">
+                                            <div class="w-6 h-6 rounded-lg bg-blue-100 flex items-center justify-center">
+                                                <svg class="w-3.5 h-3.5 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/></svg>
+                                            </div>
+                                            <span class="text-[11px] font-black text-slate-700 uppercase tracking-widest">Select Properties</span>
+                                        </div>
+                                    </div>
+                                    <div class="px-5 py-4 space-y-4">
+                                        <div class="space-y-2 max-h-52 overflow-y-auto pr-1">
+                                            <div v-for="prop in reportProperties" :key="prop.id" 
+                                                @click="reportSelectedProps.includes(prop.id) ? reportSelectedProps.splice(reportSelectedProps.indexOf(prop.id), 1) : reportSelectedProps.push(prop.id)"
+                                                class="flex items-center gap-3 p-3 rounded-xl border transition-all cursor-pointer"
+                                                :class="reportSelectedProps.includes(prop.id) ? 'bg-blue-50/50 border-blue-200' : 'bg-slate-50 border-transparent hover:border-slate-200'">
+                                                <div class="w-5 h-5 rounded-md flex items-center justify-center border transition-all"
+                                                    :class="reportSelectedProps.includes(prop.id) ? 'bg-blue-600 border-blue-600 text-white' : 'bg-white border-slate-300'">
+                                                    <svg v-if="reportSelectedProps.includes(prop.id)" class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M5 13l4 4L19 7"/></svg>
+                                                </div>
+                                                <div class="flex-1 min-w-0">
+                                                    <div class="text-[12px] font-bold text-slate-800 truncate">{{ prop.name }}</div>
+                                                    <div class="text-[9px] text-slate-500 truncate">{{ prop.website_url }}</div>
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        <div class="space-y-2">
+                                            <label class="text-[9px] font-black text-slate-400 uppercase tracking-widest block">Date Range</label>
+                                            <div class="grid grid-cols-3 gap-2">
+                                                <button v-for="range in ['7', '30', '90']" :key="range" @click="reportDateRange = range"
+                                                    class="py-2 rounded-xl text-[10px] font-black uppercase tracking-widest border transition-all"
+                                                    :class="reportDateRange === range ? 'bg-blue-600 border-blue-600 text-white' : 'bg-slate-50 border-transparent text-slate-500 hover:border-slate-200'">
+                                                    Last {{ range }}d
+                                                </button>
+                                            </div>
+                                        </div>
+
+                                        <button @click="reportStep = 'sections'" :disabled="reportSelectedProps.length === 0" class="w-full py-3 bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white rounded-xl text-[10px] font-black uppercase tracking-widest transition-all active:scale-95 flex items-center justify-center gap-2">
+                                            Continue to Configuration
+                                            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14 5l7 7m0 0l-7 7m7-7H3"/></svg>
+                                        </button>
+                                    </div>
+                                </div>
+
+                                <!-- STEP 2: Section Configuration -->
+                                <div v-if="reportStep === 'sections'" class="bg-white border border-slate-100 rounded-2xl shadow-sm overflow-hidden animate-in slide-in-from-right-4 duration-300">
+                                    <div class="px-5 py-4 border-b border-slate-50 flex items-center gap-2">
+                                        <button @click="reportStep = 'select'" class="w-7 h-7 rounded-lg bg-slate-50 hover:bg-slate-100 flex items-center justify-center text-slate-400 hover:text-slate-700 transition-colors">
+                                            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/></svg>
+                                        </button>
+                                        <div class="w-6 h-6 rounded-lg bg-indigo-100 flex items-center justify-center">
+                                            <svg class="w-3.5 h-3.5 text-indigo-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/></svg>
+                                        </div>
+                                        <span class="text-[11px] font-black text-slate-700 uppercase tracking-widest">Report Sections</span>
+                                    </div>
+                                    <div class="px-5 py-4 space-y-4">
+                                        <div class="grid grid-cols-1 gap-2">
+                                            <div v-for="section in ['overview', 'traffic', 'acquisition', 'seo_intelligence', 'insights', 'forecasts']" :key="section"
+                                                @click="toggleReportSection(section)"
+                                                class="flex items-center justify-between p-3 rounded-xl border cursor-pointer transition-all"
+                                                :class="reportSections.includes(section) ? 'bg-indigo-50/50 border-indigo-200' : 'bg-slate-50 border-transparent'">
+                                                <div class="flex items-center gap-3">
+                                                    <div class="w-4 h-4 rounded-full flex items-center justify-center border transition-all"
+                                                        :class="reportSections.includes(section) ? 'bg-indigo-600 border-indigo-600 text-white' : 'bg-white border-slate-300'">
+                                                        <svg v-if="reportSections.includes(section)" class="w-2.5 h-2.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M5 13l4 4L19 7"/></svg>
+                                                    </div>
+                                                    <span class="text-[11px] font-bold text-slate-700 capitalize">{{ section.replace('_', ' ') }}</span>
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        <p v-if="reportError" class="text-[10px] font-bold text-red-500 bg-red-50 rounded-xl px-3 py-2">{{ reportError }}</p>
+
+                                        <button @click="submitGenerateReport" :disabled="reportGenerating" class="w-full py-4 bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 text-white rounded-xl text-[10px] font-black uppercase tracking-widest transition-all active:scale-95 shadow-md shadow-indigo-100 flex items-center justify-center gap-2">
+                                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z"/></svg>
+                                            Compile Professional Report
+                                        </button>
+                                    </div>
+                                </div>
+
+                                <!-- STEP 3: Generating -->
+                                <div v-if="reportStep === 'generating'" class="bg-white border border-slate-100 rounded-2xl shadow-sm p-8 text-center animate-in zoom-in-95 duration-500">
+                                    <div class="relative w-20 h-20 mx-auto mb-6">
+                                        <div class="absolute inset-0 rounded-full border-4 border-blue-50"></div>
+                                        <div class="absolute inset-0 rounded-full border-4 border-blue-600 border-t-transparent animate-spin"></div>
+                                        <div class="absolute inset-0 flex items-center justify-center">
+                                            <svg class="w-8 h-8 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z"/></svg>
+                                        </div>
+                                    </div>
+                                    <h3 class="text-[14px] font-black text-slate-800 uppercase tracking-widest mb-2">Compiling Report</h3>
+                                    <p class="text-[11px] text-slate-500 leading-relaxed">Pique is aggregating analytics data, generating AI insights, and formatting your professional PDF report...</p>
+                                </div>
+
+                                <!-- STEP 4: Ready -->
+                                <div v-if="reportStep === 'ready' && reportResult" class="bg-white border border-emerald-100 rounded-2xl shadow-xl shadow-emerald-500/10 overflow-hidden animate-in zoom-in-95 duration-500">
+                                    <div class="bg-emerald-600 px-5 py-6 text-center">
+                                        <div class="w-12 h-12 bg-white/20 rounded-2xl flex items-center justify-center mx-auto mb-4 scale-110">
+                                            <svg class="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>
+                                        </div>
+                                        <h3 class="text-[16px] font-black text-white uppercase tracking-widest">Report Ready</h3>
+                                    </div>
+                                    <div class="px-5 py-5 space-y-4">
+                                        <div class="grid grid-cols-2 gap-3">
+                                            <div class="bg-slate-50 rounded-xl p-3">
+                                                <div class="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1">Properties</div>
+                                                <div class="text-[11px] font-extrabold text-slate-700 truncate">{{ reportResult.properties }}</div>
+                                            </div>
+                                            <div class="bg-slate-50 rounded-xl p-3">
+                                                <div class="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1">Range</div>
+                                                <div class="text-[11px] font-extrabold text-slate-700">{{ reportResult.date_range }}</div>
+                                            </div>
+                                        </div>
+                                        
+                                        <a :href="reportResult.url" target="_blank" class="w-full py-4 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-[11px] font-black uppercase tracking-widest transition-all active:scale-95 flex items-center justify-center gap-3 shadow-lg shadow-emerald-200">
+                                            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
+                                            Download PDF Report
+                                        </a>
+                                        
+                                        <button @click="reportStep = 'select'" class="w-full py-3 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all">
+                                            Generate Another
+                                        </button>
+                                    </div>
+                                </div>
+
+                            </div>
+                            <!-- ═══ /SEO Report UI Panel ══════════════════════════════════════ -->
 
                             <div class="text-[10px] text-slate-400 mt-1"
                                 :class="msg.role === 'user' ? 'text-right' : ''">

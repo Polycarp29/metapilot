@@ -58,7 +58,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
 
     // Pique the Agent
     Route::get('/pique', [PiqueTheAgentController::class, 'index'])->name('pique.agent');
-    Route::post('/api/pique/ask', [PiqueTheAgentController::class, 'ask'])->name('api.pique.ask');
+    Route::post('/api/pique/ask', [PiqueTheAgentController::class, 'ask'])->middleware('throttle:pique-chat')->name('api.pique.ask');
     Route::get('/api/pique/credits', [PiqueTheAgentController::class, 'credits'])->name('api.pique.credits');
     Route::get('/api/pique/history', [PiqueTheAgentController::class, 'history'])->name('api.pique.history');
     Route::get('/api/pique/sessions/{sessionId}', [PiqueTheAgentController::class, 'showSession'])->name('api.pique.session');
@@ -67,6 +67,11 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::post('/api/pique/containers', [PiqueTheAgentController::class, 'createContainer'])->name('api.pique.containers.store');
     Route::post('/api/pique/containers/{sitemapId}/crawl', [PiqueTheAgentController::class, 'startContainerCrawl'])->name('api.pique.containers.crawl');
     Route::get('/api/pique/containers/{sitemapId}/crawl-status', [PiqueTheAgentController::class, 'getContainerCrawlStatus'])->name('api.pique.containers.crawl-status');
+
+    // Pique Report Routes
+    Route::get('/api/pique/report/properties', [\App\Http\Controllers\AI\Agent\PiqueReportController::class, 'listProperties'])->name('api.pique.report.properties');
+    Route::post('/api/pique/report/generate', [\App\Http\Controllers\AI\Agent\PiqueReportController::class, 'generate'])->middleware('throttle:pique-reports')->name('api.pique.report.generate');
+    Route::get('/api/pique/report/status/{jobId}', [\App\Http\Controllers\AI\Agent\PiqueReportController::class, 'checkStatus'])->name('api.pique.report.status');
 
     // Schema Actions (AJAX endpoints)
     Route::post('api/validate-schema', [SchemaController::class, 'validateJsonLd'])->name('api.validate-schema');

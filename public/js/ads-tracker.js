@@ -108,7 +108,26 @@
     let lastStartTime = Date.now();
     let isCurrentlyActive = !document.hidden;
     let clicks = 0;
+    let maxScrollDepth = 0;
     let retryCount = 0;
+
+    const updateScrollDepth = () => {
+        const scrollTop = window.pageYOffset || document.documentElement.scrollTop;
+        const windowHeight = window.innerHeight;
+        const documentHeight = document.documentElement.scrollHeight;
+        
+        if (documentHeight <= windowHeight) {
+            maxScrollDepth = 100;
+            return;
+        }
+
+        const scrollPercentage = Math.round((scrollTop / (documentHeight - windowHeight)) * 100);
+        if (scrollPercentage > maxScrollDepth) {
+            maxScrollDepth = Math.min(100, scrollPercentage);
+        }
+    };
+
+    window.addEventListener('scroll', updateScrollDepth, { passive: true });
 
     document.addEventListener('visibilitychange', () => {
         if (document.hidden) {
@@ -137,7 +156,8 @@
             session_id: getSessionId(),
             screen_resolution: `${window.screen.width}x${window.screen.height}`,
             duration_seconds: activeSeconds,
-            is_engaged: activeSeconds >= 30,
+            max_scroll_depth: maxScrollDepth,
+            is_engaged: activeSeconds >= 30 || maxScrollDepth >= 50,
             click_count: clicks,
             metadata: getMetadata(),
             gclid: getParam('gclid'),

@@ -4,8 +4,8 @@ namespace App\Services\AI\Agent;
 
 use App\Models\Organization;
 use App\Models\Sitemap;
-use App\Models\User;
 use App\Models\AnalyticsProperty;
+use App\Models\User;
 use App\Services\Crawler\CrawlerManager;
 use App\Services\KeywordService;
 use App\Services\CampaignKeywordService;
@@ -20,6 +20,8 @@ use App\Services\AiContentDetectionService;
 use App\Services\ContentHumanizerService;
 use App\Services\NicheDetectionService;
 use App\Services\OpenAIService;
+use App\Services\LeadScoringService;
+use App\Services\AttributionService;
 use Illuminate\Support\Facades\Log;
 
 class PiqueActionDispatcher
@@ -38,6 +40,7 @@ class PiqueActionDispatcher
         protected AiContentDetectionService $aiDetector,
         protected ContentHumanizerService   $humanizer,
         protected NicheDetectionService     $nicheDetection,
+        protected AttributionService      $attribution,
         protected OpenAIService             $openAI,
     ) {}
 
@@ -99,11 +102,26 @@ class PiqueActionDispatcher
             }
             return $this->runPixelData($organization);
         }
-        if ($this->contains($p, ['insight', 'performance', 'analytics report', 'traffic report', 'how is my site'])) {
+        if ($this->contains($p, ['insight', 'performance', 'how is my site'])) {
             return $this->runAnalyticsInsight($organization);
         }
 
-        // 8. Traffic forecast
+        // 7.5 Attribution Intelligence
+        if ($this->contains($p, ['attribution', 'channel', 'google vs', 'bing', 'yandex', 'where is traffic from', 'country performance'])) {
+            return $this->runAttributionAnalysis($organization);
+        }
+
+        // 7.6 Lead Intelligence
+        if ($this->contains($p, ['lead', 'hot lead', 'who is interested', 'potential customer', 'intent analysis'])) {
+            return $this->runLeadIntelligence($organization);
+        }
+
+        // 8. SEO / PDF Report
+        if ($this->contains($p, ['seo report', 'analytics report', 'export report', 'compile report', 'generate report', 'pdf report', 'download report'])) {
+            return $this->runSeoReport($organization);
+        }
+
+        // 9. Traffic forecast
         if ($this->contains($p, ['forecast', 'predict traffic', 'projection', 'predict my'])) {
             return $this->runForecast($organization);
         }
@@ -305,6 +323,16 @@ class PiqueActionDispatcher
             ->groupBy('device_type')
             ->get();
 
+        // Lead Intelligence Integration
+        $leadService = app(\App\Services\LeadScoringService::class);
+        $hotLeadsCount = 0;
+        $sessions = (clone $events)->distinct('session_id')->pluck('session_id');
+        
+        foreach ($sessions as $sid) {
+            $score = $leadService->scoreSession($sid);
+            if ($score['label'] === 'hot') $hotLeadsCount++;
+        }
+
         return [
             'action' => 'deep_pixel_analysis',
             'label' => "Deep MetaPilot analysis for the last 7 days",
@@ -314,7 +342,49 @@ class PiqueActionDispatcher
                 'avg_clicks' => round($engagement->avg_clicks ?? 0, 1),
                 'top_pages' => $topPages,
                 'top_referrers' => $referrers,
-                'device_breakdown' => $devices
+                'device_breakdown' => $devices,
+                'hot_leads_count' => $hotLeadsCount
+            ]
+        ];
+    }
+
+    private function runLeadIntelligence(Organization $organization): array
+    {
+        $leadService = app(\App\Services\LeadScoringService::class);
+        $limit = now()->subDays(7);
+        $sessions = $organization->adTrackEvents()
+            ->where('created_at', '>=', $limit)
+            ->distinct('session_id')
+            ->pluck('session_id');
+
+        $hotLeads = [];
+        $warmLeadsCount = 0;
+
+        foreach ($sessions as $sid) {
+            $analysis = $leadService->scoreSession($sid);
+            if ($analysis['label'] === 'hot') {
+                $firstEvent = $organization->adTrackEvents()->where('session_id', $sid)->first();
+                $hotLeads[] = array_merge($analysis, [
+                    'session_id' => $sid,
+                    'last_seen' => $firstEvent->created_at->diffForHumans(),
+                    'location' => ($firstEvent->city ? $firstEvent->city . ', ' : '') . $firstEvent->country_code,
+                    'source' => $firstEvent->utm_source ?? ($firstEvent->referrer ? parse_url($firstEvent->referrer, PHP_URL_HOST) : 'Direct'),
+                ]);
+            } elseif ($analysis['label'] === 'warm') {
+                $warmLeadsCount++;
+            }
+        }
+
+        // Sort hot leads by score
+        usort($hotLeads, fn($a, $b) => $b['score'] <=> $a['score']);
+
+        return [
+            'action' => 'lead_intelligence',
+            'label' => "Lead Intelligence: Found " . count($hotLeads) . " hot leads in the last 7 days",
+            'data' => [
+                'hot_leads' => array_slice($hotLeads, 0, 10), // Top 10
+                'warm_leads_count' => $warmLeadsCount,
+                'total_analyzed' => count($sessions)
             ]
         ];
     }
@@ -396,6 +466,27 @@ class PiqueActionDispatcher
 
     // ─── Helpers ──────────────────────────────────────────────────────────────
 
+    private function runSeoReport(Organization $organization): array
+    {
+        $properties = $organization->analyticsProperties()
+            ->where('is_active', true)
+            ->get()
+            ->map(fn ($p) => [
+                'id'          => $p->id,
+                'name'        => $p->name,
+                'property_id' => $p->property_id,
+                'website_url' => $p->website_url,
+            ])
+            ->toArray();
+
+        return [
+            'action'     => 'report_property_select',
+            'label'      => 'SEO Report Configuration',
+            'properties' => $properties,
+            'response'   => "I can help you compile a professional SEO report. Which analytics properties should I include?"
+        ];
+    }
+
     private function contains(string $prompt, array $needles): bool
     {
         foreach ($needles as $needle) {
@@ -435,5 +526,27 @@ class PiqueActionDispatcher
             return array_map('trim', explode(',', $m[1]));
         }
         return [];
+    }
+
+    private function runAttributionAnalysis(\App\Models\Organization $organization): array
+    {
+        $data = $this->attribution->analyze($organization);
+        
+        // Enrich with Keyword Inference for top pages
+        $property = $organization->analyticsProperties()->first();
+
+        if ($property) {
+            foreach ($data['top_links'] as &$link) {
+                $url = $link['page_url'];
+                $keywords = $this->gsc->getTopKeywordsForUrl($property, $url);
+                $link['inferred_keywords'] = array_slice($keywords, 0, 5);
+            }
+        }
+
+        return [
+            'action' => 'attribution_analysis',
+            'label' => 'Attribution and channel analysis complete',
+            'data' => $data
+        ];
     }
 }

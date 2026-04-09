@@ -450,4 +450,50 @@ class GscService
         // to detect indexing issues
         return [];
     }
+
+    /**
+     * Fetch top keywords for a specific landing page URL.
+     */
+    public function getTopKeywordsForUrl(\App\Models\AnalyticsProperty $property, string $url, int $days = 30): array
+    {
+        if (!$property->gsc_site_url) return [];
+
+        $this->initializeClient($property);
+
+        try {
+            $request = new \Google\Service\SearchConsole\SearchAnalyticsQueryRequest();
+            $request->setStartDate(now()->subDays($days)->format('Y-m-d'));
+            $request->setEndDate(now()->format('Y-m-d'));
+            $request->setDimensions(['query']);
+            
+            $filter = new \Google\Service\SearchConsole\ApiDimensionFilter();
+            $filter->setDimension('page');
+            $filter->setOperator('equals');
+            $filter->setExpression($url);
+
+            $filterGroup = new \Google\Service\SearchConsole\ApiDimensionFilterGroup();
+            $filterGroup->setFilters([$filter]);
+
+            $request->setDimensionFilterGroups([$filterGroup]);
+            $request->setRowLimit(10);
+
+            $response = $this->client->searchanalytics->query($property->gsc_site_url, $request);
+            
+            $results = [];
+            if ($response && $response->getRows()) {
+                foreach ($response->getRows() as $row) {
+                    $results[] = [
+                        'query' => $row->getKeys()[0],
+                        'clicks' => $row->getClicks(),
+                        'impressions' => $row->getImpressions(),
+                    ];
+                }
+            }
+
+            return $results;
+        } catch (\Exception $e) {
+            Log::error("GscService.getTopKeywordsForUrl failed: " . $e->getMessage());
+            return [];
+        }
+    }
 }

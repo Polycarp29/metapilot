@@ -19,6 +19,7 @@ class AdTrackEvent extends Model
         'device_type',
         'screen_resolution',
         'duration_seconds',
+        'max_scroll_depth',
         'click_count',
         'google_campaign_id',
         'page_url',

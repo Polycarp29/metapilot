@@ -74,6 +74,8 @@ class CdnTrackingController extends Controller
             'token'        => 'required|uuid',
             'page_view_id' => 'required|string|max:50',
             'page_url'     => 'nullable|url',
+            'duration_seconds' => 'nullable|integer',
+            'max_scroll_depth' => 'nullable|integer',
             '_ts'          => 'required|integer',
             '_sig'         => 'required|string',
         ]);
@@ -192,6 +194,7 @@ class CdnTrackingController extends Controller
                 'device_type'        => $deviceData['device_type'],
                 'screen_resolution'  => $request->screen_resolution,
                 'duration_seconds'   => $request->duration_seconds ?? 0,
+                'max_scroll_depth'   => $request->max_scroll_depth ?? 0,
                 'click_count'        => $request->click_count      ?? 0,
                 'google_campaign_id' => $request->campaign_id,
                 'page_url'           => $request->page_url,
@@ -820,6 +823,7 @@ class CdnTrackingController extends Controller
             ->selectRaw("page_url,
                 COUNT(*) as total_hits,
                 AVG(duration_seconds) as avg_duration,
+                AVG(max_scroll_depth) as avg_scroll,
                 AVG(click_count) as avg_clicks,
                 SUM(CASE WHEN (gclid IS NOT NULL OR utm_campaign IS NOT NULL OR google_campaign_id IS NOT NULL) THEN 1 ELSE 0 END) as ad_hits,
                 SUM(CASE WHEN DATE(created_at) = CURDATE() THEN 1 ELSE 0 END) as today_count,
@@ -870,14 +874,17 @@ class CdnTrackingController extends Controller
             $errorCount  = $errorInfo ? (int) $errorInfo->error_count : 0;
             $avgLoadTime = $errorInfo ? round($errorInfo->avg_load_time ?? 0) : 0;
 
-            // Dwell factor (0-40): 60s+ = max
-            $dwellScore = min(($avgDuration / 60) * 40, 40);
-            // Interaction factor (0-40): 5+ clicks = max
-            $interactionScore = min(($avgClicks / 5) * 40, 40);
-            // Bounce factor (0-20): 0% bounce = 20, 100% bounce = 0
-            $bounceScore = (1 - ($bounceRate / 100)) * 20;
-
-            $engagementScore = round($dwellScore + $interactionScore + $bounceScore);
+            // Dwell factor (0-30): 60s+ = max
+            $dwellScore = min(($avgDuration / 60) * 30, 30);
+            // Scroll factor (0-30): 100% = max
+            $maxScroll = $row->avg_scroll ?? 0;
+            $scrollScore = ($maxScroll / 100) * 30;
+            // Interaction factor (0-25): 5+ clicks = max
+            $interactionScore = min(($avgClicks / 5) * 25, 25);
+            // Bounce factor (0-15): 0% bounce = 15, 100% bounce = 0
+            $bounceScore = (1 - ($bounceRate / 100)) * 15;
+            
+            $engagementScore = round($dwellScore + $scrollScore + $interactionScore + $bounceScore);
 
             // ── Bottleneck Score (0-100, higher = more problematic) ──
             // High bounce + low dwell + errors + slow load = bottleneck
