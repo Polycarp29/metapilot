@@ -3,6 +3,10 @@
 namespace App\Http\Controllers\AI\Agent;
 
 use App\Http\Controllers\Controller;
+use App\Models\Sitemap;
+use App\Services\Crawler\CrawlerManager;
+use Illuminate\Http\Request;
+use Illuminate\Support\Str;
 use Inertia\Inertia;
 
 class PiqueTheAgentController extends Controller
@@ -113,6 +117,148 @@ class PiqueTheAgentController extends Controller
         return response()->json([
             'session_id' => $session->session_id,
             'messages'   => $session->message,
+        ]);
+    }
+
+    // ─── Container-Aware Crawl API ────────────────────────────────────────────
+
+    /**
+     * List sitemap containers for the current organization.
+     */
+    public function listContainers()
+    {
+        $organization = auth()->user()->currentOrganization();
+        if (!$organization) {
+            return response()->json([]);
+        }
+
+        $sitemaps = Sitemap::where('organization_id', $organization->id)
+            ->withCount('links')
+            ->orderBy('updated_at', 'desc')
+            ->get()
+            ->map(fn ($s) => [
+                'id'               => $s->id,
+                'name'             => $s->name,
+                'site_url'         => $s->site_url,
+                'last_crawl_status'=> $s->last_crawl_status,
+                'last_crawl_job_id'=> $s->last_crawl_job_id,
+                'links_count'      => $s->links_count,
+                'manage_url'       => route('sitemaps.show', $s->id),
+            ]);
+
+        return response()->json($sitemaps);
+    }
+
+    /**
+     * Create a new sitemap container for the current organization.
+     */
+    public function createContainer(Request $request)
+    {
+        $organization = auth()->user()->currentOrganization();
+        if (!$organization) {
+            return response()->json(['error' => 'No organization selected'], 400);
+        }
+
+        $validated = $request->validate([
+            'name'         => 'required|string|max:255',
+            'sitemap_name' => 'required|string|max:100',
+            'site_url'     => 'required|url|max:500',
+        ]);
+
+        $filename = Str::slug($validated['sitemap_name']) . '.xml';
+
+        $sitemap = Sitemap::create([
+            'user_id'         => auth()->id(),
+            'organization_id' => $organization->id,
+            'name'            => $validated['name'],
+            'site_url'        => rtrim($validated['site_url'], '/'),
+            'filename'        => $filename,
+        ]);
+
+        return response()->json([
+            'id'          => $sitemap->id,
+            'name'        => $sitemap->name,
+            'site_url'    => $sitemap->site_url,
+            'links_count' => 0,
+            'manage_url'  => route('sitemaps.show', $sitemap->id),
+        ], 201);
+    }
+
+    /**
+     * Dispatch a crawl for a specific sitemap container.
+     */
+    public function startContainerCrawl(Request $request, $sitemapId)
+    {
+        $organization = auth()->user()->currentOrganization();
+        if (!$organization) {
+            return response()->json(['error' => 'No organization selected'], 400);
+        }
+
+        $sitemap = Sitemap::where('id', $sitemapId)
+            ->where('organization_id', $organization->id)
+            ->firstOrFail();
+
+        if (!$sitemap->site_url) {
+            return response()->json(['error' => 'This container has no site URL configured.'], 422);
+        }
+
+        $crawler = app(CrawlerManager::class);
+        $result  = $crawler->dispatch($sitemap->id, $sitemap->site_url, 3, [
+            'render_js'           => false,
+            'individual_results'  => true,
+        ]);
+
+        if (!$result) {
+            return response()->json(['error' => 'Failed to dispatch crawl job. Ensure the crawler service is reachable.'], 503);
+        }
+
+        $sitemap->update([
+            'last_crawl_status'  => 'dispatched',
+            'last_crawl_job_id'  => $result['job_id'] ?? null,
+        ]);
+
+        return response()->json([
+            'job_id'     => $result['job_id'] ?? null,
+            'sitemap_id' => $sitemap->id,
+            'status'     => 'dispatched',
+            'manage_url' => route('sitemaps.show', $sitemap->id),
+        ]);
+    }
+
+    /**
+     * Poll the crawl progress for a given sitemap / job.
+     */
+    public function getContainerCrawlStatus(Request $request, $sitemapId)
+    {
+        $organization = auth()->user()->currentOrganization();
+        if (!$organization) {
+            return response()->json(['error' => 'No organization selected'], 400);
+        }
+
+        $sitemap = Sitemap::where('id', $sitemapId)
+            ->where('organization_id', $organization->id)
+            ->firstOrFail();
+
+        // If there's a job ID, poll the external crawler service
+        if ($sitemap->last_crawl_job_id) {
+            $crawler = app(CrawlerManager::class);
+            $progress = $crawler->getStatus($sitemap->last_crawl_job_id);
+            if ($progress) {
+                return response()->json(array_merge($progress, [
+                    'manage_url'  => route('sitemaps.show', $sitemap->id),
+                    'links_count' => $sitemap->links()->count(),
+                ]));
+            }
+        }
+
+        // Fallback: report from local DB
+        return response()->json([
+            'status'           => $sitemap->last_crawl_status ?? 'unknown',
+            'total_crawled'    => $sitemap->links()->whereNotNull('last_crawl_status')->count(),
+            'total_discovered' => $sitemap->links()->count(),
+            'current_url'      => null,
+            'manage_url'       => route('sitemaps.show', $sitemap->id),
+            'links_count'      => $sitemap->links()->count(),
         ]);
     }
 

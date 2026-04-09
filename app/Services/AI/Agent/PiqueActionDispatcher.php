@@ -3,6 +3,7 @@
 namespace App\Services\AI\Agent;
 
 use App\Models\Organization;
+use App\Models\Sitemap;
 use App\Models\User;
 use App\Models\AnalyticsProperty;
 use App\Services\Crawler\CrawlerManager;
@@ -148,12 +149,7 @@ class PiqueActionDispatcher
 
     private function runCrawl(Organization $organization): array
     {
-        $sitemap = $organization->sitemaps()->first();
-        if (!$sitemap) {
-            return ['action' => 'crawl', 'status' => 'error', 'label' => 'No sitemap registered — add a sitemap first.'];
-        }
-        $this->crawler->dispatch($sitemap->id, $organization->allowed_domain);
-        return ['action' => 'crawl', 'status' => 'dispatched', 'label' => "Crawl dispatched for {$organization->allowed_domain}"];
+        return $this->buildContainerSelectPayload($organization);
     }
 
     private function runKeywordResearch(Organization $organization, string $query): array
@@ -182,32 +178,33 @@ class PiqueActionDispatcher
 
     private function runStartCrawl(Organization $organization): array
     {
-        $sitemap = $organization->sitemaps()
-            ->orderBy('is_discovery', 'desc')
-            ->whereNotNull('site_url')
-            ->first();
+        return $this->buildContainerSelectPayload($organization);
+    }
 
-        if (!$sitemap) {
-            return ['action' => 'start_crawl', 'status' => 'error', 'label' => 'No sitemap or site URL found to crawl.'];
-        }
-
-        $result = $this->crawler->dispatch($sitemap->id, $sitemap->site_url);
-
-        if (!$result) {
-            return ['action' => 'start_crawl', 'status' => 'error', 'label' => 'Failed to dispatch crawl job.'];
-        }
-
-        $sitemap->update([
-            'last_crawl_status' => 'dispatched',
-            'last_crawl_job_id' => $result['job_id'] ?? null
-        ]);
+    /**
+     * Build the container-select action payload used by the Pique chat UI.
+     */
+    private function buildContainerSelectPayload(Organization $organization): array
+    {
+        $containers = Sitemap::where('organization_id', $organization->id)
+            ->withCount('links')
+            ->orderBy('updated_at', 'desc')
+            ->get()
+            ->map(fn ($s) => [
+                'id'                => $s->id,
+                'name'              => $s->name,
+                'site_url'          => $s->site_url,
+                'last_crawl_status' => $s->last_crawl_status,
+                'links_count'       => $s->links_count,
+                'manage_url'        => route('sitemaps.show', $s->id),
+            ])
+            ->values()
+            ->toArray();
 
         return [
-            'action' => 'start_crawl',
-            'status' => 'success',
-            'label' => "Crawl initialized for {$sitemap->site_url}",
-            'job_id' => $result['job_id'] ?? null,
-            'data' => $result
+            'action'     => 'crawl_container_select',
+            'label'      => 'Container Crawl Setup',
+            'containers' => $containers,
         ];
     }
 

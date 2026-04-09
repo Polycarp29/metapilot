@@ -59,6 +59,82 @@ const showDeleteModal = ref(false);
 const sessionToDelete = ref(null);
 const isDeleting = ref(false);
 
+// ─── Crawl Container Panel State ───────────────────────────────────────────
+const crawlPanelMsgId = ref(null); // ID of the crawl_ui message in the feed
+const crawlStep = ref('select');   // 'select' | 'create' | 'progress'
+const crawlContainers = ref([]);
+const crawlForm = ref({ name: '', sitemap_name: '', site_url: '' });
+const crawlFormError = ref('');
+const crawlFormSubmitting = ref(false);
+const activeSitemapId = ref(null);
+const activeCrawlJobId = ref(null);
+const crawlProgress = ref({ status: 'dispatched', total_crawled: 0, total_discovered: 0, current_url: '', logs: [], manage_url: '' });
+const crawlPollInterval = ref(null);
+
+const startCrawlPoll = (sitemapId) => {
+    if (crawlPollInterval.value) clearInterval(crawlPollInterval.value);
+    crawlPollInterval.value = setInterval(async () => {
+        try {
+            const res = await axios.get(route('api.pique.containers.crawl-status', sitemapId));
+            const data = res.data;
+            const pct = data.total_discovered > 0
+                ? Math.round((data.total_crawled / data.total_discovered) * 100)
+                : 0;
+            crawlProgress.value = {
+                status: data.status,
+                total_crawled: data.total_crawled ?? 0,
+                total_discovered: data.total_discovered ?? 0,
+                current_url: data.current_url ?? '',
+                pct,
+                manage_url: data.manage_url ?? '',
+                links_count: data.links_count ?? 0,
+                logs: data.logs ?? [],
+            };
+            // Stop polling when done
+            if (['completed', 'failed', 'error'].includes(data.status)) {
+                clearInterval(crawlPollInterval.value);
+                crawlPollInterval.value = null;
+            }
+        } catch (e) {
+            console.error('Crawl poll error', e);
+        }
+    }, 3000);
+};
+
+const launchCrawlForContainer = async (container) => {
+    try {
+        crawlFormSubmitting.value = true;
+        activeSitemapId.value = container.id;
+        const res = await axios.post(route('api.pique.containers.crawl', container.id));
+        activeCrawlJobId.value = res.data.job_id;
+        crawlProgress.value = { status: 'dispatched', total_crawled: 0, total_discovered: 0, current_url: '', pct: 0, manage_url: res.data.manage_url ?? '', logs: [] };
+        crawlStep.value = 'progress';
+        startCrawlPoll(container.id);
+    } catch (e) {
+        toast.error(e.response?.data?.error ?? 'Failed to start crawl', 'Error');
+    } finally {
+        crawlFormSubmitting.value = false;
+    }
+};
+
+const submitCreateContainer = async () => {
+    crawlFormError.value = '';
+    if (!crawlForm.value.name || !crawlForm.value.sitemap_name || !crawlForm.value.site_url) {
+        crawlFormError.value = 'All fields are required.';
+        return;
+    }
+    try {
+        crawlFormSubmitting.value = true;
+        const res = await axios.post(route('api.pique.containers.store'), crawlForm.value);
+        const newContainer = res.data;
+        await launchCrawlForContainer(newContainer);
+    } catch (e) {
+        crawlFormError.value = e.response?.data?.message ?? 'Failed to create container.';
+    } finally {
+        crawlFormSubmitting.value = false;
+    }
+};
+
 const models = [
     { id: 'pique-gpt', label: 'Pique GPT', description: 'Advanced Reasoning' },
     { id: 'pique-claude', label: 'Pique Claude', description: 'Technical Expert' },
@@ -186,17 +262,38 @@ const sendMessage = async () => {
         isTyping.value = false;
         
         if (response.data.response) {
-            messages.value.push({
-                id: Date.now() + 1,
-                role: 'agent',
-                content: response.data.response,
-                type: 'text',
-                timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-                action: response.data.action
-            });
-            
+            const action = response.data.action;
+
+            // Handle crawl container selector as a special in-chat UI message
+            if (action?.action === 'crawl_container_select') {
+                crawlContainers.value = action.containers ?? [];
+                crawlStep.value = 'select';
+                crawlForm.value = { name: '', sitemap_name: '', site_url: '' };
+                crawlFormError.value = '';
+                activeSitemapId.value = null;
+                activeCrawlJobId.value = null;
+                const crawlMsgId = Date.now() + 1;
+                crawlPanelMsgId.value = crawlMsgId;
+                messages.value.push({
+                    id: crawlMsgId,
+                    role: 'agent',
+                    content: response.data.response,
+                    type: 'crawl_ui',
+                    timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+                });
+            } else {
+                messages.value.push({
+                    id: Date.now() + 1,
+                    role: 'agent',
+                    content: response.data.response,
+                    type: 'text',
+                    timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+                    action,
+                });
+            }
+
             currentSessionId.value = response.data.session_id;
-            
+
             // Refresh balance and history
             const balanceRes = await axios.get(route('api.pique.credits'));
             balance.value = balanceRes.data.balance;
@@ -578,6 +675,165 @@ onMounted(() => {
                                     <span class="text-sm font-semibold">{{ item.label }}</span>
                                 </button>
                             </div>
+
+                            <!-- ═══ Crawl UI Panel ═══════════════════════════════════════════ -->
+                            <div v-if="msg.type === 'crawl_ui'" class="mt-4 w-full">
+
+                                <!-- STEP 1: Container Selector -->
+                                <div v-if="crawlStep === 'select'" class="bg-white border border-slate-100 rounded-2xl shadow-sm overflow-hidden">
+                                    <div class="px-5 py-4 border-b border-slate-50 flex items-center justify-between">
+                                        <div class="flex items-center gap-2">
+                                            <div class="w-6 h-6 rounded-lg bg-indigo-100 flex items-center justify-center">
+                                                <svg class="w-3.5 h-3.5 text-indigo-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"/></svg>
+                                            </div>
+                                            <span class="text-[11px] font-black text-slate-700 uppercase tracking-widest">Crawl Containers</span>
+                                        </div>
+                                        <span class="text-[9px] bg-indigo-50 text-indigo-600 font-black px-2 py-0.5 rounded-full uppercase tracking-widest">{{ crawlContainers.length }} container{{ crawlContainers.length !== 1 ? 's' : '' }}</span>
+                                    </div>
+
+                                    <!-- Empty state -->
+                                    <div v-if="crawlContainers.length === 0" class="px-5 py-8 text-center">
+                                        <div class="w-12 h-12 rounded-2xl bg-slate-50 flex items-center justify-center mx-auto mb-3">
+                                            <svg class="w-6 h-6 text-slate-300" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 13h6m-3-3v6m-9 1V7a2 2 0 012-2h6l2 2h6a2 2 0 012 2v8a2 2 0 01-2 2H5a2 2 0 01-2-2z"/></svg>
+                                        </div>
+                                        <p class="text-[11px] font-bold text-slate-500 uppercase tracking-widest mb-3">No containers yet</p>
+                                        <p class="text-[10px] text-slate-400">Create your first crawl container to start scanning your site.</p>
+                                    </div>
+
+                                    <!-- Container list -->
+                                    <div v-else class="divide-y divide-slate-50 max-h-60 overflow-y-auto">
+                                        <div v-for="c in crawlContainers" :key="c.id" class="flex items-center justify-between px-5 py-3 hover:bg-slate-50/60 transition-colors">
+                                            <div class="flex-1 min-w-0">
+                                                <p class="text-[12px] font-bold text-slate-800 truncate">{{ c.name }}</p>
+                                                <p class="text-[9px] text-slate-400 truncate">{{ c.site_url }}</p>
+                                                <div class="flex items-center gap-2 mt-1">
+                                                    <span class="text-[8px] font-black uppercase tracking-widest px-2 py-0.5 rounded-full" :class="{
+                                                        'bg-emerald-50 text-emerald-700': c.last_crawl_status === 'completed',
+                                                        'bg-blue-50 text-blue-700': c.last_crawl_status === 'dispatched' || c.last_crawl_status === 'crawling',
+                                                        'bg-slate-100 text-slate-500': !c.last_crawl_status,
+                                                        'bg-red-50 text-red-600': c.last_crawl_status === 'failed',
+                                                    }">{{ c.last_crawl_status || 'not crawled' }}</span>
+                                                    <span class="text-[8px] text-slate-400 font-medium">{{ c.links_count }} links</span>
+                                                </div>
+                                            </div>
+                                            <button @click="launchCrawlForContainer(c)" :disabled="crawlFormSubmitting" class="ml-4 px-3 py-1.5 bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 text-white rounded-xl text-[9px] font-black uppercase tracking-widest transition-all active:scale-95 flex-shrink-0">
+                                                {{ crawlFormSubmitting && activeSitemapId === c.id ? 'Starting…' : 'Crawl' }}
+                                            </button>
+                                        </div>
+                                    </div>
+
+                                    <!-- Create new -->
+                                    <div class="px-5 py-3 bg-slate-50/50 border-t border-slate-100">
+                                        <button @click="crawlStep = 'create'" class="w-full flex items-center justify-center gap-2 py-2.5 bg-white hover:bg-blue-50 border border-dashed border-slate-200 hover:border-blue-300 text-slate-600 hover:text-blue-600 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all">
+                                            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>
+                                            Create New Container
+                                        </button>
+                                    </div>
+                                </div>
+
+                                <!-- STEP 2: Create Container Form -->
+                                <div v-if="crawlStep === 'create'" class="bg-white border border-slate-100 rounded-2xl shadow-sm overflow-hidden">
+                                    <div class="px-5 py-4 border-b border-slate-50 flex items-center gap-2">
+                                        <button @click="crawlStep = 'select'" class="w-7 h-7 rounded-lg bg-slate-50 hover:bg-slate-100 flex items-center justify-center text-slate-400 hover:text-slate-700 transition-colors flex-shrink-0">
+                                            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/></svg>
+                                        </button>
+                                        <div class="w-6 h-6 rounded-lg bg-emerald-100 flex items-center justify-center">
+                                            <svg class="w-3.5 h-3.5 text-emerald-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>
+                                        </div>
+                                        <span class="text-[11px] font-black text-slate-700 uppercase tracking-widest">New Container</span>
+                                    </div>
+                                    <div class="px-5 py-4 space-y-3">
+                                        <div class="space-y-1">
+                                            <label class="text-[9px] font-black text-slate-400 uppercase tracking-widest block">Container Name</label>
+                                            <input v-model="crawlForm.name" type="text" placeholder="e.g. Main Website" class="w-full px-3 py-2.5 rounded-xl bg-slate-50 border border-slate-200 text-[12px] font-semibold focus:bg-white focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400 transition-all outline-none">
+                                        </div>
+                                        <div class="space-y-1">
+                                            <label class="text-[9px] font-black text-slate-400 uppercase tracking-widest block">Sitemap Name</label>
+                                            <input v-model="crawlForm.sitemap_name" type="text" placeholder="e.g. main-sitemap" class="w-full px-3 py-2.5 rounded-xl bg-slate-50 border border-slate-200 text-[12px] font-semibold focus:bg-white focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400 transition-all outline-none">
+                                            <p class="text-[9px] text-slate-400">Becomes the filename: <code class="text-indigo-600">{{ crawlForm.sitemap_name ? crawlForm.sitemap_name.toLowerCase().replace(/\s+/g,'-') + '.xml' : 'sitemap.xml' }}</code></p>
+                                        </div>
+                                        <div class="space-y-1">
+                                            <label class="text-[9px] font-black text-slate-400 uppercase tracking-widest block">Site URL</label>
+                                            <input v-model="crawlForm.site_url" type="url" placeholder="https://yoursite.com" class="w-full px-3 py-2.5 rounded-xl bg-slate-50 border border-slate-200 text-[12px] font-semibold focus:bg-white focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400 transition-all outline-none">
+                                        </div>
+                                        <p v-if="crawlFormError" class="text-[10px] font-bold text-red-500 bg-red-50 rounded-xl px-3 py-2">{{ crawlFormError }}</p>
+                                        <button @click="submitCreateContainer" :disabled="crawlFormSubmitting" class="w-full py-3 bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white rounded-xl text-[10px] font-black uppercase tracking-widest transition-all active:scale-95 shadow-md shadow-blue-100 flex items-center justify-center gap-2">
+                                            <div v-if="crawlFormSubmitting" class="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
+                                            {{ crawlFormSubmitting ? 'Creating & Launching…' : 'Create & Start Crawl' }}
+                                        </button>
+                                    </div>
+                                </div>
+
+                                <!-- STEP 3: Live Progress -->
+                                <div v-if="crawlStep === 'progress'" class="bg-white border border-slate-100 rounded-2xl shadow-sm overflow-hidden">
+                                    <div class="px-5 py-4 border-b border-slate-50 flex items-center justify-between">
+                                        <div class="flex items-center gap-2">
+                                            <span class="relative flex h-2 w-2 flex-shrink-0">
+                                                <span v-if="crawlProgress.status !== 'completed'" class="animate-ping absolute inline-flex h-full w-full rounded-full bg-blue-400 opacity-75"></span>
+                                                <span class="relative inline-flex rounded-full h-2 w-2" :class="crawlProgress.status === 'completed' ? 'bg-emerald-500' : crawlProgress.status === 'failed' ? 'bg-red-500' : 'bg-blue-500'"></span>
+                                            </span>
+                                            <span class="text-[11px] font-black text-slate-700 uppercase tracking-widest">Crawl in Progress</span>
+                                        </div>
+                                        <span class="text-[10px] font-black" :class="crawlProgress.status === 'completed' ? 'text-emerald-600' : crawlProgress.status === 'failed' ? 'text-red-600' : 'text-blue-600'">
+                                            {{ crawlProgress.status?.toUpperCase() }}
+                                        </span>
+                                    </div>
+                                    <div class="px-5 py-4 space-y-4">
+                                        <!-- Progress bar -->
+                                        <div class="space-y-1.5">
+                                            <div class="flex justify-between text-[9px] font-black text-slate-400 uppercase tracking-widest">
+                                                <span>Pages Crawled</span>
+                                                <span>{{ crawlProgress.total_crawled }} / {{ crawlProgress.total_discovered || '?' }}</span>
+                                            </div>
+                                            <div class="w-full h-2 bg-slate-100 rounded-full overflow-hidden">
+                                                <div class="h-full rounded-full transition-all duration-500" :class="crawlProgress.status === 'completed' ? 'bg-emerald-500' : crawlProgress.status === 'failed' ? 'bg-red-500' : 'bg-blue-500'" :style="{ width: `${crawlProgress.pct || 0}%` }"></div>
+                                            </div>
+                                            <p class="text-[9px] text-slate-400 truncate">{{ crawlProgress.current_url || 'Initializing scanner…' }}</p>
+                                        </div>
+
+                                        <!-- Stats row -->
+                                        <div class="grid grid-cols-3 gap-2">
+                                            <div class="bg-slate-50 rounded-xl p-2.5 text-center">
+                                                <div class="text-[14px] font-black text-slate-900">{{ crawlProgress.pct || 0 }}%</div>
+                                                <div class="text-[8px] font-bold text-slate-400 uppercase tracking-widest">Progress</div>
+                                            </div>
+                                            <div class="bg-slate-50 rounded-xl p-2.5 text-center">
+                                                <div class="text-[14px] font-black text-slate-900">{{ crawlProgress.total_crawled }}</div>
+                                                <div class="text-[8px] font-bold text-slate-400 uppercase tracking-widest">Crawled</div>
+                                            </div>
+                                            <div class="bg-slate-50 rounded-xl p-2.5 text-center">
+                                                <div class="text-[14px] font-black text-slate-900">{{ crawlProgress.links_count || 0 }}</div>
+                                                <div class="text-[8px] font-bold text-slate-400 uppercase tracking-widest">Indexed</div>
+                                            </div>
+                                        </div>
+
+                                        <!-- Log output -->
+                                        <div v-if="crawlProgress.logs && crawlProgress.logs.length > 0" class="bg-slate-950 rounded-xl p-3 max-h-28 overflow-y-auto space-y-0.5">
+                                            <p v-for="(log, i) in crawlProgress.logs" :key="i" class="text-[9px] font-mono text-slate-400 leading-snug">{{ log }}</p>
+                                        </div>
+                                        <div v-else class="bg-slate-50 rounded-xl p-3 flex items-center gap-2">
+                                            <div v-if="crawlProgress.status !== 'completed'" class="w-3 h-3 border-2 border-blue-200 border-t-blue-500 rounded-full animate-spin flex-shrink-0"></div>
+                                            <p class="text-[9px] font-medium text-slate-400 italic">Waiting for crawler logs…</p>
+                                        </div>
+
+                                        <!-- Completion CTA -->
+                                        <div v-if="crawlProgress.status === 'completed' && crawlProgress.manage_url" class="flex gap-2">
+                                            <a :href="crawlProgress.manage_url" class="flex-1 py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-[10px] font-black uppercase tracking-widest transition-all text-center shadow-md shadow-emerald-100">
+                                                View in Sitemap Manager →
+                                            </a>
+                                            <button @click="crawlStep = 'select'" class="px-4 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all">
+                                                Done
+                                            </button>
+                                        </div>
+                                        <div v-else-if="crawlProgress.status === 'failed'" class="flex gap-2">
+                                            <button @click="crawlStep = 'select'" class="flex-1 py-2.5 bg-red-50 hover:bg-red-100 text-red-600 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all">
+                                                Try Again
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            <!-- ═══ /Crawl UI Panel ═══════════════════════════════════════════ -->
 
                             <div class="text-[10px] text-slate-400 mt-1"
                                 :class="msg.role === 'user' ? 'text-right' : ''">

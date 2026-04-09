@@ -63,6 +63,10 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::get('/api/pique/history', [PiqueTheAgentController::class, 'history'])->name('api.pique.history');
     Route::get('/api/pique/sessions/{sessionId}', [PiqueTheAgentController::class, 'showSession'])->name('api.pique.session');
     Route::delete('/api/pique/sessions/{sessionId}', [PiqueTheAgentController::class, 'destroySession'])->name('api.pique.session.destroy');
+    Route::get('/api/pique/containers', [PiqueTheAgentController::class, 'listContainers'])->name('api.pique.containers.index');
+    Route::post('/api/pique/containers', [PiqueTheAgentController::class, 'createContainer'])->name('api.pique.containers.store');
+    Route::post('/api/pique/containers/{sitemapId}/crawl', [PiqueTheAgentController::class, 'startContainerCrawl'])->name('api.pique.containers.crawl');
+    Route::get('/api/pique/containers/{sitemapId}/crawl-status', [PiqueTheAgentController::class, 'getContainerCrawlStatus'])->name('api.pique.containers.crawl-status');
 
     // Schema Actions (AJAX endpoints)
     Route::post('api/validate-schema', [SchemaController::class, 'validateJsonLd'])->name('api.validate-schema');

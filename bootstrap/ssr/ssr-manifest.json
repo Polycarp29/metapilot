@@ -4,8 +4,8 @@
   ],
   "node_modules/laravel-vite-plugin/inertia-helpers/index.js": [],
   "node_modules/prismjs/themes/prism-tomorrow.css": [
-    "/build/assets/Index-CoveloEr.js",
-    "/build/assets/Index-DIoDGEvT.css"
+    "/build/assets/Index-D26s2kWC.js",
+    "/build/assets/Index-BEw8MWSY.css"
   ],
   "resources/js/Components/BrandLogo.vue": [
     "/build/assets/BrandLogo-DhDYxbtK.js"
@@ -230,16 +230,16 @@
     "/build/assets/Terms-DKS86sTw.js"
   ],
   "resources/js/Pages/Pique/Index.vue": [
-    "/build/assets/Index-CoveloEr.js",
-    "/build/assets/Index-DIoDGEvT.css"
+    "/build/assets/Index-D26s2kWC.js",
+    "/build/assets/Index-BEw8MWSY.css"
   ],
   "resources/js/Pages/Pique/Index.vue?vue&type=style&index=0&lang.css": [
-    "/build/assets/Index-CoveloEr.js",
-    "/build/assets/Index-DIoDGEvT.css"
+    "/build/assets/Index-D26s2kWC.js",
+    "/build/assets/Index-BEw8MWSY.css"
   ],
-  "resources/js/Pages/Pique/Index.vue?vue&type=style&index=1&scoped=ba8b7b60&lang.css": [
-    "/build/assets/Index-CoveloEr.js",
-    "/build/assets/Index-DIoDGEvT.css"
+  "resources/js/Pages/Pique/Index.vue?vue&type=style&index=1&scoped=a83446d6&lang.css": [
+    "/build/assets/Index-D26s2kWC.js",
+    "/build/assets/Index-BEw8MWSY.css"
   ],
   "resources/js/Pages/Profile/Edit.vue": [
     "/build/assets/Edit-BEchj1Xs.js"
