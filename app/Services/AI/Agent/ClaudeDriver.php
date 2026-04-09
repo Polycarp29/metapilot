@@ -1,0 +1,93 @@
+<?php
+
+namespace App\Services\AI\Agent;
+
+use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Log;
+
+class ClaudeDriver implements ModelDriverInterface
+{
+    protected string $apiKey;
+    protected string $model = 'claude-3-5-sonnet-20240620';
+
+    public function __construct()
+    {
+        $this->apiKey = config('services.anthropic.key', '');
+    }
+
+    public function generateResponse(string $prompt, array $context = [], array $history = [], string $systemPrompt = '', ?array $actionResult = null): string
+    {
+        if (empty($this->apiKey)) {
+            return $this->simulateResponse($prompt, $context);
+        }
+
+        // Anthropic uses alternating user/assistant messages
+        $messages = [];
+        foreach ($history as $turn) {
+            if (!in_array($turn['role'] ?? '', ['user', 'assistant'])) continue;
+            $messages[] = [
+                'role'    => $turn['role'],
+                'content' => $turn['content'],
+            ];
+        }
+        // Add current prompt + action result if present
+        $fullPrompt = $prompt;
+        if ($actionResult) {
+            $fullPrompt .= "\n\n[ACTION RESULT]: " . json_encode($actionResult) . "\n(Please incorporate and restructure this data in your response)";
+        }
+        $messages[] = ['role' => 'user', 'content' => $fullPrompt];
+
+        $body = [
+            'model'      => $this->model,
+            'max_tokens' => 1500,
+            'messages'   => $messages,
+        ];
+
+        // System prompt is a top-level field in Anthropic API
+        if ($systemPrompt) {
+            $body['system'] = $systemPrompt;
+        }
+
+        try {
+            $response = Http::withHeaders([
+                    'x-api-key'         => $this->apiKey,
+                    'anthropic-version' => '2023-06-01',
+                    'content-type'      => 'application/json',
+                ])
+                ->retry(2, 300)
+                ->timeout(60)
+                ->post('https://api.anthropic.com/v1/messages', $body);
+
+            if ($response->successful()) {
+                $text = $response->json('content.0.text', '');
+                return trim($text) ?: 'Claude returned an empty response.';
+            }
+
+            Log::error('Pique ClaudeDriver API error', ['status' => $response->status(), 'body' => $response->body()]);
+            return 'I encountered an error reaching Claude. Please try again shortly.';
+        } catch (\Exception $e) {
+            Log::error('Pique ClaudeDriver exception: ' . $e->getMessage());
+            return 'I encountered a connection error. Please try again.';
+        }
+    }
+
+    public function getModelName(): string
+    {
+        return 'pique-claude';
+    }
+
+    public function getCreditCost(): float
+    {
+        return 1.5;
+    }
+
+    protected function simulateResponse(string $prompt, array $context): string
+    {
+        $org     = $context['organization']['name'] ?? 'your organisation';
+        $schemas = count($context['schemas'] ?? []);
+
+        return "[Simulation — Anthropic API key not configured]\n\nI am Pique Claude, your master SEO specialist. "
+            . "For **{$org}**, I see {$schemas} active schemas. "
+            . "Set `ANTHROPIC_KEY` in your .env to enable live responses.";
+    }
+}

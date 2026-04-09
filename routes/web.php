@@ -1,16 +1,17 @@
 <?php
+use App\Http\Controllers\AI\Agent\PiqueTheAgentController;
 use App\Http\Controllers\Auth\LoginController;
 use App\Http\Controllers\Auth\RegisterController;
+use App\Http\Controllers\BlogPostController;
+use App\Http\Controllers\BlogTopicController;
 use App\Http\Controllers\CdnTrackingController;
+use App\Http\Controllers\ContentAuditController;
+use App\Http\Controllers\ContentHumanizerController;
 use App\Http\Controllers\CrawlScheduleController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\SchemaController;
 use App\Http\Controllers\SitemapController;
 use App\Http\Controllers\WelcomeController;
-use App\Http\Controllers\BlogPostController;
-use App\Http\Controllers\ContentHumanizerController;
-use App\Http\Controllers\ContentAuditController;
-use App\Http\Controllers\BlogTopicController;
 use Illuminate\Support\Facades\Route;
 use Inertia\Inertia;
 
@@ -54,6 +55,14 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::post('schemas/automated', [SchemaController::class, 'automatedStore'])->name('schemas.automated.store');
     Route::post('api/analyze-url', [SchemaController::class, 'analyzeUrl'])->name('api.analyze-url');
     Route::resource('schemas', SchemaController::class);
+
+    // Pique the Agent
+    Route::get('/pique', [PiqueTheAgentController::class, 'index'])->name('pique.agent');
+    Route::post('/api/pique/ask', [PiqueTheAgentController::class, 'ask'])->name('api.pique.ask');
+    Route::get('/api/pique/credits', [PiqueTheAgentController::class, 'credits'])->name('api.pique.credits');
+    Route::get('/api/pique/history', [PiqueTheAgentController::class, 'history'])->name('api.pique.history');
+    Route::get('/api/pique/sessions/{sessionId}', [PiqueTheAgentController::class, 'showSession'])->name('api.pique.session');
+    Route::delete('/api/pique/sessions/{sessionId}', [PiqueTheAgentController::class, 'destroySession'])->name('api.pique.session.destroy');
 
     // Schema Actions (AJAX endpoints)
     Route::post('api/validate-schema', [SchemaController::class, 'validateJsonLd'])->name('api.validate-schema');
@@ -125,6 +134,10 @@ Route::middleware(['auth', 'verified'])->group(function () {
     // Organization Settings
     Route::get('settings', [\App\Http\Controllers\OrganizationSettingsController::class, 'index'])->name('organization.settings');
     Route::put('settings', [\App\Http\Controllers\OrganizationSettingsController::class, 'update'])->name('organization.update');
+
+    // Organization Selection
+    Route::get('organizations/select', [\App\Http\Controllers\OrganizationController::class, 'select'])->name('organizations.select');
+    Route::post('organizations/select', [\App\Http\Controllers\OrganizationController::class, 'store'])->name('organizations.select.store');
 
     // Password Update
     Route::put('password', [\App\Http\Controllers\PasswordController::class, 'update'])->name('password.update');

@@ -62,7 +62,7 @@
           <!-- Actions -->
           <div class="flex items-center space-x-4">
             <div class="relative group hidden sm:flex">
-              <Link
+              <Link href="/pique"
                 class="flex items-center space-x-2 bg-slate-900 hover:bg-slate-800 text-white px-6 py-2.5 rounded-xl text-sm font-bold transition-standard shadow-lg shadow-slate-200 active:scale-95">
 
                 <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5"

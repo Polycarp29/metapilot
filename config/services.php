@@ -73,5 +73,13 @@ return [
         'webhook_secret' => env('CRAWLER_WEBHOOK_SECRET'),
     ],
 
+    'anthropic' => [
+        'key' => env('ANTHROPIC_API_KEY'),
+    ],
+
+    'google_ai' => [
+        'key' => env('GOOGLE_AI_KEY'),
+    ],
+
 ];
 
