@@ -163,7 +163,7 @@ const startReportPoll = (jobId) => {
     
     reportPollInterval = setInterval(async () => {
         try {
-            const res = await axios.get(route('api.pique.report.status', jobId));
+            const res = await axios.get(route('api.pique.report.status', jobId) + `?t=${Date.now()}`);
             const status = res.data.status;
             
             if (status === 'completed') {

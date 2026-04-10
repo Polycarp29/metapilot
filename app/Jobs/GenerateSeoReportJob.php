@@ -168,6 +168,8 @@ class GenerateSeoReportJob implements ShouldQueue
             Cache::put("pique_report_{$this->jobId}_result", $result, 3600);
             Cache::put("pique_report_{$this->jobId}_status", 'completed', 3600);
 
+            Log::info("PiqueReportJob [{$this->jobId}]: Status transitioned to COMPLETED.");
+
         } catch (\Exception $e) {
             Log::error("PiqueReportJob Error: " . $e->getMessage());
             Cache::put("pique_report_{$this->jobId}_status", 'failed', 3600);

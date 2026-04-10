@@ -106,6 +106,7 @@ class PiqueReportController extends Controller
             'status' => $status,
             'data'   => $result,
             'error'  => $error
-        ]);
+        ])->header('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0')
+          ->header('Pragma', 'no-cache');
     }
 }
