@@ -178,7 +178,7 @@ class PiqueActionDispatcher
         }
 
         // 18. Device split
-        if ($this->contains($p, ['mobile traffic', 'desktop traffic', 'device split', 'mobile vs desktop', 'device breakdown', 'tablet traffic', 'device type'])) {
+        if ($this->contains($p, ['mobile traffic', 'desktop traffic', 'device split', 'mobile vs desktop', 'device breakdown', 'tablet traffic', 'device type', 'graph', 'plot', 'chart'])) {
             return $this->runDeviceSplit($organization);
         }
 
@@ -379,6 +379,20 @@ class PiqueActionDispatcher
                 'top_referrers' => $referrers,
                 'device_breakdown' => $devices,
                 'hot_leads_count' => $hotLeadsCount
+            ],
+            'chart' => [
+                'type' => 'bar',
+                'title' => 'Top Pages Performance',
+                'subtitle' => 'Traffic volume by page (Last 7 Days)',
+                'data' => [
+                    'labels' => collect($topPages)->pluck('page_url')->map(fn($url) => Str::limit($url, 20))->toArray(),
+                    'datasets' => [[
+                        'label' => 'Hits',
+                        'data' => collect($topPages)->pluck('count')->toArray(),
+                        'backgroundColor' => '#3b82f6',
+                        'borderRadius' => 6,
+                    ]]
+                ]
             ]
         ];
     }
@@ -605,7 +619,7 @@ class PiqueActionDispatcher
                 'title' => 'Top Pages by Traffic',
                 'subtitle' => 'Most visited pages recently',
                 'data' => [
-                    'labels' => collect($topPages)->pluck('page_url')->map(fn($url) => Str::limit($url, 20))->toArray(),
+                    'labels' => collect($topPages)->pluck('url')->map(fn($url) => Str::limit($url, 20))->toArray(),
                     'datasets' => [[
                         'label' => 'Hits',
                         'data' => collect($topPages)->pluck('hit_count')->toArray(),
@@ -630,7 +644,7 @@ class PiqueActionDispatcher
                 'title' => 'Traffic Velocity',
                 'subtitle' => 'High-growth vs Declining pages (Hits)',
                 'data' => [
-                    'labels' => collect($velocity['rising'])->merge($velocity['falling'])->pluck('page_url')->map(fn($url) => Str::limit($url, 15))->toArray(),
+                    'labels' => collect($velocity['rising'])->merge($velocity['falling'])->pluck('url')->map(fn($url) => Str::limit($url, 15))->toArray(),
                     'datasets' => [[
                         'label' => 'Hit Velocity',
                         'data' => collect($velocity['rising'])->pluck('hit_count')->merge(collect($velocity['falling'])->pluck('hit_count')->map(fn($h) => -$h))->toArray(),

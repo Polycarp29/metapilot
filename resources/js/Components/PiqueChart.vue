@@ -1,17 +1,17 @@
 <template>
-    <div class="pique-chart-container bg-white/5 backdrop-blur-md rounded-2xl p-6 border border-white/10 my-4 shadow-2xl overflow-hidden transition-all hover:border-white/20">
-        <div class="flex items-center justify-between mb-6">
+    <div class="pique-chart-container bg-white border border-slate-200 rounded-3xl p-6 my-6 shadow-xl shadow-slate-200/50 overflow-hidden transition-all hover:border-blue-300">
+        <div class="flex items-center justify-between mb-8">
             <div>
-                <h4 v-if="title" class="text-white font-semibold text-lg tracking-tight">{{ title }}</h4>
-                <p v-if="subtitle" class="text-white/50 text-xs mt-1 uppercase tracking-widest">{{ subtitle }}</p>
+                <h4 v-if="title" class="text-slate-900 font-extrabold text-lg tracking-tight">{{ title }}</h4>
+                <p v-if="subtitle" class="text-slate-500 text-[10px] mt-1 uppercase font-bold tracking-widest">{{ subtitle }}</p>
             </div>
-            <div class="flex gap-2">
-                <div class="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></div>
-                <div class="w-2 h-2 rounded-full bg-emerald-500/30"></div>
+            <div class="flex gap-1.5">
+                <div class="w-1.5 h-1.5 rounded-full bg-blue-600 animate-pulse"></div>
+                <div class="w-1.5 h-1.5 rounded-full bg-slate-200"></div>
             </div>
         </div>
 
-        <div class="relative h-[280px]">
+        <div class="relative h-[300px]">
             <Bar
                 v-if="type === 'bar'"
                 :data="chartData"
@@ -80,25 +80,24 @@ const chartOptions = computed(() => ({
             display: props.type === 'doughnut',
             position: 'bottom',
             labels: {
-                color: 'rgba(255, 255, 255, 0.7)',
+                color: '#1e293b', // slate-800
                 font: {
                     family: "'Inter', sans-serif",
-                    size: 11
+                    size: 11,
+                    weight: '600'
                 },
                 usePointStyle: true,
                 padding: 20
             }
         },
         tooltip: {
-            backgroundColor: 'rgba(15, 23, 42, 0.95)',
+            backgroundColor: '#0f172a',
             titleColor: '#fff',
-            bodyColor: 'rgba(255, 255, 255, 0.8)',
-            borderColor: 'rgba(255, 255, 255, 0.1)',
-            borderWidth: 1,
+            bodyColor: 'rgba(255, 255, 255, 0.9)',
             padding: 12,
             displayColors: false,
-            cornerRadius: 8,
-            titleFont: { size: 13, weight: '600' },
+            cornerRadius: 12,
+            titleFont: { size: 13, weight: '700' },
             bodyFont: { size: 12 }
         }
     },
@@ -106,12 +105,12 @@ const chartOptions = computed(() => ({
         y: {
             beginAtZero: true,
             grid: {
-                color: 'rgba(255, 255, 255, 0.05)',
+                color: 'rgba(0, 0, 0, 0.05)',
                 drawBorder: false
             },
             ticks: {
-                color: 'rgba(255, 255, 255, 0.5)',
-                font: { size: 10 }
+                color: '#64748b', // slate-500
+                font: { size: 10, weight: '500' }
             }
         },
         x: {
@@ -119,8 +118,8 @@ const chartOptions = computed(() => ({
                 display: false
             },
             ticks: {
-                color: 'rgba(255, 255, 255, 0.5)',
-                font: { size: 10 }
+                color: '#64748b',
+                font: { size: 10, weight: '500' }
             }
         }
     }
@@ -129,17 +128,17 @@ const chartOptions = computed(() => ({
 
 <style scoped>
 .pique-chart-container {
-    animation: slideUp 0.6s cubic-bezier(0.16, 1, 0.3, 1);
+    animation: chartAppear 0.8s cubic-bezier(0.34, 1.56, 0.64, 1);
 }
 
-@keyframes slideUp {
+@keyframes chartAppear {
     from {
         opacity: 0;
-        transform: translateY(20px);
+        transform: scale(0.95) translateY(10px);
     }
     to {
         opacity: 1;
-        transform: translateY(0);
+        transform: scale(1) translateY(0);
     }
 }
 </style>
