@@ -71,6 +71,15 @@ class ClaudeDriver implements ModelDriverInterface
         }
     }
 
+    public function generateStreamedResponse(string $prompt, array $context = [], array $history = [], string $systemPrompt = '', ?array $actionResult = null, callable $onChunk = null): void
+    {
+        // For now, simplify Claude by using the sync response as a stream
+        // This satisfies the interface and ensures no crashes.
+        // Once cURL is confirmed working, a proper SSE implementation can be added.
+        $response = $this->generateResponse($prompt, $context, $history, $systemPrompt, $actionResult);
+        if ($onChunk) $onChunk($response);
+    }
+
     public function getModelName(): string
     {
         return 'pique-claude';

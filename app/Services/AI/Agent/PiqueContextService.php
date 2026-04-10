@@ -12,6 +12,10 @@ use App\Models\KeywordResearch;
 
 class PiqueContextService
 {
+    public function __construct(
+        protected PixelIntelligenceService $pixelIntelligence
+    ) {}
+
     /**
      * Gather all relevant Metapilot data for the agent's context.
      */
@@ -21,6 +25,8 @@ class PiqueContextService
             'organization'      => $this->getOrganizationContext($organization),
             'schemas'           => $this->getSchemaContext($organization),
             'pixels'            => $this->getPixelContext($organization),
+            'pixel_summary'     => $this->getPixelSummaryContext($organization),
+            'pixel_journey'     => $this->getPixelJourneyContext($organization),
             'properties'        => $this->getAnalyticsContext($organization),
             'niche_intelligence'=> $this->getNicheContext($organization),
             'keyword_research'  => $this->getKeywordResearchContext($organization),
@@ -93,6 +99,41 @@ class PiqueContextService
                 'verified'=> (bool) $p->pixel_verified_at,
                 'modules' => $p->enabled_modules,
             ])->toArray();
+    }
+
+    /**
+     * 7-day traffic summary per pixel site.
+     * Injected into the system prompt as a live performance snapshot.
+     */
+    protected function getPixelSummaryContext(Organization $organization): array
+    {
+        return $organization->pixelSites()
+            ->get()
+            ->map(fn($site) => [
+                'site_id'  => $site->id,
+                'label'    => $site->label,
+                'domain'   => $site->allowed_domain,
+                'stats_7d' => $this->pixelIntelligence->getSummary($organization, 7, $site->id),
+            ])->toArray();
+    }
+
+    /**
+     * Top pages + trend velocity — the user journey intelligence block.
+     * Injected into the system prompt so Pique can proactively surface insights.
+     */
+    protected function getPixelJourneyContext(Organization $organization): array
+    {
+        // Prefer a verified site; fall back to null (org-wide aggregation)
+        $activeSite = $organization->pixelSites()
+            ->whereNotNull('pixel_verified_at')
+            ->first();
+
+        $siteId = $activeSite?->id;
+
+        return [
+            'top_pages'       => $this->pixelIntelligence->getTopPages($organization, 5, 7, $siteId),
+            'trend_velocity'  => $this->pixelIntelligence->getTrendVelocity($organization, $siteId),
+        ];
     }
 
     protected function getAnalyticsContext(Organization $organization): array

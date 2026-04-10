@@ -75,6 +75,13 @@ class GeminiDriver implements ModelDriverInterface
         }
     }
 
+    public function generateStreamedResponse(string $prompt, array $context = [], array $history = [], string $systemPrompt = '', ?array $actionResult = null, callable $onChunk = null): void
+    {
+        // For Gemini, we also sync-to-stream for now to maintain stability
+        $response = $this->generateResponse($prompt, $context, $history, $systemPrompt, $actionResult);
+        if ($onChunk) $onChunk($response);
+    }
+
     public function getModelName(): string
     {
         return 'pique-gemini';

@@ -22,33 +22,7 @@ class GptDriver implements ModelDriverInterface
             return $this->simulateResponse($prompt, $context);
         }
 
-        $messages = [];
-
-        // 1. System prompt with live org context
-        if ($systemPrompt) {
-            $messages[] = ['role' => 'system', 'content' => $systemPrompt];
-        }
-
-        // 2. Conversation history (prior turns)
-        foreach ($history as $turn) {
-            if (in_array($turn['role'] ?? '', ['user', 'assistant'])) {
-                $messages[] = [
-                    'role'    => $turn['role'],
-                    'content' => $turn['content'],
-                ];
-            }
-        }
-
-        // 3. Action Result (if any)
-        if ($actionResult) {
-            $messages[] = [
-                'role'    => 'system',
-                'content' => "[ACTION RESULT]: " . json_encode($actionResult) . "\n\nUse this data to inform your response. Restructure and format this information for the user.",
-            ];
-        }
-
-        // 4. Current user prompt
-        $messages[] = ['role' => 'user', 'content' => $prompt];
+        $messages = $this->buildMessages($prompt, $history, $systemPrompt, $actionResult);
 
         try {
             $response = Http::withToken($this->apiKey)
@@ -71,6 +45,89 @@ class GptDriver implements ModelDriverInterface
             Log::error('Pique GptDriver exception: ' . $e->getMessage());
             return 'I encountered a connection error. Please try again.';
         }
+    }
+
+    public function generateStreamedResponse(string $prompt, array $context = [], array $history = [], string $systemPrompt = '', ?array $actionResult = null, callable $onChunk = null): void
+    {
+        if (empty($this->apiKey)) {
+            $sim = $this->simulateResponse($prompt, $context);
+            if ($onChunk) $onChunk($sim);
+            return;
+        }
+
+        $messages = $this->buildMessages($prompt, $history, $systemPrompt, $actionResult);
+
+        if (!function_exists('curl_init')) {
+            Log::error('PHP cURL extension is missing. Falling back to non-streamed response.');
+            $resp = $this->generateResponse($prompt, $context, $history, $systemPrompt, $actionResult);
+            if ($onChunk) $onChunk($resp);
+            return;
+        }
+
+        $ch = \curl_init('https://api.openai.com/v1/chat/completions');
+        \curl_setopt($ch, CURLOPT_RETURNTRANSFER, false);
+        \curl_setopt($ch, CURLOPT_POST, true);
+        \curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode([
+            'model'       => $this->model,
+            'messages'    => $messages,
+            'temperature' => 0.5,
+            'max_tokens'  => 1500,
+            'stream'      => true,
+        ]));
+        \curl_setopt($ch, CURLOPT_HTTPHEADER, [
+            'Content-Type: application/json',
+            'Authorization: Bearer ' . $this->apiKey,
+        ]);
+
+        \curl_setopt($ch, CURLOPT_WRITEFUNCTION, function($ch, $data) use ($onChunk) {
+            $lines = explode("\n", $data);
+            foreach ($lines as $line) {
+                if (str_starts_with($line, 'data: ')) {
+                    $jsonStr = substr($line, 6);
+                    if ($jsonStr === '[DONE]') return strlen($data);
+                    
+                    $decoded = json_decode($jsonStr, true);
+                    $content = $decoded['choices'][0]['delta']['content'] ?? null;
+                    if ($content && $onChunk) {
+                        $onChunk($content);
+                    }
+                }
+            }
+            return strlen($data);
+        });
+
+        \curl_exec($ch);
+        \curl_close($ch);
+    }
+
+    protected function buildMessages(string $prompt, array $history, string $systemPrompt, ?array $actionResult): array
+    {
+        $messages = [];
+
+        if ($systemPrompt) {
+            $messages[] = ['role' => 'system', 'content' => $systemPrompt];
+        }
+
+        foreach ($history as $turn) {
+            if (in_array($turn['role'] ?? '', ['user', 'assistant', 'agent'])) {
+                $role = ($turn['role'] === 'agent') ? 'assistant' : $turn['role'];
+                $messages[] = [
+                    'role'    => $role,
+                    'content' => $turn['content'],
+                ];
+            }
+        }
+
+        if ($actionResult) {
+            $messages[] = [
+                'role'    => 'system',
+                'content' => "[ACTION RESULT]: " . json_encode($actionResult) . "\n\nUse this data to inform your response. Restructure and format this information for the user.",
+            ];
+        }
+
+        $messages[] = ['role' => 'user', 'content' => $prompt];
+
+        return $messages;
     }
 
     public function getModelName(): string

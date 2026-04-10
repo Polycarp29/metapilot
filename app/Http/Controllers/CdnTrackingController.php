@@ -141,15 +141,24 @@ class CdnTrackingController extends Controller
                 'page_view_id'  => $request->page_view_id,
                 'referrer'      => $request->header('Referer'),
             ]);
+        } elseif ($signature === 'invalid-sig') {
+             Log::warning('Pixel hit received with deliberate "invalid-sig" (likely test or bypass attempt)', [
+                'pixel_site_id' => $pixelSite->id,
+                'page_view_id'  => $request->page_view_id,
+                'ip'            => $request->ip(),
+            ]);
+            return response()->json(['error' => 'Invalid signature format'], 403)
+                ->withHeaders($this->corsHeaders());
         } elseif (!hash_equals($expected, $signature)) {
-            Log::warning('Pixel HMAC validation failed', [
+            Log::warning('Pixel HMAC validation failed: Mismatch', [
                 'pixel_site_id' => $pixelSite->id,
                 'page_view_id'  => $request->page_view_id,
                 'received_sig'  => $signature,
                 'expected_sig'  => $expected,
-                'payload'       => $request->token . $request->page_view_id . $ts,
+                'payload_used'  => $request->token . $request->page_view_id . $ts,
+                'key_used_prefix' => substr($pixelSite->ads_site_token, 0, 8) . '...',
             ]);
-            return response()->json(['error' => 'Invalid signature'], 403)
+            return response()->json(['error' => 'Signature mismatch'], 403)
                 ->withHeaders($this->corsHeaders());
         }
 

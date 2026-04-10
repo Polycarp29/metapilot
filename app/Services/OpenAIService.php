@@ -96,7 +96,7 @@ class OpenAIService
 
             if ($response->successful()) {
                 Log::info("OpenAI Schema Suggestion successful for URL: {$url}");
-                return json_decode($response->json()['choices'][0]['message']['content'], true);
+                return $this->parseAiResponse($response);
             }
 
             Log::error("OpenAI Schema Suggestion API Error [URL: {$url}]: " . $response->body());
@@ -170,7 +170,7 @@ class OpenAIService
 
             if ($response->successful()) {
                 Log::info("OpenAI Analytics Analysis successful for property: {$propertyName}");
-                return json_decode($response->json()['choices'][0]['message']['content'], true);
+                return $this->parseAiResponse($response);
             }
 
             Log::error("OpenAI Analytics Analysis API Error [Property: {$propertyName}]: " . $response->body());
@@ -242,8 +242,7 @@ class OpenAIService
 
             if ($response->successful()) {
                 Log::info("OpenAI Ad Analysis successful for property: {$propertyName}");
-                $content = $response->json()['choices'][0]['message']['content'];
-                return json_decode($content, true);
+                return $this->parseAiResponse($response);
             }
 
             Log::error("OpenAI Ad Analysis API Error [Property: {$propertyName}]: " . $response->body());
@@ -318,7 +317,7 @@ class OpenAIService
 
             if ($response->successful()) {
                 Log::info("OpenAI Campaign Proposal successful for property: {$propertyName}");
-                return json_decode($response->json()['choices'][0]['message']['content'], true);
+                return $this->parseAiResponse($response);
             }
 
             Log::error("OpenAI Campaign Proposal API Error [Property: {$propertyName}]: " . $response->body());
@@ -384,7 +383,7 @@ class OpenAIService
 
             if ($response->successful()) {
                 Log::info("OpenAI Professional Synthesis successful for URL: {$url}");
-                return json_decode($response->json()['choices'][0]['message']['content'], true);
+                return $this->parseAiResponse($response);
             }
 
             Log::error("OpenAI Professional Synthesis API Error [URL: {$url}]: " . $response->body());
@@ -438,7 +437,7 @@ class OpenAIService
             ]);
 
             if ($response->successful()) {
-                return json_decode($response->json()['choices'][0]['message']['content'], true);
+                return $this->parseAiResponse($response);
             }
             return null;
         } catch (\Exception $e) {
@@ -486,7 +485,7 @@ class OpenAIService
             ]);
 
             if ($response->successful()) {
-                return json_decode($response->json()['choices'][0]['message']['content'], true);
+                return $this->parseAiResponse($response);
             }
             return null;
         } catch (\Exception $e) {
@@ -539,7 +538,7 @@ class OpenAIService
             ]);
 
             if ($response->successful()) {
-                return json_decode($response->json()['choices'][0]['message']['content'], true);
+                return $this->parseAiResponse($response);
             }
             return null;
         } catch (\Exception $e) {
@@ -589,7 +588,7 @@ class OpenAIService
             ]);
 
             if ($response->successful()) {
-                return json_decode($response->json()['choices'][0]['message']['content'], true);
+                return $this->parseAiResponse($response);
             }
             return null;
         } catch (\Exception $e) {
@@ -628,7 +627,7 @@ class OpenAIService
             ]);
 
             if ($response->successful()) {
-                return trim($response->json()['choices'][0]['message']['content']);
+                return $this->parseAiResponse($response, false);
             }
             return null;
         } catch (\Exception $e) {
@@ -666,13 +665,34 @@ class OpenAIService
                 'temperature' => 0.6,
             ]);
 
-            if ($response->successful()) {
-                return trim($response->json()['choices'][0]['message']['content']);
-            }
-            return null;
+            return $this->parseAiResponse($response, false);
         } catch (\Exception $e) {
             Log::error("OpenAI Refine Gen Exception: " . $e->getMessage());
             return null;
         }
+    }
+
+    /**
+     * Safely parse the OpenAI response and return the message content or decoded JSON.
+     */
+    protected function parseAiResponse($response, bool $asJson = true)
+    {
+        if (!$response->successful()) {
+            return null;
+        }
+
+        $json = $response->json();
+        
+        $content = data_get($json, 'choices.0.message.content');
+        
+        if ($content === null) {
+            return null;
+        }
+
+        if (!$asJson) {
+            return trim($content);
+        }
+
+        return json_decode($content, true);
     }
 }

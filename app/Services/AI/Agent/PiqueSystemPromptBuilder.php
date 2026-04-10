@@ -15,6 +15,8 @@ class PiqueSystemPromptBuilder
         $niche         = $context['niche_intelligence'] ?? [];
         $schemas       = $context['schemas'] ?? [];
         $pixels        = $context['pixels'] ?? [];
+        $pixelSummary  = $context['pixel_summary'] ?? [];
+        $pixelJourney  = $context['pixel_journey'] ?? [];
         $properties    = $context['properties'] ?? [];
         $keywords      = $context['keyword_research'] ?? [];
 
@@ -53,15 +55,64 @@ class PiqueSystemPromptBuilder
         }
         $kwBlock = $kwLines ? implode("\n", $kwLines) : '  No recent keyword research.';
 
-        // --- Pixel block ---
+        // --- Pixel block (site list + connection status) ---
         $pixelVerified = $org['is_pixel_verified'] ? '✓ Verified' : '✗ Not verified';
-        
+
         $pixelLines = [];
         foreach ($pixels as $p) {
             $status = $p['verified'] ? '✓' : '✗';
             $pixelLines[] = "  • {$p['label']} ({$p['domain']}) — {$status} verified [token: {$p['token']}, id: {$p['id']}]";
         }
         $pixelBlock = $pixelLines ? implode("\n", $pixelLines) : '  No pixel sites registered.';
+
+        // --- Live pixel intelligence block (7-day stats per site) ---
+        $pixelIntelLines = [];
+        foreach ($pixelSummary as $site) {
+            $s = $site['stats_7d'] ?? [];
+            if (empty($s) || ($s['total_hits'] ?? 0) === 0) {
+                $pixelIntelLines[] = "  • {$site['label']} ({$site['domain']}): No traffic data yet.";
+                continue;
+            }
+            $delta      = isset($s['week_delta']) ? ($s['week_delta'] >= 0 ? "▲ +{$s['week_delta']}%" : "▼ {$s['week_delta']}%") : 'N/A';
+            $engagement = isset($s['engagement_rate']) ? "{$s['engagement_rate']}%" : '—';
+            $bounce     = isset($s['bounce_rate'])     ? "{$s['bounce_rate']}%"     : '—';
+            $dwell      = isset($s['avg_dwell'])       ? "{$s['avg_dwell']}s"        : '—';
+            $device     = $s['top_device'] ?? 'Unknown';
+            $mobilePct  = $s['device_pct']['mobile'] ?? 0;
+            $pixelIntelLines[] = "  • {$site['label']} ({$site['domain']}): {$s['total_hits']} hits {$delta} vs prior week | Engaged: {$engagement} | Bounce: {$bounce} | Avg dwell: {$dwell} | Top device: {$device} ({$mobilePct}% mobile)";
+        }
+        $pixelIntelBlock = $pixelIntelLines ? implode("\n", $pixelIntelLines) : '  No pixel traffic in the last 7 days.';
+
+        // --- Page journey block ---
+        $journeyLines  = [];
+
+        $topPages     = $pixelJourney['top_pages']     ?? [];
+        $risingPages  = $pixelJourney['trend_velocity']['rising']  ?? [];
+        $fallingPages = $pixelJourney['trend_velocity']['falling'] ?? [];
+
+        if (!empty($topPages)) {
+            $journeyLines[] = "### 🔝 Top Pages (Last 7 Days)";
+            foreach (array_slice($topPages, 0, 5) as $page) {
+                $recs = !empty($page['recommendations']) ? ' ⚠ ' . implode('; ', $page['recommendations']) : '';
+                $journeyLines[] = "  • {$page['path']}: {$page['total_hits']} hits | Engagement: {$page['engagement_score']}/100 | Bounce: {$page['bounce_rate']}% | Dwell: {$page['avg_dwell']}s{$recs}";
+            }
+        }
+
+        if (!empty($risingPages)) {
+            $journeyLines[] = "### 🔥 Rising Pages (gaining traffic this week)";
+            foreach (array_slice($risingPages, 0, 3) as $page) {
+                $journeyLines[] = "  • {$page['path']}: {$page['prev7']} → {$page['last7']} hits (+{$page['delta_pct']}%)";
+            }
+        }
+
+        if (!empty($fallingPages)) {
+            $journeyLines[] = "### 📉 Falling Pages (losing traffic this week)";
+            foreach (array_slice($fallingPages, 0, 3) as $page) {
+                $journeyLines[] = "  • {$page['path']}: {$page['prev7']} → {$page['last7']} hits ({$page['delta_pct']}%)";
+            }
+        }
+
+        $journeyBlock = $journeyLines ? implode("\n", $journeyLines) : '  No page journey data yet — traffic will appear as users visit tracked pages.';
 
         // --- Properties list (for selection) ---
         $propList = [];
@@ -90,6 +141,12 @@ When the user asks you to perform any of the following, confirm what action you 
   14. Audit content for SEO         → Keyword gap & readability analysis
   15. Analyze pixel performance     → Review MetaPilot pixel tracking, events, and dwell time
   16. Lead Intelligence             → Analyze "Hot Leads" based on dwell time and scroll depth
+  17. Show top/most visited pages   → Page journey intelligence from pixel data
+  18. Show rising / falling pages   → Traffic velocity report (7d vs prior 7d)
+  19. Show user journey / session flow → Most common multi-page session paths
+  20. Show device split             → Mobile vs Desktop vs Tablet breakdown
+  21. Show page detail for a URL    → Full engagement + bottleneck drill-down for one page
+  22. Show engagement / traffic quality trend → Bounce rate, dwell, engagement rate over time
 CAP;
 
         return <<<PROMPT
@@ -106,6 +163,12 @@ You have real-time access to the organisation's data below. Always cite numbers 
 
 ## Available Pixel Sites (MetaPilot)
 {$pixelBlock}
+
+## Live Pixel Intelligence (Last 7 Days)
+{$pixelIntelBlock}
+
+## Page Journey Intelligence
+{$journeyBlock}
 
 ## Connected Analytics Properties
 {$propBlock}
@@ -134,7 +197,7 @@ You have real-time access to the organisation's data below. Always cite numbers 
    - If the action result contains an error or "pending" status, explain what that means and how to proceed.
 5. **Interactive Buttons:** If you suggest an action that a user can take (like starting a crawl, fixing a schema, or researching a keyword), you MUST include an interactive button using this syntax: `[[Button: Label Text | action_command]]`.
    - Example: "I recommend starting a crawl to find broken links. [[Button: Start Crawl | start_crawl]]"
-   - Common actions: `start_crawl`, `run_audit`, `generate_schema`, `pixel_data`, `humanize_content`, `pixel_module_click`, `pixel_module_schema`, `pixel_module_behavior`, `pixel_ping`, `attribution_analysis`, `lead_intelligence`.
+   - Common actions: `start_crawl`, `run_audit`, `generate_schema`, `pixel_data`, `humanize_content`, `pixel_module_click`, `pixel_module_schema`, `pixel_module_behavior`, `pixel_ping`, `attribution_analysis`, `lead_intelligence`, `page_journey`, `traffic_velocity`, `session_journey`, `page_detail`, `device_split`, `engagement_trend`.
 6. **Pixel Script Flow:** When a user asks for a tracking pixel or script:
    - **Phase 1 (Site):** If multiple sites exist in `[PIXEL SITES]`, ask which site it's for. Provide buttons: `[[Button: Select [Label] | select_pixel_site_[id]]]`
    - **Phase 2 (Modules):** Once a site is chosen, ask "What would you like to monitor?". Provide **multi-select toggle buttons**: `[[Toggle: Clicks | click]]`, `[[Toggle: Schema Data | schema]]`, `[[Toggle: User Behavior | behavior]]`. Tell the user to toggle all that apply and then click `[[Button: Generate Script | generate_pixel_config]]`.

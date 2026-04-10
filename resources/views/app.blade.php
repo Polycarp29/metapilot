@@ -4,6 +4,7 @@
 <head>
     <x-s-e-o-aspects :title="$title ?? 'Metapilot – The All-in-One SEO, Schema, and GEO Optimization Platform'">
     </x-s-e-o-aspects>
+    <meta name="csrf-token" content="{{ csrf_token() }}">
     <meta name="google-site-verification" content="-oTaRot_mKoXCtXjlB9bDecH1IYE6kGxJ60upxeYmw0" />
 
 

@@ -1,7 +1,7 @@
 <script setup>
 import { ref, onMounted, onUnmounted, nextTick, computed } from 'vue';
 import AppLayout from '../../Layouts/AppLayout.vue';
-import { Head, usePage } from '@inertiajs/vue3';
+import { Head, usePage, Link, router } from '@inertiajs/vue3';
 import axios from 'axios';
 import ConfirmationModal from '@/Components/ConfirmationModal.vue';
 import { useToastStore } from '@/stores/useToastStore';
@@ -14,9 +14,11 @@ import 'prismjs/components/prism-javascript';
 import 'prismjs/components/prism-bash';
 import 'prismjs/components/prism-php';
 import 'prismjs/components/prism-markdown';
+import PiqueChart from '@/Components/PiqueChart.vue';
 
 const props = defineProps({
-    initialBalance: Number
+    initialBalance: Number,
+    metapilotContext: Object
 });
 
 // State Management
@@ -55,6 +57,7 @@ const selectedToggles = ref([]);
 const history = ref([]);
 const toast = useToastStore();
 
+const isStreaming = ref(false);
 const showDeleteModal = ref(false);
 const sessionToDelete = ref(null);
 const isDeleting = ref(false);
@@ -340,83 +343,111 @@ const sendMessage = async () => {
     scrollToBottom();
 
     isTyping.value = true;
+    isStreaming.value = true;
+
+    // Create a placeholder for the agent's response
+    const agentMsgId = Date.now() + 1;
+    messages.value.push({
+        id: agentMsgId,
+        role: 'agent',
+        content: '',
+        type: 'text',
+        timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+    });
 
     try {
-        const response = await axios.post(route('api.pique.ask'), {
-            prompt: userText,
-            model: selectedModel.value,
-            session_id: currentSessionId.value
+        const response = await fetch(route('api.pique.ask'), {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Accept': 'text/event-stream',
+                'X-Requested-With': 'XMLHttpRequest',
+                'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content'),
+            },
+            body: JSON.stringify({
+                prompt: userText,
+                model: selectedModel.value,
+                session_id: currentSessionId.value,
+                stream: true
+            })
         });
+        
+        if (!response.ok) {
+            const errBody = await response.text();
+            let errJson = {};
+            try { errJson = JSON.parse(errBody); } catch(e) {}
+            throw new Error(`${response.status} ${response.statusText}${errJson.error ? ': ' + errJson.error : ''}`);
+        }
+
+        const reader = response.body.getReader();
+        const decoder = new TextDecoder();
+        let buffer = '';
+
+        while (true) {
+            const { value, done } = await reader.read();
+            if (done) break;
+
+            buffer += decoder.decode(value, { stream: true });
+            const lines = buffer.split("\n\n");
+            buffer = lines.pop();
+
+            for (const line of lines) {
+                if (line.startsWith('data: ')) {
+                    const data = JSON.parse(line.substring(6));
+
+                    if (data.error) {
+                        throw new Error(data.error);
+                    }
+                    
+                    if (data.chunk) {
+                        const msgIdx = messages.value.findIndex(m => m.id === agentMsgId);
+                        if (msgIdx !== -1) {
+                            messages.value[msgIdx].content += data.chunk;
+                            scrollToBottom();
+                        }
+                    }
+
+                    if (data.done) {
+                        const msgIdx = messages.value.findIndex(m => m.id === agentMsgId);
+                        if (msgIdx !== -1 && data.action) {
+                            messages.value[msgIdx].action = data.action;
+                            
+                            // Specific UI message transforms (Crawl, Report)
+                            if (data.action.action === 'crawl_container_select') {
+                                messages.value[msgIdx].type = 'crawl_ui';
+                                crawlContainers.value = data.action.containers ?? [];
+                                crawlStep.value = 'select';
+                            } else if (data.action.action === 'report_property_select') {
+                                messages.value[msgIdx].type = 'report_ui';
+                                reportProperties.value = data.action.properties ?? [];
+                                reportSelectedProps.value = reportProperties.value.map(p => p.id);
+                            }
+                        }
+                        currentSessionId.value = data.session_id;
+                    }
+                }
+            }
+        }
 
         isTyping.value = false;
-        
-        if (response.data.response) {
-            const action = response.data.action;
+        isStreaming.value = false;
 
-            // Handle crawl container selector as a special in-chat UI message
-            if (action?.action === 'crawl_container_select') {
-                crawlContainers.value = action.containers ?? [];
-                crawlStep.value = 'select';
-                crawlForm.value = { name: '', sitemap_name: '', site_url: '' };
-                crawlFormError.value = '';
-                activeSitemapId.value = null;
-                activeCrawlJobId.value = null;
-                const crawlMsgId = Date.now() + 1;
-                crawlPanelMsgId.value = crawlMsgId;
-                messages.value.push({
-                    id: crawlMsgId,
-                    role: 'agent',
-                    content: response.data.response,
-                    type: 'crawl_ui',
-                    timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-                });
-            } else if (action?.action === 'report_property_select') {
-                // Initialize report UI state
-                reportProperties.value = action.properties ?? [];
-                reportSelectedProps.value = reportProperties.value.map(p => p.id); // Select all by default
-                reportStep.value = 'select';
-                reportGenerating.value = false;
-                reportResult.value = null;
-                reportError.value = '';
-
-                messages.value.push({
-                    id: Date.now() + 1,
-                    role: 'agent',
-                    content: response.data.response || "Which properties should I include in the SEO report?",
-                    type: 'report_ui',
-                    timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-                });
-            } else {
-                messages.value.push({
-                    id: Date.now() + 1,
-                    role: 'agent',
-                    content: response.data.response,
-                    type: 'text',
-                    timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-                    action,
-                });
-            }
-
-            currentSessionId.value = response.data.session_id;
-
-            // Refresh balance and history
-            const balanceRes = await axios.get(route('api.pique.credits'));
-            balance.value = balanceRes.data.balance;
-            fetchHistory();
-        }
+        // Refresh balance and history
+        const balanceRes = await axios.get(route('api.pique.credits'));
+        balance.value = balanceRes.data.balance;
+        fetchHistory();
 
         scrollToBottom();
     } catch (error) {
         isTyping.value = false;
-        const errorMsg = error.response?.data?.error || 'Something went wrong. Please try again.';
+        isStreaming.value = false;
+        console.error('Streaming error:', error);
         
-        messages.value.push({
-            id: Date.now() + 1,
-            role: 'agent',
-            content: `Error: ${errorMsg}`,
-            type: 'text',
-            timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-        });
+        const errorMsg = error.message || 'Something went wrong. Please try again.';
+        const msgIdx = messages.value.findIndex(m => m.id === agentMsgId);
+        if (msgIdx !== -1) {
+            messages.value[msgIdx].content = `Error: ${errorMsg}`;
+        }
         scrollToBottom();
     }
 };
@@ -590,6 +621,25 @@ onMounted(() => {
                     </div>
                 </div>
 
+                <!-- Niche Intelligence -->
+                <div v-if="props.metapilotContext?.niche_intelligence" class="p-6 border-t border-slate-200/50 bg-indigo-50/30">
+                    <label class="text-[10px] font-black text-indigo-400 uppercase tracking-widest mb-3 block">Niche Intelligence</label>
+                    <div class="space-y-4">
+                        <div v-if="props.metapilotContext.niche_intelligence.detected_niche" class="p-3 bg-white border border-indigo-100 rounded-xl shadow-sm">
+                            <span class="text-[9px] text-slate-400 font-bold uppercase block mb-1">Detected Domain</span>
+                            <span class="text-indigo-900 font-extrabold text-xs">{{ props.metapilotContext.niche_intelligence.detected_niche }}</span>
+                        </div>
+                        
+                        <div v-if="Array.isArray(props.metapilotContext.niche_intelligence.market_insights)" class="space-y-2">
+                            <div v-for="(insight, idx) in props.metapilotContext.niche_intelligence.market_insights.slice(0, 2)" :key="idx" 
+                                class="flex gap-2 p-2 bg-white/50 border border-slate-100 rounded-lg text-slate-600 text-[10px] leading-tight font-medium">
+                                <div class="w-1 h-1 rounded-full bg-blue-500 mt-1 shrink-0"></div>
+                                {{ insight }}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
                 <!-- Footer Sidebar Tools -->
                 <div class="p-6 bg-slate-100/30 border-t border-slate-200/50">
                     <div class="mb-4">
@@ -611,7 +661,7 @@ onMounted(() => {
                         </div>
                         <div class="flex-1">
                             <div class="text-xs font-bold text-slate-900 leading-tight">Credits Remaining</div>
-                            <div class="text-sm text-blue-600 font-extrabold">{{ balance.toFixed(2) }}</div>
+                            <div class="text-sm text-blue-600 font-extrabold">{{ (balance || 0).toFixed(2) }}</div>
                         </div>
                     </div>
                 </div>
@@ -634,7 +684,7 @@ onMounted(() => {
                             <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2"
                                 stroke="currentColor" class="w-6 h-6">
                                 <path stroke-linecap="round" stroke-linejoin="round"
-                                    d="M9.813 15.904 9 18.75l-.813-2.846a4.5 4.5 0 0 0-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 0 0 3.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 0 0 3.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 0 0-3.09 3.09ZM18.259 8.715 18 9.75l-.259-1.035a3.375 3.375 0 0 0-2.455-2.456L14.25 6l1.036-.259a3.375 3.375 0 0 0 2.455-2.456L18 2.25l.259 1.035a3.375 3.375 0 0 0 2.456 2.456L21.75 6l-1.035.259a3.375 3.375 0 0 0-2.456 2.456ZM16.894 20.567 16.5 21.75l-.394-1.183a2.25 2.25 0 0 0-1.423-1.423L13.5 18.75l1.183-.394a2.25 2.25 0 0 0 1.423-1.423l.394-1.183.394 1.183a2.25 2.25 0 0 0 1.423 1.423l1.183.394-1.183.394a2.25 2.25 0 0 0-1.423 1.423Z" />
+                                    d="M9.813 15.904 9 18.75l-.813-2.846a4.5 4.5 0 0 0-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 0 0 3.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 0 0 3.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 0 0 3.09 3.09ZM18.259 8.715 18 9.75l-.259-1.035a3.375 3.375 0 0 0-2.455-2.456L14.25 6l1.036-.259a3.375 3.375 0 0 0 2.455-2.456L18 2.25l.259 1.035a3.375 3.375 0 0 0 2.456 2.456L21.75 6l-1.035.259a3.375 3.375 0 0 0-2.456 2.456ZM16.894 20.567 16.5 21.75l-.394-1.183a2.25 2.25 0 0 0-1.423-1.423L13.5 18.75l1.183-.394a2.25 2.25 0 0 0 1.423-1.423l.394-1.183.394 1.183a2.25 2.25 0 0 0 1.423 1.423l1.183.394-1.183.394a2.25 2.25 0 0 0-1.423 1.423Z" />
                             </svg>
                         </div>
 
@@ -646,6 +696,13 @@ onMounted(() => {
 
                                 <div class="prose prose-slate prose-sm max-w-none text-[15px] leading-relaxed markdown-content" 
                                      v-html="renderMarkdown(cleanContent(msg.content))"></div>
+
+                                <!-- Thinking Indicator (Unified) -->
+                                <div v-if="msg.role === 'agent' && !msg.content && isTyping" class="flex items-center space-x-1.5 py-2">
+                                    <div class="w-1.5 h-1.5 bg-blue-400 rounded-full animate-bounce"></div>
+                                    <div class="w-1.5 h-1.5 bg-blue-500 rounded-full animate-bounce delay-100"></div>
+                                    <div class="w-1.5 h-1.5 bg-blue-600 rounded-full animate-bounce delay-200"></div>
+                                </div>
                                 
                                 <!-- Inline Action Buttons -->
                                 <div v-if="extractButtons(msg.content).length > 0" class="mt-4 flex flex-wrap gap-2">
@@ -782,7 +839,16 @@ onMounted(() => {
                             </div>
 
                             <!-- ═══ Crawl UI Panel ═══════════════════════════════════════════ -->
-                            <div v-if="msg.type === 'crawl_ui'" class="mt-4 w-full">
+                            <div v-if="msg.role === 'agent' && msg.action?.chart" class="mt-4 w-full">
+                                <PiqueChart
+                                    :type="msg.action.chart.type"
+                                    :chartData="msg.action.chart.data"
+                                    :title="msg.action.chart.title"
+                                    :subtitle="msg.action.chart.subtitle"
+                                />
+                            </div>
+
+                            <div v-if="msg.type === 'crawl_ui'" class="mt-6 w-full">
 
                                 <!-- STEP 1: Container Selector -->
                                 <div v-if="crawlStep === 'select'" class="bg-white border border-slate-100 rounded-2xl shadow-sm overflow-hidden">
@@ -1087,23 +1153,6 @@ onMounted(() => {
                         </div>
                     </div>
 
-                    <!-- Typing Indicator -->
-                    <div v-if="isTyping" class="flex justify-start animate-in fade-in slide-in-from-bottom-2">
-                        <div
-                            class="w-10 h-10 rounded-2xl bg-gradient-to-br from-blue-600 to-indigo-700 flex items-center justify-center text-white shadow-lg mr-4 flex-shrink-0">
-                            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2"
-                                stroke="currentColor" class="w-6 h-6 animate-pulse">
-                                <path stroke-linecap="round" stroke-linejoin="round"
-                                    d="M9.813 15.904 9 18.75l-.813-2.846a4.5 4.5 0 0 0-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 0 0 3.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 0 0 3.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 0 0-3.09 3.09ZM18.259 8.715 18 9.75l-.259-1.035a3.375 3.375 0 0 0-2.455-2.456L14.25 6l1.036-.259a3.375 3.375 0 0 0 2.455-2.456L18 2.25l.259 1.035a3.375 3.375 0 0 0 2.456 2.456L21.75 6l-1.035.259a3.375 3.375 0 0 0-2.456 2.456ZM16.894 20.567 16.5 21.75l-.394-1.183a2.25 2.25 0 0 0-1.423-1.423L13.5 18.75l1.183-.394a2.25 2.25 0 0 0 1.423-1.423l.394-1.183.394 1.183a2.25 2.25 0 0 0 1.423 1.423l1.183.394-1.183.394a2.25 2.25 0 0 0-1.423 1.423Z" />
-                            </svg>
-                        </div>
-                        <div
-                            class="px-5 py-4 bg-white border border-slate-100 rounded-3xl rounded-tl-none shadow-sm flex items-center space-x-1.5">
-                            <div class="w-1.5 h-1.5 bg-blue-400 rounded-full animate-bounce"></div>
-                            <div class="w-1.5 h-1.5 bg-blue-500 rounded-full animate-bounce delay-100"></div>
-                            <div class="w-1.5 h-1.5 bg-blue-600 rounded-full animate-bounce delay-200"></div>
-                        </div>
-                    </div>
                 </div>
 
                 <!-- Input Area -->
@@ -1138,6 +1187,7 @@ onMounted(() => {
                     </div>
                 </div>
             </main>
+
         </div>
 
         <!-- Confirmation Modal -->

@@ -16,19 +16,23 @@ class PiqueTheAgentController extends Controller
 
     public function __construct(
         \App\Services\AI\Agent\PiqueAgentService $agent,
-        \App\Services\AI\Agent\PiqueCreditService $credits
+        \App\Services\AI\Agent\PiqueCreditService $credits,
+        \App\Services\AI\Agent\PiqueContextService $context
     ) {
         $this->agent = $agent;
         $this->credits = $credits;
+        $this->context = $context;
     }
 
     public function index()
     {
         $organization = auth()->user()->currentOrganization();
         $balance = $organization ? $this->credits->getCredits($organization)->balance : 0;
+        $context = $organization ? $this->context->getContext($organization) : null;
 
         return Inertia::render('Pique/Index', [
-            'initialBalance' => (float) $balance,
+            'initialBalance'   => (float) $balance,
+            'metapilotContext' => $context,
         ]);
     }
 
@@ -38,15 +42,56 @@ class PiqueTheAgentController extends Controller
     public function ask(\Illuminate\Http\Request $request)
     {
         $request->validate([
-            'prompt' => 'required|string',
-            'model' => 'required|string|in:pique-gpt,pique-claude,pique-gemini',
+            'prompt'     => 'required|string',
+            'model'      => 'required|string|in:pique-gpt,pique-claude,pique-gemini',
             'session_id' => 'nullable|string',
+            'stream'     => 'nullable|boolean',
         ]);
 
         $organization = auth()->user()->currentOrganization();
         
         if (!$organization) {
             return response()->json(['error' => 'No organization selected'], 400);
+        }
+
+        if ($request->boolean('stream')) {
+            return response()->stream(function () use ($organization, $request) {
+                // We wrap the process call to catch the metadata
+                $fullResult = $this->agent->process(
+                    $organization,
+                    auth()->user(),
+                    $request->prompt,
+                    $request->model,
+                    $request->session_id,
+                    true, // stream
+                    function ($chunk) {
+                        echo "data: " . json_encode(['chunk' => $chunk]) . "\n\n";
+                        if (ob_get_level() > 0) ob_flush();
+                        flush();
+                    }
+                );
+                
+                // Check if process returned an error instead of a session
+                if (isset($fullResult['error'])) {
+                     echo "data: " . json_encode(['error' => $fullResult['error']]) . "\n\n";
+                     if (ob_get_level() > 0) ob_flush();
+                     flush();
+                     return;
+                }
+
+                // Finally send the full result metadata (session_id, action) so the frontend can finalize
+                echo "data: " . json_encode([
+                    'session_id' => $fullResult['session_id'] ?? null,
+                    'action'     => $fullResult['action'] ?? null,
+                    'done'       => true
+                ]) . "\n\n";
+                if (ob_get_level() > 0) ob_flush();
+                flush();
+            }, 200, [
+                'Content-Type'      => 'text/event-stream',
+                'X-Accel-Buffering' => 'no',
+                'Cache-Control'     => 'no-cache',
+            ]);
         }
 
         $result = $this->agent->process(
@@ -58,7 +103,7 @@ class PiqueTheAgentController extends Controller
         );
 
         if (isset($result['error'])) {
-            return response()->json($result, 402); // Payment Required equivalent
+            return response()->json($result, 402);
         }
 
         return response()->json($result);

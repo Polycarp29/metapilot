@@ -40,8 +40,9 @@ class PiqueActionDispatcher
         protected AiContentDetectionService $aiDetector,
         protected ContentHumanizerService   $humanizer,
         protected NicheDetectionService     $nicheDetection,
-        protected AttributionService      $attribution,
+        protected AttributionService        $attribution,
         protected OpenAIService             $openAI,
+        protected PixelIntelligenceService  $pixelIntelligence,
     ) {}
 
     /**
@@ -158,6 +159,39 @@ class PiqueActionDispatcher
         // 14. Niche detection
         if ($this->contains($p, ['detect niche', 'my niche', 'my industry', 'what industry', 'detect industry'])) {
             return $this->runNicheDetection($organization);
+        }
+
+        // 15. Page journey — top visited pages from pixel
+        if ($this->contains($p, ['top pages', 'most visited', 'popular pages', 'which pages', 'page traffic', 'visited the most', 'page performance', 'what pages'])) {
+            return $this->runPageJourney($organization);
+        }
+
+        // 16. Traffic velocity — rising / falling pages
+        if ($this->contains($p, ['rising', 'gaining traffic', 'growing pages', 'trending pages', 'falling', 'losing traffic', 'pages going down', 'traffic velocity', 'trend', 'pages declining'])) {
+            return $this->runTrafficVelocity($organization);
+        }
+
+        // 17. Session journey / user navigation flow
+        if ($this->contains($p, ['session', 'user journey', 'visitor path', 'how do visitors navigate', 'navigation flow', 'visit path', 'page flow', 'session flow'])) {
+            return $this->runSessionJourney($organization);
+        }
+
+        // 18. Device split
+        if ($this->contains($p, ['mobile traffic', 'desktop traffic', 'device split', 'mobile vs desktop', 'device breakdown', 'tablet traffic', 'device type'])) {
+            return $this->runDeviceSplit($organization);
+        }
+
+        // 19. Page detail drill-down
+        if ($this->contains($p, ['page detail', 'what happened on', 'traffic for url', 'drill down', 'details for', 'stats for page', 'page stats'])) {
+            $url = $this->extractUrl($prompt);
+            if ($url) {
+                return $this->runPageDetail($organization, $url);
+            }
+        }
+
+        // 20. Engagement / traffic quality trend
+        if ($this->contains($p, ['engagement trend', 'traffic quality', 'bounce rate', 'how is traffic quality', 'dwell time trend', 'engagement rate', 'quality of traffic'])) {
+            return $this->runEngagementTrend($organization);
         }
 
         return null;
@@ -549,4 +583,132 @@ class PiqueActionDispatcher
             'data' => $data
         ];
     }
+
+    // ─── Pixel Journey Action Runners (Pique-only via PixelIntelligenceService) ─
+
+    private function runPageJourney(Organization $organization): array
+    {
+        $topPages    = $this->pixelIntelligence->getTopPages($organization, 10, 7);
+        $velocity    = $this->pixelIntelligence->getTrendVelocity($organization);
+
+        return [
+            'action'          => 'page_journey',
+            'label'           => 'Page journey intelligence retrieved',
+            'data'            => [
+                'top_pages'       => $topPages,
+                'rising_pages'    => $velocity['rising'],
+                'falling_pages'   => $velocity['falling'],
+            ],
+            'chart' => [
+                'type' => 'bar',
+                'title' => 'Top Pages by Traffic',
+                'subtitle' => 'Most visited pages recently',
+                'data' => [
+                    'labels' => collect($topPages)->pluck('page_url')->map(fn($url) => Str::limit($url, 20))->toArray(),
+                    'datasets' => [[
+                        'label' => 'Hits',
+                        'data' => collect($topPages)->pluck('hit_count')->toArray(),
+                        'backgroundColor' => '#10b981',
+                        'borderRadius' => 6,
+                    ]]
+                ]
+            ]
+        ];
+    }
+
+    private function runTrafficVelocity(Organization $organization): array
+    {
+        $velocity = $this->pixelIntelligence->getTrendVelocity($organization);
+
+        return [
+            'action' => 'traffic_velocity',
+            'label'  => 'Traffic velocity report: rising and falling pages',
+            'data'   => $velocity,
+            'chart'  => [
+                'type' => 'bar',
+                'title' => 'Traffic Velocity',
+                'subtitle' => 'High-growth vs Declining pages (Hits)',
+                'data' => [
+                    'labels' => collect($velocity['rising'])->merge($velocity['falling'])->pluck('page_url')->map(fn($url) => Str::limit($url, 15))->toArray(),
+                    'datasets' => [[
+                        'label' => 'Hit Velocity',
+                        'data' => collect($velocity['rising'])->pluck('hit_count')->merge(collect($velocity['falling'])->pluck('hit_count')->map(fn($h) => -$h))->toArray(),
+                        'backgroundColor' => collect($velocity['rising'])->map(fn() => '#10b981')->merge(collect($velocity['falling'])->map(fn() => '#ef4444'))->toArray(),
+                        'borderRadius' => 6,
+                    ]]
+                ]
+            ]
+        ];
+    }
+
+    private function runSessionJourney(Organization $organization): array
+    {
+        $flows = $this->pixelIntelligence->getJourneyFlows($organization);
+
+        return [
+            'action' => 'session_journey',
+            'label'  => 'User session journey flows retrieved',
+            'data'   => $flows,
+        ];
+    }
+
+    private function runPageDetail(Organization $organization, string $url): array
+    {
+        $detail = $this->pixelIntelligence->getPageDetail($organization, $url);
+
+        return [
+            'action' => 'page_detail',
+            'label'  => "Page detail for {$url}",
+            'data'   => $detail,
+        ];
+    }
+
+    private function runDeviceSplit(Organization $organization): array
+    {
+        $split   = $this->pixelIntelligence->getDeviceSplit($organization);
+        $summary = $this->pixelIntelligence->getSummary($organization, 7);
+
+        // Prepare Chart Data
+        $labels = array_map(fn($k) => ucfirst($k), array_keys($split));
+        $values = array_values($split);
+
+        return [
+            'action' => 'device_split',
+            'label'  => 'Device traffic breakdown retrieved',
+            'data'   => [
+                'device_split' => $split,
+                'period'       => '7 days',
+                'total_hits'   => $summary['total_hits'],
+            ],
+            'chart'  => [
+                'type' => 'doughnut',
+                'title' => 'Device Type Split',
+                'subtitle' => 'Traffic by Device (Last 7 Days)',
+                'data' => [
+                    'labels' => $labels,
+                    'datasets' => [[
+                        'data' => $values,
+                        'backgroundColor' => ['#10b981', '#3b82f6', '#f59e0b', '#8b5cf6'],
+                        'borderWidth' => 0
+                    ]]
+                ]
+            ]
+        ];
+    }
+
+    private function runEngagementTrend(Organization $organization): array
+    {
+        $current = $this->pixelIntelligence->getSummary($organization, 7);
+        $prior   = $this->pixelIntelligence->getSummary($organization, 14);
+
+        return [
+            'action' => 'engagement_trend',
+            'label'  => 'Engagement and traffic quality trend',
+            'data'   => [
+                'last_7_days'  => $current,
+                'last_14_days' => $prior,
+            ],
+        ];
+    }
 }
+

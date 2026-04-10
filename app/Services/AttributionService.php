@@ -38,47 +38,51 @@ class AttributionService
     }
 
     /**
-     * Group traffic by channel (Organic, Paid, Social, etc.)
+     * Group traffic by channel (Organic, Paid, Social, etc.) using DB-level aggregation.
+     * Note: Channel classification is done via SQL CASE expressions instead of loading
+     * all rows into PHP memory — safe at any scale.
      */
     private function getChannelStats(Organization $organization, Carbon $startDate): array
     {
-        $events = AdTrackEvent::where('organization_id', $organization->id)
+        // DB-level channel classification via CASE WHEN
+        $rows = AdTrackEvent::where('organization_id', $organization->id)
             ->where('created_at', '>=', $startDate)
             ->where('is_bot', false)
+            ->selectRaw("
+                CASE
+                    WHEN gclid IS NOT NULL OR utm_medium IN ('cpc','ppc','paid') OR google_campaign_id IS NOT NULL THEN 'Paid Search'
+                    WHEN referrer REGEXP '(facebook\\.com|twitter\\.com|x\\.com|instagram\\.com|linkedin\\.com|pinterest\\.com|tiktok\\.com|reddit\\.com)' THEN 'Social'
+                    WHEN referrer IS NOT NULL AND referrer != '' AND utm_medium NOT IN ('cpc','ppc','paid') THEN 'Referral'
+                    WHEN utm_source IN ('google','bing','yandex','duckduckgo') AND (utm_medium IS NULL OR utm_medium NOT IN ('cpc','ppc','paid')) THEN 'Organic Search'
+                    ELSE 'Direct'
+                END AS channel,
+                COUNT(*) as hits,
+                SUM(CASE WHEN duration_seconds >= 30 OR max_scroll_depth >= 50 THEN 1 ELSE 0 END) as engaged
+            ")
+            ->groupBy('channel')
             ->get();
 
-        $stats = [
-            'Paid Search'    => ['hits' => 0, 'engagement' => 0, 'leads' => 0],
-            'Organic Search' => ['hits' => 0, 'engagement' => 0, 'leads' => 0],
-            'Social'         => ['hits' => 0, 'engagement' => 0, 'leads' => 0],
-            'Direct'         => ['hits' => 0, 'engagement' => 0, 'leads' => 0],
-            'Referral'       => ['hits' => 0, 'engagement' => 0, 'leads' => 0],
+        $channels = [
+            'Paid Search'    => ['hits' => 0, 'engagement' => 0, 'engagement_rate' => 0],
+            'Organic Search' => ['hits' => 0, 'engagement' => 0, 'engagement_rate' => 0],
+            'Social'         => ['hits' => 0, 'engagement' => 0, 'engagement_rate' => 0],
+            'Direct'         => ['hits' => 0, 'engagement' => 0, 'engagement_rate' => 0],
+            'Referral'       => ['hits' => 0, 'engagement' => 0, 'engagement_rate' => 0],
         ];
 
-        foreach ($events as $event) {
-            $channel = $this->classifyChannel($event);
-            if (!isset($stats[$channel])) $stats[$channel] = ['hits' => 0, 'engagement' => 0, 'leads' => 0];
-
-            $stats[$channel]['hits']++;
-            
-            // Engagement logic (using dwell time or scroll)
-            if (($event->duration_seconds >= 30) || ($event->max_scroll_depth >= 50)) {
-                $stats[$channel]['engagement']++;
+        foreach ($rows as $row) {
+            $name = $row->channel;
+            if (!isset($channels[$name])) {
+                $channels[$name] = ['hits' => 0, 'engagement' => 0, 'engagement_rate' => 0];
             }
-
-            // Lead logic (using lead scoring threshold - assumed 70+ if we had it here, 
-            // but we can use is_engaged as a proxy for leads in this rapid summary)
-            if ($event->metadata['is_engaged'] ?? false) {
-                $stats[$channel]['leads']++;
-            }
+            $channels[$name]['hits']           = (int) $row->hits;
+            $channels[$name]['engagement']     = (int) $row->engaged;
+            $channels[$name]['engagement_rate'] = $row->hits > 0
+                ? round(($row->engaged / $row->hits) * 100, 1)
+                : 0;
         }
 
-        // Calculate rates
-        foreach ($stats as $name => &$data) {
-            $data['engagement_rate'] = $data['hits'] > 0 ? round(($data['engagement'] / $data['hits']) * 100, 1) : 0;
-        }
-
-        return $stats;
+        return $channels;
     }
 
     /**
