@@ -75,6 +75,9 @@ class PiqueReportController extends Controller
 
         $jobId = Str::uuid()->toString();
         
+        // Initialize status before dispatching to prevent race conditions in sync mode
+        \Illuminate\Support\Facades\Cache::put("pique_report_{$jobId}_status", 'pending', 3600);
+
         // Dispatch to background queue
         \App\Jobs\GenerateSeoReportJob::dispatch(
             $org, 
@@ -84,8 +87,6 @@ class PiqueReportController extends Controller
             $endDate, 
             $jobId
         );
-
-        \Illuminate\Support\Facades\Cache::put("pique_report_{$jobId}_status", 'pending', 3600);
 
         return response()->json([
             'job_id' => $jobId,
