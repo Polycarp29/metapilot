@@ -51,6 +51,7 @@ class GenerateSeoReportJob implements ShouldQueue
         ForecastService $forecastService
     ) {
         Cache::put("pique_report_{$this->jobId}_status", 'processing', 3600);
+        Log::info("PiqueReportJob [{$this->jobId}]: Started processing.");
 
         try {
             $reportData = [];
@@ -134,6 +135,8 @@ class GenerateSeoReportJob implements ShouldQueue
                 $reportData[] = $pData;
             }
 
+            Log::info("PiqueReportJob [{$this->jobId}]: Data aggregated. Rendering PDF.");
+
             // Render PDF
             $pdf = Pdf::loadView('pdf.seo-report', [
                 'organization' => $this->organization,
@@ -143,10 +146,16 @@ class GenerateSeoReportJob implements ShouldQueue
             ])->setPaper('a4', 'portrait')
               ->setOption('defaultFont', 'sans-serif')
               ->setOption('isHtml5ParserEnabled', true)
-              ->setOption('isRemoteEnabled', true);
+              ->setOption('isRemoteEnabled', false);
 
             $filename = "seo-report-{$this->jobId}.pdf";
+            
+            if (!Storage::disk('public')->exists('reports')) {
+                Storage::disk('public')->makeDirectory('reports');
+            }
             Storage::disk('public')->put("reports/{$filename}", $pdf->output());
+
+            Log::info("PiqueReportJob [{$this->jobId}]: PDF generated and stored: {$filename}");
 
             $result = [
                 'url'        => url("storage/reports/{$filename}"),
