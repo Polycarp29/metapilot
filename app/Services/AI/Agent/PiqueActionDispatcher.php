@@ -23,6 +23,7 @@ use App\Services\OpenAIService;
 use App\Services\LeadScoringService;
 use App\Services\AttributionService;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Str;
 
 class PiqueActionDispatcher
 {
