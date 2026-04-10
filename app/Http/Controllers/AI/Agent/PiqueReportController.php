@@ -102,6 +102,8 @@ class PiqueReportController extends Controller
         $result = \Illuminate\Support\Facades\Cache::get("pique_report_{$jobId}_result");
         $error  = \Illuminate\Support\Facades\Cache::get("pique_report_{$jobId}_error");
 
+        Log::info("PiqueReportController: checkStatus for [{$jobId}] found status: {$status}");
+
         return response()->json([
             'status' => $status,
             'data'   => $result,
