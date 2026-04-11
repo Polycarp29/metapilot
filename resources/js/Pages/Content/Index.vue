@@ -1,551 +1,760 @@
 <template>
   <AppLayout title="Content Hub">
-    <div class="max-w-[1440px] mx-auto pb-20">
-      <!-- Header -->
-      <div class="flex flex-col md:flex-row md:items-center justify-between gap-6 mb-8">
-        <div>
-          <h1 class="text-3xl font-extrabold text-slate-900 tracking-tight mb-2">Content Hub</h1>
-          <p class="text-slate-500 font-medium">Create, optimize, and manage your SEO content with AI assistance.</p>
-        </div>
+    <div class="max-w-[1440px] mx-auto pb-24">
 
-        <!-- Tab Switches (Pill Style) -->
-        <div class="flex items-center bg-slate-100 p-1.5 rounded-2xl border border-slate-200/60 shadow-inner w-fit">
-          <button 
-            @click="activeTab = 'write'"
-            class="px-5 py-2.5 rounded-xl text-sm font-bold transition-all duration-300 flex items-center gap-2"
-            :class="activeTab === 'write' ? 'bg-white text-blue-600 shadow-sm border border-slate-100' : 'text-slate-500 hover:text-slate-700'"
-          >
-            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" /></svg>
-            Write Content
-          </button>
-          <button 
-            @click="activeTab = 'humanizer'"
-            class="px-5 py-2.5 rounded-xl text-sm font-bold transition-all duration-300 flex items-center gap-2"
-            :class="activeTab === 'humanizer' ? 'bg-white text-blue-600 shadow-sm border border-slate-100' : 'text-slate-500 hover:text-slate-700'"
-          >
-            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" /></svg>
-            AI Humanizer
-          </button>
-          <button 
-            @click="activeTab = 'audit'"
-            class="px-5 py-2.5 rounded-xl text-sm font-bold transition-all duration-300 flex items-center gap-2"
-            :class="activeTab === 'audit' ? 'bg-white text-blue-600 shadow-sm border border-slate-100' : 'text-slate-500 hover:text-slate-700'"
-          >
-            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01" /></svg>
-            SEO Audit
-          </button>
-        </div>
-      </div>
+      <!-- ══════════════════════════════════════════
+           HERO HEADER
+      ══════════════════════════════════════════ -->
+      <div class="relative mb-10 overflow-hidden rounded-[2.5rem] bg-slate-900 p-10 shadow-2xl">
+        <div class="pointer-events-none absolute -right-20 -top-20 h-80 w-80 rounded-full bg-indigo-500/10 blur-3xl"></div>
+        <div class="pointer-events-none absolute -bottom-16 left-10 h-60 w-60 rounded-full bg-violet-500/10 blur-3xl"></div>
 
-      <!-- Tab Content Area -->
-      <div class="mt-8">
-        <!-- Write Content Empty/List State -->
-        <div v-if="activeTab === 'write' && !editingPost">
-          <div class="flex items-center justify-between mb-8">
-            <div class="flex items-center gap-4">
-               <h2 class="text-2xl font-black text-slate-900">Blog Posts</h2>
-               <span class="bg-blue-100 text-blue-600 px-3 py-1 rounded-full text-xs font-black">{{ posts.length }} Total</span>
+        <div class="relative flex flex-col gap-8 md:flex-row md:items-center md:justify-between">
+          <div>
+            <p class="mb-2 text-[10px] font-black uppercase tracking-[0.3em] text-indigo-400">Metapilot Platform</p>
+            <h1 class="mb-3 text-4xl font-black tracking-tight text-white">Content Hub</h1>
+            <p class="max-w-md text-sm font-medium leading-relaxed text-slate-400">Create, optimize, and publish SEO-ready content — powered by AI at every step.</p>
+
+            <div class="mt-6 flex items-center gap-6">
+              <div class="text-center">
+                <p class="text-2xl font-black text-white">{{ posts.length }}</p>
+                <p class="text-[10px] font-bold uppercase tracking-widest text-slate-500">Posts</p>
+              </div>
+              <div class="h-8 w-px bg-white/10"></div>
+              <div class="text-center">
+                <p class="text-2xl font-black text-white">{{ posts.filter(p => p.status === 'published').length }}</p>
+                <p class="text-[10px] font-bold uppercase tracking-widest text-slate-500">Published</p>
+              </div>
+              <div class="h-8 w-px bg-white/10"></div>
+              <div class="text-center">
+                <p class="text-2xl font-black text-white">{{ posts.reduce((a, p) => a + (p.word_count || 0), 0).toLocaleString() }}</p>
+                <p class="text-[10px] font-bold uppercase tracking-widest text-slate-500">Total Words</p>
+              </div>
             </div>
-            <button @click="createNewPost" class="bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-2xl font-bold flex items-center gap-2 shadow-lg shadow-blue-500/20 transition-all">
-               <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6" /></svg>
-               New Post
+          </div>
+
+          <div class="flex flex-col items-end gap-4">
+            <!-- Glassy tab bar -->
+            <div class="flex items-center gap-1 rounded-2xl border border-white/10 bg-white/5 p-1.5 backdrop-blur-sm">
+              <button
+                @click="switchTab('write')"
+                class="flex items-center gap-2 rounded-xl px-5 py-2.5 text-sm font-bold transition-all duration-300"
+                :class="activeTab === 'write' ? 'bg-white text-indigo-700 shadow-lg' : 'text-slate-400 hover:text-white'"
+              >
+                <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/></svg>
+                Write
+              </button>
+              <button
+                @click="switchTab('humanizer')"
+                class="flex items-center gap-2 rounded-xl px-5 py-2.5 text-sm font-bold transition-all duration-300"
+                :class="activeTab === 'humanizer' ? 'bg-white text-indigo-700 shadow-lg' : 'text-slate-400 hover:text-white'"
+              >
+                <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"/></svg>
+                Humanizer
+              </button>
+              <button
+                @click="switchTab('audit')"
+                class="flex items-center gap-2 rounded-xl px-5 py-2.5 text-sm font-bold transition-all duration-300"
+                :class="activeTab === 'audit' ? 'bg-white text-indigo-700 shadow-lg' : 'text-slate-400 hover:text-white'"
+              >
+                <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"/></svg>
+                SEO Audit
+              </button>
+            </div>
+
+            <button
+              v-if="activeTab === 'write'"
+              @click="createNewPost"
+              class="group flex items-center gap-2 rounded-2xl bg-indigo-600 px-6 py-3 text-sm font-black text-white shadow-lg transition-all hover:scale-[1.02] hover:bg-indigo-700 hover:shadow-xl"
+            >
+              <svg class="h-5 w-5 transition-transform duration-300 group-hover:rotate-90" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M12 6v6m0 0v6m0-6h6m-6 0H6"/></svg>
+              New Post
             </button>
           </div>
+        </div>
+      </div>
 
-          <div v-if="posts.length === 0" class="text-center py-24 bg-slate-50 rounded-[40px] border-2 border-dashed border-slate-200">
-            <div class="w-20 h-20 bg-white rounded-3xl flex items-center justify-center mx-auto mb-6 shadow-sm">
-              <svg class="w-10 h-10 text-slate-300" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 20H5a2 2 0 01-2-2V6a2 2 0 012-2h10l4 4v10a2 2 0 01-2 2z" /></svg>
-            </div>
-            <h3 class="text-xl font-bold text-slate-900 mb-2">No Blog Posts Yet</h3>
-            <p class="text-slate-500 max-w-sm mx-auto">Start creating SEO-optimized content to boost your rankings.</p>
-            <button @click="createNewPost" class="mt-6 text-blue-600 font-bold hover:underline">Create your first post →</button>
+      <!-- ══════════════════════════════════════════
+           TAB 1 — WRITE (posts list)
+      ══════════════════════════════════════════ -->
+      <div v-if="activeTab === 'write' && !editingPost">
+
+        <!-- Empty State -->
+        <div v-if="posts.length === 0" class="flex flex-col items-center justify-center py-32 text-center">
+          <div class="mb-8 flex h-28 w-28 items-center justify-center rounded-[2rem] bg-indigo-50 shadow-inner">
+            <svg class="h-14 w-14 text-indigo-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M19 20H5a2 2 0 01-2-2V6a2 2 0 012-2h10l4 4v10a2 2 0 01-2 2z"/>
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M17 8h-3a1 1 0 01-1-1V4"/>
+            </svg>
           </div>
-
-          <div v-else class="grid grid-cols-1 gap-4">
-             <div v-for="post in posts" :key="post.id" class="group bg-white p-6 rounded-3xl border border-slate-100 hover:shadow-xl hover:shadow-slate-200/30 transition-all flex items-center justify-between">
-                <div class="flex items-center gap-6 flex-1">
-                   <div class="w-14 h-14 bg-slate-50 rounded-2xl flex items-center justify-center group-hover:bg-blue-50 transition-colors">
-                      <svg class="w-7 h-7 text-slate-400 group-hover:text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
-                   </div>
-                   <div>
-                      <h3 class="text-lg font-black text-slate-900 mb-1 flex items-center gap-3">
-                        {{ post.title }}
-                        <span v-if="post.status === 'published'" class="px-2 py-0.5 bg-emerald-100 text-emerald-600 text-[10px] uppercase font-black rounded-lg">Published</span>
-                        <span v-else class="px-2 py-0.5 bg-slate-100 text-slate-500 text-[10px] uppercase font-black rounded-lg">{{ post.status }}</span>
-                      </h3>
-                      <div class="flex items-center gap-4 text-sm font-bold text-slate-400">
-                         <span class="flex items-center gap-1.5">
-                           <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z" /></svg>
-                           {{ post.category?.name || 'Uncategorized' }}
-                         </span>
-                         <span>•</span>
-                         <span>{{ post.word_count }} words</span>
-                         <span>•</span>
-                         <span>Updated {{ formatDate(post.updated_at) }}</span>
-                      </div>
-                   </div>
-                </div>
-
-                <div class="flex items-center gap-8">
-                   <div class="flex flex-col items-center">
-                      <p class="text-[10px] uppercase font-black text-slate-400 mb-1">SEO Health</p>
-                      <div class="relative w-14 h-14">
-                         <svg class="w-full h-full -rotate-90" viewBox="0 0 36 36">
-                            <circle cx="18" cy="18" r="16" fill="none" class="stroke-slate-100" stroke-width="3"></circle>
-                            <circle cx="18" cy="18" r="16" fill="none" :class="getScoreColorClass(post.seo_score)" stroke-width="3" stroke-dasharray="100" :stroke-dashoffset="100 - (post.seo_score || 0)" stroke-linecap="round" class="transition-all duration-1000" style="stroke: currentColor;"></circle>
-                         </svg>
-                         <div class="absolute inset-0 flex items-center justify-center text-[11px] font-black text-slate-900">
-                            {{ post.seo_score }}%
-                         </div>
-                      </div>
-                   </div>
-                   
-                   <div class="flex flex-col items-center">
-                      <p class="text-[10px] uppercase font-black text-slate-400 mb-1">Human Score</p>
-                      <div class="px-3 py-1.5 rounded-full font-black text-[11px]" :class="getAiScoreClass(post.ai_content_score)">
-                         {{ post.ai_content_score }}%
-                      </div>
-                   </div>
-                   <div class="flex items-center gap-2">
-                      <button @click="editPost(post)" class="p-3 bg-slate-50 hover:bg-blue-50 text-slate-400 hover:text-blue-600 rounded-2xl transition-all">
-                         <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" /></svg>
-                      </button>
-                      <button @click="deletePost(post)" class="p-3 bg-slate-50 hover:bg-rose-50 text-slate-400 hover:text-rose-600 rounded-2xl transition-all">
-                         <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
-                      </button>
-                   </div>
-                </div>
-             </div>
-          </div>
+          <h3 class="mb-2 text-2xl font-black text-slate-900">Your content canvas is empty</h3>
+          <p class="mb-8 max-w-sm text-sm font-medium text-slate-500">Start writing SEO-optimized content and watch your rankings climb. Powered by AI from outline to publish.</p>
+          <button @click="createNewPost" class="flex items-center gap-2 rounded-2xl bg-indigo-600 px-8 py-4 text-sm font-black text-white shadow-xl transition-all hover:scale-[1.02] hover:bg-indigo-700 hover:shadow-2xl">
+            <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M12 6v6m0 0v6m0-6h6m-6 0H6"/></svg>
+            Write your first post
+          </button>
         </div>
 
-        <!-- Tab 2: Humanizer -->
-        <div v-if="activeTab === 'humanizer'">
-          <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
-            <!-- Input -->
-            <div class="bg-white p-8 rounded-[3rem] border border-slate-100 shadow-sm">
-               <h3 class="text-xl font-black text-slate-900 mb-6 flex items-center gap-3">
-                 <span class="w-2 h-8 bg-blue-600 rounded-full"></span>
-                 Input Content
-               </h3>
-               <textarea 
-                  v-model="humanizer.input"
-                  placeholder="Paste AI-generated content here (min 100 words)..."
-                  class="w-full h-96 p-6 bg-slate-50 border-none rounded-3xl focus:ring-2 focus:ring-blue-500/20 font-medium text-slate-700 placeholder:text-slate-400 transition-all resize-none"
-               ></textarea>
-               
-               <div class="mt-8 flex items-center justify-between">
-                  <div class="flex items-center gap-4">
-                     <p class="text-sm font-black text-slate-500 uppercase">Tone:</p>
-                     <select v-model="humanizer.tone" class="bg-slate-50 border-none rounded-xl px-4 py-2 text-sm font-bold text-slate-600 focus:ring-2 focus:ring-blue-500/20">
-                        <option value="professional">Professional</option>
-                        <option value="conversational">Conversational</option>
-                        <option value="academic">Academic</option>
-                        <option value="creative">Creative</option>
-                     </select>
-                  </div>
-                  <button 
-                    @click="runHumanizer"
-                    :disabled="humanizing || humanizer.input.length < 100"
-                    class="bg-slate-900 hover:bg-black text-white px-8 py-3 rounded-2xl font-black flex items-center gap-2 transition-all disabled:opacity-50"
-                  >
-                    <svg v-if="humanizing" class="animate-spin h-5 w-5 text-white" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
-                    {{ humanizing ? 'Humanizing...' : 'Humanize Content' }}
-                  </button>
-               </div>
+        <!-- Posts List -->
+        <div v-else class="space-y-3">
+          <div
+            v-for="post in posts"
+            :key="post.id"
+            class="group relative flex items-center justify-between overflow-hidden rounded-2xl border border-slate-100 bg-white px-6 py-5 shadow-sm transition-all duration-300 hover:-translate-y-0.5 hover:shadow-lg hover:shadow-slate-200/60"
+          >
+            <!-- Left accent bar -->
+            <div
+              class="absolute left-0 top-0 h-full w-1 rounded-l-2xl transition-all duration-300"
+              :class="{
+                'bg-emerald-400': post.status === 'published',
+                'bg-amber-400': post.status === 'review',
+                'bg-slate-300': post.status === 'draft',
+                'bg-slate-200': post.status === 'archived',
+              }"
+            ></div>
+
+            <!-- Icon -->
+            <div class="mr-5 flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-xl bg-slate-50 transition-colors group-hover:bg-indigo-50">
+              <svg class="h-6 w-6 text-slate-400 transition-colors group-hover:text-indigo-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
+              </svg>
             </div>
 
-            <!-- Output -->
-            <div class="bg-white p-8 rounded-[3rem] border border-slate-100 shadow-sm relative overflow-hidden">
-               <div v-if="!humanizer.output" class="h-full flex flex-col items-center justify-center text-center py-20">
-                  <div class="w-16 h-16 bg-slate-50 rounded-2xl flex items-center justify-center mb-6">
-                    <svg class="w-8 h-8 text-slate-300" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z" /></svg>
-                  </div>
-                  <h4 class="text-lg font-bold text-slate-400">Humanized output will appear here</h4>
-               </div>
-               
-               <div v-else>
-                  <div class="flex items-center justify-between mb-6">
-                    <h3 class="text-xl font-black text-slate-900 flex items-center gap-3">
-                      <span class="w-2 h-8 bg-emerald-500 rounded-full"></span>
-                      Humanized Result
-                    </h3>
-                    <button @click="copyOutput" class="text-blue-600 font-bold hover:underline">Copy Result</button>
-                  </div>
-                  
-                  <div class="grid grid-cols-2 gap-4 mb-8">
-                     <div class="bg-rose-50 p-4 rounded-2xl border border-rose-100">
-                        <p class="text-[10px] uppercase font-black text-rose-600 mb-1">Before AI Score</p>
-                        <p class="text-2xl font-black text-rose-700">{{ humanizer.result.initial_ai_score }}%</p>
-                     </div>
-                     <div class="bg-emerald-50 p-4 rounded-2xl border border-emerald-100">
-                        <p class="text-[10px] uppercase font-black text-emerald-600 mb-1">After AI Score</p>
-                        <p class="text-2xl font-black text-emerald-700">{{ humanizer.result.final_ai_score }}%</p>
-                     </div>
-                  </div>
-
-                  <div class="p-6 bg-slate-50 rounded-3xl font-medium text-slate-700 leading-relaxed overflow-y-auto max-h-[400px]">
-                    {{ humanizer.output }}
-                  </div>
-               </div>
-            </div>
-          </div>
-        </div>
-
-        <!-- Tab 3: SEO Audit -->
-        <div v-if="activeTab === 'audit'">
-           <!-- Implementation for Audit Tab -->
-           <div class="max-w-3xl mx-auto bg-white p-12 rounded-[3.5rem] border border-slate-100 shadow-xl shadow-slate-200/20 text-center">
-              <div class="w-24 h-24 bg-blue-50 text-blue-600 rounded-[2rem] flex items-center justify-center mx-auto mb-8">
-                 <svg class="w-12 h-12" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>
+            <!-- Meta -->
+            <div class="flex flex-1 flex-col gap-1 min-w-0">
+              <div class="flex items-center gap-3">
+                <h3 class="truncate text-base font-black text-slate-900">{{ post.title }}</h3>
+                <span
+                  class="flex-shrink-0 rounded-lg px-2.5 py-0.5 text-[9px] font-black uppercase tracking-widest"
+                  :class="{
+                    'bg-emerald-100 text-emerald-700': post.status === 'published',
+                    'bg-amber-100 text-amber-700': post.status === 'review',
+                    'bg-slate-100 text-slate-500': post.status === 'draft',
+                    'bg-red-50 text-red-400': post.status === 'archived',
+                  }"
+                >{{ post.status }}</span>
               </div>
-              <h2 class="text-3xl font-black text-slate-900 mb-4">Deep Content Audit</h2>
-              <p class="text-slate-500 font-medium mb-12">Analyze any URL or pasted content against your target keywords to find gaps and optimization opportunities.</p>
-              
-              <div class="space-y-6 text-left">
-                 <div>
-                    <label class="block text-sm font-black text-slate-400 uppercase tracking-wider mb-2">Audit Target</label>
-                    <input 
-                      v-model="audit.url" 
-                      type="url" 
-                      placeholder="https://example.com/blog-post" 
-                      class="w-full px-6 py-4 bg-slate-50 border-none rounded-2xl focus:ring-2 focus:ring-blue-500/20 font-bold"
-                    >
-                 </div>
-                 
+              <div class="flex items-center gap-3 text-[11px] font-bold text-slate-400">
+                <span class="flex items-center gap-1">
+                  <svg class="h-3 w-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z"/></svg>
+                  {{ post.category?.name || 'Uncategorized' }}
+                </span>
+                <span class="text-slate-200">•</span>
+                <span>{{ (post.word_count || 0).toLocaleString() }} words</span>
+                <span class="text-slate-200">•</span>
+                <span>{{ formatDate(post.updated_at) }}</span>
+              </div>
+            </div>
+
+            <!-- Scores + Actions -->
+            <div class="ml-6 flex items-center gap-6">
+              <!-- SEO Ring -->
+              <div class="flex flex-col items-center gap-1">
+                <p class="text-[9px] font-black uppercase tracking-widest text-slate-400">SEO</p>
+                <div class="relative h-12 w-12">
+                  <svg class="h-full w-full -rotate-90" viewBox="0 0 36 36">
+                    <circle cx="18" cy="18" r="15" fill="none" class="stroke-slate-100" stroke-width="3"></circle>
+                    <circle
+                      cx="18" cy="18" r="15" fill="none"
+                      :class="getScoreColorClass(post.seo_score)"
+                      stroke-width="3"
+                      stroke-dasharray="94.25"
+                      :stroke-dashoffset="94.25 - (94.25 * (post.seo_score || 0) / 100)"
+                      stroke-linecap="round"
+                      class="transition-all duration-1000"
+                      style="stroke:currentColor"
+                    ></circle>
+                  </svg>
+                  <div class="absolute inset-0 flex items-center justify-center text-[11px] font-black text-slate-800">{{ post.seo_score || 0 }}</div>
+                </div>
+              </div>
+
+              <!-- AI Score -->
+              <div class="flex flex-col items-center gap-1">
+                <p class="text-[9px] font-black uppercase tracking-widest text-slate-400">AI</p>
+                <span class="rounded-xl px-3 py-1.5 text-[11px] font-black" :class="getAiScoreClass(post.ai_content_score)">{{ post.ai_content_score || 0 }}%</span>
+              </div>
+
+              <!-- Actions -->
+              <div class="flex items-center gap-1.5">
+                <button @click="editPost(post)" class="rounded-xl p-2.5 text-slate-400 transition-all hover:bg-indigo-50 hover:text-indigo-600" title="Edit">
+                  <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/></svg>
+                </button>
+                <button @click="deletePost(post)" class="rounded-xl p-2.5 text-slate-400 transition-all hover:bg-rose-50 hover:text-rose-600" title="Delete">
+                  <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg>
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ══════════════════════════════════════════
+           TAB 2 — AI HUMANIZER
+      ══════════════════════════════════════════ -->
+      <div v-if="activeTab === 'humanizer'">
+        <div class="grid grid-cols-1 gap-6 lg:grid-cols-2">
+
+          <!-- Input Panel -->
+          <div class="flex flex-col gap-5 rounded-3xl border border-slate-100 bg-white p-8 shadow-sm">
+            <div class="flex items-center gap-3">
+              <div class="flex h-9 w-9 items-center justify-center rounded-xl bg-slate-900 text-white">
+                <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6M5 5h14a2 2 0 012 2v10a2 2 0 01-2 2H5a2 2 0 01-2-2V7a2 2 0 012-2z"/></svg>
+              </div>
+              <div>
+                <h3 class="text-sm font-black uppercase tracking-wider text-slate-900">Input</h3>
+                <p class="text-[10px] font-bold text-slate-400">Paste AI-generated text (min 100 words)</p>
+              </div>
+            </div>
+
+            <textarea
+              v-model="humanizer.input"
+              placeholder="Paste your AI-generated content here..."
+              class="h-80 w-full resize-none rounded-2xl border border-slate-100 bg-slate-50 p-5 text-sm font-medium text-slate-700 placeholder:text-slate-300 outline-none transition-all focus:border-indigo-200 focus:ring-4 focus:ring-indigo-50"
+            ></textarea>
+
+            <div class="flex items-center justify-between">
+              <div class="flex items-center gap-3">
+                <p class="text-[10px] font-black uppercase tracking-widest text-slate-500">Tone:</p>
+                <select v-model="humanizer.tone" class="rounded-xl border border-slate-100 bg-slate-50 px-4 py-2 text-sm font-bold text-slate-700 outline-none focus:border-indigo-200 focus:ring-2 focus:ring-indigo-50">
+                  <option value="professional">Professional</option>
+                  <option value="conversational">Conversational</option>
+                  <option value="academic">Academic</option>
+                  <option value="creative">Creative</option>
+                </select>
+              </div>
+              <button
+                @click="runHumanizer"
+                :disabled="humanizing || humanizer.input.length < 100"
+                class="flex items-center gap-2 rounded-2xl bg-slate-900 px-7 py-3 text-sm font-black text-white shadow-lg transition-all hover:scale-[1.02] hover:bg-black hover:shadow-xl disabled:cursor-not-allowed disabled:scale-100 disabled:opacity-40"
+              >
+                <svg v-if="humanizing" class="h-4 w-4 animate-spin" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
+                {{ humanizing ? 'Humanizing...' : 'Humanize Content' }}
+              </button>
+            </div>
+          </div>
+
+          <!-- Output Panel -->
+          <div class="flex flex-col gap-5 rounded-3xl border border-slate-100 bg-white p-8 shadow-sm">
+            <div v-if="!humanizer.output" class="flex h-full flex-col items-center justify-center gap-5 py-16 text-center">
+              <div class="flex h-16 w-16 items-center justify-center rounded-2xl bg-indigo-50">
+                <svg class="h-8 w-8 text-indigo-300" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M13 10V3L4 14h7v7l9-11h-7z"/></svg>
+              </div>
+              <div>
+                <p class="text-base font-black text-slate-400">Results appear here</p>
+                <p class="mt-1 text-xs font-bold text-slate-300">AI-rewritten content with before/after score</p>
+              </div>
+            </div>
+
+            <div v-else class="flex h-full flex-col gap-5">
+              <div class="flex items-center justify-between">
+                <div class="flex items-center gap-3">
+                  <div class="flex h-9 w-9 items-center justify-center rounded-xl bg-emerald-500 text-white">
+                    <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 13l4 4L19 7"/></svg>
+                  </div>
                   <div>
-                    <label class="block text-sm font-black text-slate-400 uppercase tracking-wider mb-2">Or Paste Content</label>
-                    <textarea 
-                      v-model="audit.content" 
-                      placeholder="Paste your content here for analysis..."
-                      class="w-full h-48 px-6 py-4 bg-slate-50 border-none rounded-2xl focus:ring-2 focus:ring-blue-500/20 font-bold"
-                    ></textarea>
-                 </div>
-                  
-                 <div>
-                    <label class="block text-sm font-black text-slate-400 uppercase tracking-wider mb-2">Target Keywords (one per line)</label>
-                    <textarea 
-                      v-model="audit.keywordsRaw" 
-                      placeholder="primary keyword&#10;secondary keyword..."
-                      class="w-full h-32 px-6 py-4 bg-slate-50 border-none rounded-2xl focus:ring-2 focus:ring-blue-500/20 font-bold"
-                    ></textarea>
-                 </div>
-                 
-                 <button 
-                   @click="runAudit"
-                   :disabled="auditing || !audit.keywordsRaw"
-                   class="w-full py-5 bg-blue-600 hover:bg-blue-700 text-white rounded-2xl font-black text-xl shadow-xl shadow-blue-500/20 transition-all flex items-center justify-center gap-3 disabled:opacity-50"
-                 >
-                   <svg v-if="auditing" class="animate-spin h-6 w-6 text-white" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
-                   {{ auditing ? 'Analyzing Content...' : 'Run SEO Audit' }}
-                 </button>
+                    <h3 class="text-sm font-black uppercase tracking-wider text-slate-900">Humanized Result</h3>
+                    <p class="text-[10px] font-bold text-slate-400">AI rewrite complete</p>
+                  </div>
+                </div>
+                <button @click="copyOutput" class="flex items-center gap-1.5 rounded-xl border border-slate-100 px-4 py-2 text-xs font-black text-indigo-600 transition-all hover:bg-indigo-50">
+                  <svg class="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"/></svg>
+                  Copy
+                </button>
               </div>
-           </div>
-           
-           <!-- Audit Results Modal/Panel (later) -->
-        </div>
 
-        <!-- Write Tab: Editor (Slide Over) -->
-        <Transition 
-          enter-active-class="transition duration-500 ease-out"
-          enter-from-class="translate-x-full"
-          enter-to-class="translate-x-0"
-          leave-active-class="transition duration-400 ease-in"
-          leave-from-class="translate-x-0"
-          leave-to-class="translate-x-full"
-        >
-          <div v-if="editingPost" class="fixed inset-0 z-50 bg-slate-900/40 backdrop-blur-sm flex justify-end">
-             <div class="w-full max-w-[95%] h-full bg-slate-50 flex flex-col shadow-2xl relative">
-                <!-- Editor Header -->
-                <div class="h-20 bg-white border-b border-slate-200 px-8 flex items-center justify-between">
-                   <div class="flex items-center gap-6">
-                      <button @click="closeEditor" class="p-2 hover:bg-slate-100 rounded-xl transition-colors">
-                        <svg class="w-6 h-6 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" /></svg>
-                      </button>
-                      <div>
-                        <input v-model="form.title" type="text" placeholder="Post Title..." class="text-xl font-black text-slate-900 border-none bg-transparent focus:ring-0 p-0 w-96">
-                      </div>
-                   </div>
-                   
-                   <div class="flex items-center gap-4">
-                      <span class="text-sm font-bold text-slate-400">{{ metrics.word_count }} words • {{ metrics.reading_time_minutes }} min read</span>
-                      <div class="h-8 w-px bg-slate-100 mx-2"></div>
-                      <button @click="saveDraft" :disabled="saving" class="px-6 py-2.5 rounded-xl text-sm font-bold text-slate-600 hover:bg-slate-100 transition-all">
-                        {{ saving ? 'Saving...' : 'Save Draft' }}
-                      </button>
-                      <button @click="publishPost" class="px-6 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-sm font-black shadow-lg shadow-blue-500/20 transition-all">
-                        Publish
-                      </button>
-                   </div>
+              <!-- Score comparison -->
+              <div class="grid grid-cols-2 gap-3">
+                <div class="rounded-2xl border border-rose-100 bg-rose-50 p-4">
+                  <p class="mb-1 text-[9px] font-black uppercase tracking-widest text-rose-500">Before</p>
+                  <p class="text-3xl font-black text-rose-600">{{ humanizer.result.initial_ai_score }}<span class="text-base">%</span></p>
+                  <p class="mt-0.5 text-[10px] font-bold text-rose-400">AI Detected</p>
+                </div>
+                <div class="rounded-2xl border border-emerald-100 bg-emerald-50 p-4">
+                  <p class="mb-1 text-[9px] font-black uppercase tracking-widest text-emerald-600">After</p>
+                  <p class="text-3xl font-black text-emerald-600">{{ humanizer.result.final_ai_score }}<span class="text-base">%</span></p>
+                  <p class="mt-0.5 text-[10px] font-bold text-emerald-500">AI Detected</p>
+                </div>
+              </div>
+
+              <!-- Improvement bar -->
+              <div>
+                <div class="mb-1.5 flex justify-between">
+                  <p class="text-[10px] font-black uppercase tracking-widest text-slate-400">Improvement</p>
+                  <p class="text-[10px] font-black text-emerald-600">-{{ humanizer.result.initial_ai_score - humanizer.result.final_ai_score }}% AI</p>
+                </div>
+                <div class="h-2 w-full overflow-hidden rounded-full bg-slate-100">
+                  <div
+                    class="h-full rounded-full bg-emerald-400 transition-all duration-1000"
+                    :style="`width: ${Math.min(100, ((humanizer.result.initial_ai_score - humanizer.result.final_ai_score) / Math.max(humanizer.result.initial_ai_score, 1)) * 100)}%`"
+                  ></div>
+                </div>
+              </div>
+
+              <!-- Text output -->
+              <div class="max-h-56 flex-1 overflow-y-auto rounded-2xl border border-slate-100 bg-slate-50 p-5 text-sm font-medium leading-relaxed text-slate-700 custom-scrollbar">
+                {{ humanizer.output }}
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ══════════════════════════════════════════
+           TAB 3 — SEO AUDIT
+      ══════════════════════════════════════════ -->
+      <div v-if="activeTab === 'audit'">
+        <div class="grid grid-cols-1 gap-6 lg:grid-cols-2">
+
+          <!-- Audit Form -->
+          <div class="rounded-3xl border border-slate-100 bg-white p-8 shadow-sm">
+            <div class="mb-8">
+              <h2 class="mb-1 text-xl font-black text-slate-900">Deep Content Audit</h2>
+              <p class="text-sm font-medium text-slate-500">Analyze any URL or content against your target keywords.</p>
+            </div>
+
+            <div class="space-y-5">
+              <div>
+                <label class="mb-2 block text-[10px] font-black uppercase tracking-widest text-slate-400">Target URL</label>
+                <div class="relative">
+                  <div class="pointer-events-none absolute inset-y-0 left-4 flex items-center">
+                    <svg class="h-4 w-4 text-slate-300" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1"/></svg>
+                  </div>
+                  <input v-model="audit.url" type="url" placeholder="https://example.com/blog-post"
+                    class="w-full rounded-2xl border border-slate-100 bg-slate-50 py-3.5 pl-11 pr-4 text-sm font-bold text-slate-700 placeholder:text-slate-300 outline-none transition-all focus:border-indigo-200 focus:ring-4 focus:ring-indigo-50">
+                </div>
+              </div>
+
+              <div class="flex items-center gap-3">
+                <div class="h-px flex-1 bg-slate-100"></div>
+                <span class="text-[10px] font-black uppercase tracking-widest text-slate-400">Or paste content</span>
+                <div class="h-px flex-1 bg-slate-100"></div>
+              </div>
+
+              <textarea v-model="audit.content" placeholder="Paste your content here for analysis..."
+                class="h-36 w-full resize-none rounded-2xl border border-slate-100 bg-slate-50 p-4 text-sm font-bold text-slate-700 placeholder:text-slate-300 outline-none transition-all focus:border-indigo-200 focus:ring-4 focus:ring-indigo-50">
+              </textarea>
+
+              <div>
+                <label class="mb-2 block text-[10px] font-black uppercase tracking-widest text-slate-400">Target Keywords <span class="normal-case font-bold text-indigo-400">(one per line)</span></label>
+                <textarea v-model="audit.keywordsRaw" placeholder="primary keyword&#10;secondary keyword&#10;long-tail keyword..."
+                  class="h-28 w-full resize-none rounded-2xl border border-slate-100 bg-slate-50 p-4 text-sm font-bold text-slate-700 placeholder:text-slate-300 outline-none transition-all focus:border-indigo-200 focus:ring-4 focus:ring-indigo-50">
+                </textarea>
+              </div>
+
+              <button
+                @click="runAudit"
+                :disabled="auditing || !audit.keywordsRaw"
+                class="flex w-full items-center justify-center gap-3 rounded-2xl bg-indigo-600 py-4 text-sm font-black text-white shadow-xl transition-all hover:scale-[1.01] hover:bg-indigo-700 hover:shadow-2xl disabled:cursor-not-allowed disabled:scale-100 disabled:opacity-50"
+              >
+                <svg v-if="auditing" class="h-5 w-5 animate-spin" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
+                <svg v-else class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
+                {{ auditing ? 'Analyzing Content...' : 'Run SEO Audit' }}
+              </button>
+            </div>
+          </div>
+
+          <!-- Inline Results (no modal) -->
+          <div class="rounded-3xl border border-slate-100 bg-white p-8 shadow-sm">
+            <div v-if="!auditResult" class="flex h-full flex-col items-center justify-center gap-4 py-20 text-center">
+              <div class="flex h-16 w-16 items-center justify-center rounded-2xl bg-slate-100">
+                <svg class="h-8 w-8 text-slate-300" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
+              </div>
+              <p class="text-base font-black text-slate-400">Audit results appear here</p>
+              <p class="max-w-xs text-xs font-bold text-slate-300">Run an audit on the left to see keyword gaps, opportunities, and priority fixes.</p>
+            </div>
+
+            <div v-else class="custom-scrollbar max-h-[680px] overflow-y-auto pr-1">
+              <!-- Score header -->
+              <div class="mb-6 flex items-center gap-6">
+                <div class="relative h-20 w-20 flex-shrink-0">
+                  <svg class="h-full w-full -rotate-90" viewBox="0 0 36 36">
+                    <circle cx="18" cy="18" r="15" fill="none" class="stroke-slate-100" stroke-width="3"></circle>
+                    <circle cx="18" cy="18" r="15" fill="none" class="text-indigo-500" stroke-width="3" stroke-dasharray="94.25" :stroke-dashoffset="94.25 - (94.25 * (auditResult.seo_score || 0) / 100)" stroke-linecap="round" style="stroke:currentColor; transition: stroke-dashoffset 1s ease;"></circle>
+                  </svg>
+                  <div class="absolute inset-0 flex items-center justify-center">
+                    <span class="text-lg font-black text-slate-900">{{ auditResult.seo_score }}</span>
+                  </div>
+                </div>
+                <div>
+                  <h3 class="text-xl font-black text-slate-900">Audit Report</h3>
+                  <p class="mt-1 text-sm font-medium leading-snug text-slate-500">{{ auditResult.summary }}</p>
+                </div>
+              </div>
+
+              <div class="space-y-4">
+                <!-- Keyword gaps -->
+                <div class="rounded-2xl border border-indigo-100 bg-indigo-50 p-5">
+                  <h4 class="mb-3 text-[10px] font-black uppercase tracking-widest text-indigo-600">Keyword Gaps</h4>
+                  <ul class="space-y-2">
+                    <li v-for="gap in auditResult.keyword_gaps" :key="gap" class="flex items-start gap-2 text-sm font-bold text-indigo-900">
+                      <span class="mt-1.5 h-1.5 w-1.5 flex-shrink-0 rounded-full bg-indigo-400"></span>
+                      {{ gap }}
+                    </li>
+                  </ul>
                 </div>
 
-                 <div class="flex-1 flex overflow-hidden relative">
-                   <!-- Editor Body -->
-                   <div class="flex-1 p-12 overflow-y-auto bg-white custom-scrollbar">
-                      <div class="max-w-4xl mx-auto">
-                         <!-- Focus Keyword & Meta -->
-                         <div class="grid grid-cols-1 md:grid-cols-2 gap-8 mb-12">
-                            <div>
-                               <label class="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">Focus Keyword</label>
-                               <input v-model="form.focus_keyword" @blur="runAnalysis" type="text" placeholder="e.g. SEO Content Guide" class="w-full px-5 py-3 bg-slate-50 border-none rounded-2xl focus:ring-2 focus:ring-blue-500/20 font-bold">
-                            </div>
-                            <div>
-                               <label class="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">Category</label>
-                               <select v-model="form.blog_category_id" class="w-full px-5 py-3 bg-slate-50 border-none rounded-2xl focus:ring-2 focus:ring-blue-500/20 font-bold">
-                                  <option :value="null">Uncategorized</option>
-                                  <option v-for="cat in categories" :key="cat.id" :value="cat.id">{{ cat.name }}</option>
-                               </select>
-                            </div>
-                            
-                            <!-- Search Optimization (SERP Content) -->
-                            <div class="col-span-full bg-slate-50/50 p-8 rounded-[2rem] border border-slate-100">
-                               <div class="flex items-center gap-3 mb-6">
-                                  <div class="w-8 h-8 bg-blue-100 text-blue-600 rounded-lg flex items-center justify-center">
-                                     <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>
-                                  </div>
-                                  <h4 class="text-sm font-black text-slate-900 uppercase tracking-widest">Search Appearance</h4>
-                               </div>
-                               
-                               <div class="grid grid-cols-1 gap-6">
-                                  <div>
-                                     <div class="flex justify-between items-center mb-2">
-                                        <label class="block text-[10px] font-black text-slate-400 uppercase tracking-widest">SEO Meta Title</label>
-                                        <span class="text-[10px] font-bold" :class="(form.meta_title || '').length > 60 ? 'text-rose-500' : 'text-slate-400'">{{ (form.meta_title || '').length }} / 60</span>
-                                     </div>
-                                     <input v-model="form.meta_title" type="text" :placeholder="form.title" class="w-full px-5 py-3 bg-white border border-slate-100 rounded-2xl focus:ring-2 focus:ring-blue-500/20 font-bold">
-                                  </div>
-                                  <div>
-                                     <div class="flex justify-between items-center mb-2">
-                                        <label class="block text-[10px] font-black text-slate-400 uppercase tracking-widest">Meta Description</label>
-                                        <span class="text-[10px] font-bold" :class="(form.meta_description || '').length > 160 ? 'text-rose-500' : 'text-slate-400'">{{ (form.meta_description || '').length }} / 160</span>
-                                     </div>
-                                     <textarea v-model="form.meta_description" rows="2" placeholder="Briefly summarize your post for search engines..." class="w-full px-5 py-3 bg-white border border-slate-100 rounded-2xl focus:ring-2 focus:ring-blue-500/20 font-bold resize-none"></textarea>
-                                  </div>
-                               </div>
-                            </div>
-                         </div>
+                <!-- Fix priorities -->
+                <div class="rounded-2xl border border-amber-100 bg-amber-50 p-5">
+                  <h4 class="mb-3 text-[10px] font-black uppercase tracking-widest text-amber-600">High Priority Fixes</h4>
+                  <ul class="space-y-2">
+                    <li v-for="fix in auditResult.fix_priorities" :key="fix" class="flex items-start gap-2 text-sm font-bold text-amber-900">
+                      <svg class="mt-0.5 h-4 w-4 flex-shrink-0 text-amber-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.268 15.333c-.77 1.333.192 3 1.732 3z"/></svg>
+                      {{ fix }}
+                    </li>
+                  </ul>
+                </div>
 
-                         <!-- Rich Text Toolbar -->
-                         <div class="sticky top-0 z-10 flex items-center gap-1 p-2 mb-6 bg-white/80 backdrop-blur-md border border-slate-200 rounded-2xl shadow-sm self-start">
-                            <button @click="format('bold')" class="px-3 py-2 hover:bg-slate-100 rounded-lg text-slate-600 transition-all font-black text-xs" title="Bold">B</button>
-                            <button @click="format('italic')" class="px-3 py-2 hover:bg-slate-100 rounded-lg text-slate-600 italic transition-all font-serif text-xs" title="Italic">I</button>
-                            <button @click="format('underline')" class="px-3 py-2 hover:bg-slate-100 rounded-lg text-slate-600 underline transition-all font-serif text-xs" title="Underline">U</button>
-                            <div class="w-px h-6 bg-slate-200 mx-1"></div>
-                            <button @click="format('formatBlock', 'h2')" class="px-2 py-1 hover:bg-slate-100 rounded-lg text-[10px] font-black text-slate-600 transition-all" title="Heading 2">H2</button>
-                            <button @click="format('formatBlock', 'h3')" class="px-2 py-1 hover:bg-slate-100 rounded-lg text-[10px] font-black text-slate-600 transition-all" title="Heading 3">H3</button>
-                            <div class="w-px h-6 bg-slate-200 mx-1"></div>
-                            <button @click="format('insertUnorderedList')" class="p-2 hover:bg-slate-100 rounded-lg text-slate-600 transition-all" title="Bullet List">
-                               <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16" /></svg>
-                            </button>
-                         </div>
+                <!-- Optimization tips -->
+                <div class="rounded-2xl border border-emerald-100 bg-emerald-50 p-5">
+                  <h4 class="mb-3 text-[10px] font-black uppercase tracking-widest text-emerald-700">Optimization Tips</h4>
+                  <ul class="space-y-2">
+                    <li v-for="tip in auditResult.optimization_tips" :key="tip" class="flex items-start gap-2 text-sm font-bold text-emerald-900">
+                      <svg class="mt-0.5 h-4 w-4 flex-shrink-0 text-emerald-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 13l4 4L19 7"/></svg>
+                      {{ tip }}
+                    </li>
+                  </ul>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
 
-                         <!-- Content Editor (Simplified) -->
-                         <div 
-                           ref="editor"
-                           contenteditable="true"
-                           class="prose prose-slate prose-xl max-w-none focus:outline-none min-h-[600px]"
-                           @input="handleEditorInput"
-                         ></div>
+      <!-- ══════════════════════════════════════════
+           EDITOR SLIDE-OVER
+      ══════════════════════════════════════════ -->
+      <Transition
+        enter-active-class="transition duration-500 ease-out"
+        enter-from-class="translate-x-full"
+        enter-to-class="translate-x-0"
+        leave-active-class="transition duration-300 ease-in"
+        leave-from-class="translate-x-0"
+        leave-to-class="translate-x-full"
+      >
+        <div v-if="editingPost" class="fixed inset-0 z-50 flex justify-end bg-slate-900/50 backdrop-blur-sm">
+          <div class="flex h-full w-full max-w-[96%] flex-col bg-slate-50 shadow-2xl">
+
+            <!-- Topbar -->
+            <div class="flex h-18 flex-shrink-0 items-center justify-between border-b border-slate-200 bg-white px-8 py-4">
+              <div class="flex items-center gap-5">
+                <button @click="closeEditor" class="rounded-xl p-2 text-slate-400 transition-all hover:bg-slate-100 hover:text-slate-900">
+                  <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+                </button>
+                <div class="h-6 w-px bg-slate-100"></div>
+                <input 
+                  v-model="form.title" 
+                  type="text" 
+                  placeholder="Post Title..."
+                  class="w-96 border-b-2 bg-transparent p-0 text-lg font-black text-slate-900 transition-all outline-none ring-0 placeholder:text-slate-300 focus:ring-0"
+                  :class="validationErrors.title ? 'border-rose-200 focus:border-rose-400' : 'border-transparent focus:border-indigo-400'"
+                  @input="validationErrors.title = false"
+                >
+              </div>
+
+              <div class="flex items-center gap-6">
+                <!-- Focus Mode Toggle -->
+                <button 
+                  @click="focusMode = !focusMode"
+                  class="flex items-center gap-2 rounded-xl px-4 py-2 text-[10px] font-black uppercase tracking-widest transition-all"
+                  :class="focusMode ? 'bg-indigo-600 text-white shadow-lg' : 'bg-slate-50 text-slate-500 hover:bg-slate-100'"
+                >
+                  <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/></svg>
+                  {{ focusMode ? 'Focusing' : 'Focus Mode' }}
+                </button>
+                <span class="text-xs font-bold text-slate-400">{{ metrics.word_count.toLocaleString() }} words • {{ metrics.reading_time_minutes }}m read</span>
+                <div class="h-5 w-px bg-slate-100"></div>
+                <button @click="saveDraft" :disabled="saving" class="rounded-xl border border-slate-200 px-5 py-2.5 text-xs font-black text-slate-600 transition-all hover:bg-slate-50 disabled:opacity-50">
+                  {{ saving ? 'Saving...' : 'Save Draft' }}
+                </button>
+                <button @click="publishPost" class="rounded-xl bg-indigo-600 px-5 py-2.5 text-xs font-black text-white shadow-md transition-all hover:scale-[1.02] hover:bg-indigo-700 hover:shadow-lg">
+                  Publish
+                </button>
+              </div>
+            </div>
+
+            <div class="flex flex-1 overflow-hidden">
+
+              <!-- Main Editor Body -->
+              <div class="flex-1 overflow-y-auto bg-white p-10 custom-scrollbar">
+                <div class="mx-auto max-w-3xl">
+
+                  <!-- Keyword + Category -->
+                  <div class="mb-8 grid grid-cols-2 gap-6">
+                    <div>
+                      <label class="mb-2 block text-[10px] font-black uppercase tracking-widest text-slate-400">Focus Keyword</label>
+                      <input 
+                        v-model="form.focus_keyword" 
+                        @blur="runAnalysis" 
+                        @input="validationErrors.focus_keyword = false"
+                        type="text" 
+                        placeholder="e.g. SEO Content Guide"
+                        class="w-full rounded-2xl border bg-slate-50 px-5 py-3 text-sm font-bold text-slate-700 outline-none transition-all focus:ring-4"
+                        :class="validationErrors.focus_keyword ? 'border-rose-200 focus:border-rose-400 focus:ring-rose-50' : 'border-slate-100 focus:border-indigo-200 focus:ring-indigo-50'"
+                      >
+                    </div>
+                    <div>
+                      <label class="mb-2 block text-[10px] font-black uppercase tracking-widest text-slate-400">Category</label>
+                      <select v-model="form.blog_category_id"
+                        class="w-full rounded-2xl border border-slate-100 bg-slate-50 px-5 py-3 text-sm font-bold text-slate-700 outline-none transition-all focus:border-indigo-200 focus:ring-4 focus:ring-indigo-50">
+                        <option :value="null">Uncategorized</option>
+                        <option v-for="cat in categories" :key="cat.id" :value="cat.id">{{ cat.name }}</option>
+                      </select>
+                    </div>
+                  </div>
+
+                  <!-- Search Appearance Card -->
+                  <div class="mb-8 rounded-2xl border border-slate-100 bg-slate-50/60 p-6">
+                    <div class="mb-5 flex items-center gap-3">
+                      <div class="flex h-7 w-7 items-center justify-center rounded-lg bg-indigo-100 text-indigo-600">
+                        <svg class="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
                       </div>
-                   </div>
-
-                   <!-- Sidebar: SEO & AI -->
-                   <div class="w-96 bg-slate-50 border-l border-slate-200 overflow-y-auto p-8 flex flex-col gap-8 custom-scrollbar">
-                      <!-- SEO Score Dial -->
-                      <div class="bg-white p-8 rounded-[2.5rem] border border-slate-100 shadow-sm text-center">
-                         <p class="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-6">Master SEO Score</p>
-                         <div class="relative inline-flex mb-6">
-                            <svg class="w-32 h-32 -rotate-90" viewBox="0 0 36 36">
-                               <circle class="text-slate-100" stroke-width="3" stroke="currentColor" fill="transparent" r="16" cx="18" cy="18" />
-                               <circle 
-                                 :class="getScoreColorClass(form.seo_score)"
-                                 stroke-width="3" 
-                                 stroke-dasharray="100"
-                                 :stroke-dashoffset="100 - (form.seo_score || 0)"
-                                 stroke-linecap="round" 
-                                 stroke="currentColor" 
-                                 fill="transparent" 
-                                 r="16" cx="18" cy="18"
-                                 class="transition-all duration-1000"
-                               />
-                            </svg>
-                            <span class="absolute inset-0 flex items-center justify-center text-4xl font-black text-slate-900">
-                               {{ form.seo_score }}
-                            </span>
-                         </div>
-                         <button @click="runAnalysis" :disabled="analyzing" class="w-full py-3 bg-slate-900 text-white rounded-2xl text-xs font-black uppercase hover:bg-black transition-all flex items-center justify-center gap-2">
-                            <svg v-if="analyzing" class="animate-spin h-3.5 w-3.5 text-white" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
-                            {{ analyzing ? 'Analyzing...' : 'Refresh SEO Audit' }}
-                         </button>
+                      <h4 class="text-[10px] font-black uppercase tracking-widest text-slate-700">Search Appearance</h4>
+                    </div>
+                    <div class="grid gap-4">
+                      <div>
+                        <div class="mb-1.5 flex justify-between">
+                          <label class="text-[10px] font-black uppercase tracking-widest text-slate-400">SEO Title</label>
+                          <span class="text-[10px] font-bold" :class="(form.meta_title || '').length > 60 ? 'text-rose-500' : 'text-slate-400'">{{ (form.meta_title || '').length }} / 60</span>
+                        </div>
+                        <input v-model="form.meta_title" type="text" :placeholder="form.title"
+                          class="w-full rounded-xl border border-slate-100 bg-white px-4 py-3 text-sm font-bold text-slate-700 outline-none focus:border-indigo-200 focus:ring-4 focus:ring-indigo-50">
                       </div>
-
-                      <!-- Content Stats -->
-                       <div class="bg-white p-8 rounded-[2.5rem] border border-slate-100 shadow-sm">
-                          <h4 class="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-6">Content Stats</h4>
-                          <div class="space-y-4">
-                             <div class="flex justify-between items-center">
-                                <span class="text-xs font-black text-slate-400 uppercase tracking-wider">Word Count</span>
-                                <span class="text-sm font-black text-slate-900">{{ metrics.word_count }}</span>
-                             </div>
-                             <div class="flex justify-between items-center">
-                                <span class="text-xs font-black text-slate-400 uppercase tracking-wider">Read Time</span>
-                                <span class="text-sm font-black text-slate-900">{{ metrics.reading_time_minutes }}m</span>
-                             </div>
-                             <div class="flex justify-between items-center">
-                                <span class="text-xs font-black text-slate-400 uppercase tracking-wider">KW Density</span>
-                                <span class="text-sm font-black" :class="density.primary > 1 && density.primary < 3 ? 'text-emerald-500' : 'text-amber-500'">{{ density.primary.toFixed(1) }}%</span>
-                             </div>
-                          </div>
-                       </div>
-
-                       <!-- SERP Preview -->
-                       <div class="bg-white p-8 rounded-[2.5rem] border border-slate-100 shadow-sm">
-                          <h4 class="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-6">SERP Preview</h4>
-                          <div class="p-4 bg-slate-50 rounded-2xl border border-slate-100 text-left">
-                             <p class="text-[8px] text-slate-400 truncate mb-1">https://{{ organization?.slug || 'site' }}.ai/blog/...</p>
-                             <h5 class="text-blue-700 text-xs font-bold hover:underline cursor-pointer line-clamp-2 mb-1">
-                                {{ form.meta_title || form.title || 'Untitled Post' }}
-                             </h5>
-                             <p class="text-slate-600 text-[10px] leading-relaxed line-clamp-3">
-                                {{ form.meta_description || 'Start writing to see how your meta description will appear in Google Search results...' }}
-                             </p>
-                          </div>
-                       </div>
-
-                      <!-- AI Detection -->
-                      <div class="bg-white p-8 rounded-[2.5rem] border border-slate-100 shadow-sm">
-                         <div class="flex items-center justify-between mb-6">
-                            <p class="text-[10px] font-black text-slate-400 uppercase tracking-widest">AI Probability</p>
-                            <span :class="getAiScoreClass(form.ai_content_score)" class="px-3 py-1 rounded-lg text-xs font-black">{{ form.ai_content_score || 0 }}%</span>
-                         </div>
-                         <div class="w-full h-2 bg-slate-100 rounded-full mb-6 relative overflow-hidden">
-                            <div :class="getAiBgClass(form.ai_content_score)" class="h-full rounded-full transition-all duration-1000" :style="{ width: (form.ai_content_score || 0) + '%' }"></div>
-                         </div>
-                         <p v-if="form.ai_detection_notes" class="text-[10px] font-bold text-slate-500 leading-relaxed italic">{{ form.ai_detection_notes }}</p>
+                      <div>
+                        <div class="mb-1.5 flex justify-between">
+                          <label class="text-[10px] font-black uppercase tracking-widest text-slate-400">Meta Description</label>
+                          <span class="text-[10px] font-bold" :class="(form.meta_description || '').length > 160 ? 'text-rose-500' : 'text-slate-400'">{{ (form.meta_description || '').length }} / 160</span>
+                        </div>
+                        <textarea v-model="form.meta_description" rows="2" placeholder="Briefly summarize your post..."
+                          class="w-full resize-none rounded-xl border border-slate-100 bg-white px-4 py-3 text-sm font-bold text-slate-700 outline-none focus:border-indigo-200 focus:ring-4 focus:ring-indigo-50">
+                        </textarea>
                       </div>
-
-                      <!-- SEO Checklist -->
-                      <div class="bg-white p-8 rounded-[2.5rem] border border-slate-100 shadow-sm">
-                        <p class="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-6">Actionable Audit</p>
-                        <div class="space-y-8">
-                           <div v-for="(checks, category) in groupedChecks" :key="category">
-                              <h5 class="text-[9px] font-black text-slate-400 uppercase tracking-[0.2em] mb-4">{{ category }}</h5>
-                              <div class="space-y-4">
-                                 <div v-for="check in checks" :key="check.id" class="group">
-                                    <div class="flex items-start gap-3">
-                                       <div class="mt-1">
-                                          <svg v-if="check.status === 'success'" class="w-3.5 h-3.5 text-emerald-500 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="4" d="M5 13l4 4L19 7" /></svg>
-                                          <svg v-else-if="check.status === 'error'" class="w-3.5 h-3.5 text-rose-500 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="4" d="M6 18L18 6M6 6l12 12" /></svg>
-                                          <svg v-else class="w-3.5 h-3.5 text-amber-500 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="4" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.268 15.333c-.77 1.333.192 3 1.732 3z" /></svg>
-                                       </div>
-                                       <div>
-                                          <p class="text-[10px] font-black leading-tight" :class="check.status === 'success' ? 'text-slate-700' : 'text-slate-500'">{{ check.message }}</p>
-                                          <p v-if="check.action && check.status !== 'success'" class="text-[9px] font-bold text-blue-500 mt-1 opacity-0 group-hover:opacity-100 transition-opacity">{{ check.action }}</p>
-                                       </div>
-                                    </div>
-                                 </div>
-                              </div>
-                           </div>
+                      <div class="grid grid-cols-2 gap-4">
+                        <div>
+                          <label class="mb-1.5 block text-[10px] font-black uppercase tracking-widest text-slate-400">Canonical URL</label>
+                          <input v-model="form.canonical_url" type="url" placeholder="https://..."
+                            class="w-full rounded-xl border border-slate-100 bg-white px-4 py-3 text-sm font-bold text-slate-700 outline-none focus:border-indigo-200 focus:ring-4 focus:ring-indigo-50">
+                        </div>
+                        <div>
+                          <label class="mb-1.5 block text-[10px] font-black uppercase tracking-widest text-slate-400">Featured Image URL</label>
+                          <input v-model="form.featured_image_url" type="url" placeholder="https://cdn.example.com/..."
+                            class="w-full rounded-xl border border-slate-100 bg-white px-4 py-3 text-sm font-bold text-slate-700 outline-none focus:border-indigo-200 focus:ring-4 focus:ring-indigo-50">
                         </div>
                       </div>
-
-                      <!-- Writing Assistant -->
-                      <div class="bg-white p-8 rounded-[2.5rem] border border-slate-100 shadow-sm">
-                         <div class="flex items-center justify-between mb-6">
-                            <p class="text-[10px] font-black text-slate-400 uppercase tracking-widest">Writing Assistant</p>
-                            <span class="px-2 py-0.5 bg-blue-50 text-blue-600 rounded text-[8px] font-black tracking-tighter">AI LIVE</span>
-                         </div>
-                         <div class="space-y-4">
-                            <div class="p-4 bg-slate-50 rounded-2xl border border-slate-100">
-                               <p class="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 italic">Semantic Keywords</p>
-                               <div class="flex flex-wrap gap-2">
-                                  <span v-for="kw in semanticKeywords" :key="kw" @click="addKeyword(kw)" class="px-2 py-1 bg-white border border-slate-100 rounded-lg text-[10px] font-bold text-slate-600 hover:border-blue-200 hover:text-blue-500 cursor-pointer transition-colors">
-                                     + {{ kw }}
-                                  </span>
-                               </div>
-                            </div>
-                            <div class="flex gap-2">
-                               <button @click="generateIntro" :disabled="isGeneratingIntro" class="flex-1 py-3 bg-white border-2 border-slate-900 text-slate-900 rounded-2xl text-[10px] font-black uppercase hover:bg-slate-900 hover:text-white transition-all disabled:opacity-50">
-                                  {{ isGeneratingIntro ? 'Drafting...' : 'Generate Intro' }}
-                               </button>
-                               <button @click="generateNextIdea" class="flex-1 py-3 bg-slate-50 border border-slate-200 text-slate-400 rounded-2xl text-[10px] font-black uppercase cursor-not-allowed">
-                                  Next Section
-                               </button>
-                            </div>
-                            <div v-if="hasSelection" class="pt-4 border-t border-slate-100">
-                               <p class="text-[9px] font-black text-blue-500 uppercase tracking-widest mb-3">Selection Tools</p>
-                               <button @click="refineSelection" :disabled="isRefining" class="w-full py-3 bg-blue-600 text-white rounded-2xl text-[10px] font-black uppercase hover:bg-blue-700 transition-all shadow-lg shadow-blue-100 disabled:opacity-50">
-                                  {{ isRefining ? 'Refining...' : 'Refine Tone' }}
-                               </button>
-                            </div>
-                         </div>
-                      </div>
-                   </div>
-                </div>
-             </div>
-          </div>
-        </Transition>
-      </div>
-    </div>
-
-    <!-- Audit Results Modal -->
-    <Transition enter-active-class="duration-300 ease-out" enter-from-class="opacity-0 scale-95" enter-to-class="opacity-100 scale-100" leave-active-class="duration-200 ease-in" leave-from-class="opacity-100 scale-100" leave-to-class="opacity-0 scale-95">
-       <div v-if="auditResult" class="fixed inset-0 z-[100] flex items-center justify-center p-6 bg-slate-900/60 backdrop-blur-md" @click.self="auditResult = null">
-          <div class="bg-white rounded-[3rem] p-12 w-full max-w-4xl shadow-2xl relative overflow-y-auto max-h-[90vh]">
-             <button @click="auditResult = null" class="absolute top-10 right-10 text-slate-400 hover:text-slate-900 transition-colors">
-               <svg class="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" /></svg>
-             </button>
-                          <div class="flex items-center gap-10 mb-12">
-                 <div class="relative w-32 h-32">
-                    <svg class="w-full h-full -rotate-90" viewBox="0 0 36 36">
-                       <circle cx="18" cy="18" r="16" fill="none" class="stroke-slate-50" stroke-width="2.5"></circle>
-                       <circle cx="18" cy="18" r="16" fill="none" class="text-blue-600" stroke-width="2.5" stroke-dasharray="100" :stroke-dashoffset="100 - auditResult.seo_score" stroke-linecap="round" style="stroke: currentColor;"></circle>
-                    </svg>
-                    <div class="absolute inset-0 flex flex-col items-center justify-center">
-                       <span class="text-4xl font-black text-slate-900 leading-none">{{ auditResult.seo_score }}</span>
-                       <span class="text-[10px] font-black text-slate-400 uppercase tracking-widest mt-1">Health</span>
                     </div>
-                 </div>
-                 <div class="text-left">
-                   <h2 class="text-4xl font-black text-slate-900 mb-2">Audit Report</h2>
-                   <p class="text-slate-500 font-bold text-lg leading-snug">{{ auditResult.summary }}</p>
-                   <div class="flex items-center gap-4 mt-4">
-                      <span class="px-3 py-1.5 bg-indigo-50 text-indigo-600 rounded-xl text-xs font-black uppercase tracking-widest">Technical SEO</span>
-                      <span class="px-3 py-1.5 bg-emerald-50 text-emerald-600 rounded-xl text-xs font-black uppercase tracking-widest">Content Quality</span>
-                   </div>
-                 </div>
+                  </div>
+
+                  <!-- Rich Text Toolbar -->
+                  <div class="sticky top-0 z-10 mb-5 flex flex-wrap items-center gap-1 rounded-2xl border border-slate-200 bg-white/90 p-2 shadow-sm backdrop-blur-md">
+                    <button @click="format('bold')" class="toolbar-btn font-black text-xs" title="Bold">B</button>
+                    <button @click="format('italic')" class="toolbar-btn italic font-serif text-xs" title="Italic">I</button>
+                    <button @click="format('underline')" class="toolbar-btn underline font-serif text-xs" title="Underline">U</button>
+                    <div class="mx-1 h-5 w-px bg-slate-200"></div>
+                    <button @click="format('formatBlock', 'h2')" class="toolbar-btn text-[10px] font-black" title="H2">H2</button>
+                    <button @click="format('formatBlock', 'h3')" class="toolbar-btn text-[10px] font-black" title="H3">H3</button>
+                    <div class="mx-1 h-5 w-px bg-slate-200"></div>
+                    <button @click="format('insertUnorderedList')" class="toolbar-btn" title="Bullet List">
+                      <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"/></svg>
+                    </button>
+                    <button @click="format('insertOrderedList')" class="toolbar-btn" title="Numbered List">
+                      <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7m2 0h2m-2 0v4m0 0H7m2 0h2m-2 0v4m0 0H7m2 0h2"/></svg>
+                    </button>
+                    <div class="mx-1 h-5 w-px bg-slate-200"></div>
+                    <button @click="format('removeFormat')" class="toolbar-btn text-[10px] font-bold text-slate-400" title="Clear Format">Clear</button>
+                  </div>
+
+                  <!-- Main Editor Container (Centered in Focus Mode) -->
+                  <div
+                    ref="editor"
+                    contenteditable="true"
+                    class="prose prose-slate prose-lg max-w-none min-h-[600px] transition-all focus:outline-none editor-placeholder"
+                    :class="focusMode ? 'px-12 py-8' : ''"
+                    @input="handleEditorInput"
+                    data-placeholder="Start your story here..."
+                  ></div>
+                </div>
               </div>
 
-             <div class="grid grid-cols-1 md:grid-cols-2 gap-8 mb-12 text-left">
-                <div class="bg-slate-50 p-8 rounded-3xl">
-                   <h4 class="text-xs font-black text-slate-400 uppercase tracking-widest mb-6">Keyword Gaps</h4>
-                   <ul class="space-y-3">
-                      <li v-for="gap in auditResult.keyword_gaps" :key="gap" class="flex items-center gap-3 font-bold text-slate-700">
-                         <span class="w-1.5 h-1.5 bg-blue-500 rounded-full"></span>
-                         {{ gap }}
-                      </li>
-                   </ul>
-                </div>
-                <div class="bg-amber-50 p-8 rounded-3xl">
-                   <h4 class="text-xs font-black text-amber-600 uppercase tracking-widest mb-6">High Priority Fixes</h4>
-                   <ul class="space-y-3">
-                      <li v-for="fix in auditResult.fix_priorities" :key="fix" class="flex items-start gap-3 font-bold text-amber-800">
-                         <svg class="w-5 h-5 text-amber-600 mt-0.5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.268 15.333c-.77 1.333.192 3 1.732 3z" /></svg>
-                         {{ fix }}
-                      </li>
-                   </ul>
-                </div>
-             </div>
+              <!-- Right Sidebar (Conditionally Hidden) -->
+              <div 
+                v-if="!focusMode"
+                class="w-80 flex-shrink-0 overflow-y-auto border-l border-slate-200 bg-slate-50 custom-scrollbar transition-all"
+              >
 
-             <div class="bg-indigo-50 p-8 rounded-3xl text-left">
-                <h4 class="text-xs font-black text-indigo-600 uppercase tracking-widest mb-6">Optimization Tips</h4>
-                <div class="grid grid-cols-1 md:grid-cols-2 gap-x-12 gap-y-4 font-bold text-indigo-900">
-                   <p v-for="tip in auditResult.optimization_tips" :key="tip">• {{ tip }}</p>
+                <!-- SEO Score -->
+                <div class="border-b border-slate-100 bg-white p-6 text-center">
+                  <div class="mb-5 flex items-center justify-between">
+                    <p class="text-[10px] font-black uppercase tracking-widest text-slate-400">Master SEO Score</p>
+                    <span 
+                      class="rounded-lg px-2 py-0.5 text-[9px] font-black uppercase tracking-widest transition-all"
+                      :class="[seoTier.color, seoTier.bg, seoTier.border, 'border']"
+                    >{{ seoTier.label }}</span>
+                  </div>
+
+                  <div class="relative mx-auto mb-8 inline-flex">
+                    <!-- Glow effect -->
+                    <div 
+                      class="absolute inset-0 rounded-full blur-2xl transition-all duration-1000 opacity-20"
+                      :class="seoTier.bg"
+                    ></div>
+
+                    <svg class="relative h-32 w-32 -rotate-90" viewBox="0 0 36 36">
+                      <circle class="text-slate-100" stroke-width="3" stroke="currentColor" fill="transparent" r="15" cx="18" cy="18"/>
+                      <circle
+                        :class="getScoreColorClass(form.seo_score)"
+                        stroke-width="3"
+                        stroke-dasharray="94.25"
+                        :stroke-dashoffset="94.25 - (94.25 * (form.seo_score || 0) / 100)"
+                        stroke-linecap="round"
+                        stroke="currentColor"
+                        fill="transparent"
+                        r="15" cx="18" cy="18"
+                        class="transition-all duration-1000"
+                      />
+                    </svg>
+                    <span class="absolute inset-0 flex items-center justify-center text-4xl font-black text-slate-900">{{ form.seo_score || 0 }}</span>
+                  </div>
+
+                  <!-- Score Breakdown -->
+                  <div class="mb-6 grid grid-cols-3 gap-2">
+                    <div v-for="item in scoreBreakdown" :key="item.label" class="flex flex-col items-center">
+                      <div class="mb-1 h-1 w-full overflow-hidden rounded-full bg-slate-100">
+                        <div 
+                          class="h-full bg-indigo-500 transition-all duration-1000"
+                          :style="{ width: item.percent + '%' }"
+                        ></div>
+                      </div>
+                      <span class="text-[8px] font-black uppercase tracking-tighter text-slate-400">{{ item.label }}</span>
+                    </div>
+                  </div>
+
+                  <button @click="runAnalysis" :disabled="analyzing" class="flex w-full items-center justify-center gap-2 rounded-2xl bg-slate-900 py-3 text-[10px] font-black uppercase tracking-wide text-white transition-all hover:bg-black disabled:opacity-50">
+                    <svg v-if="analyzing" class="h-3.5 w-3.5 animate-spin" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path></svg>
+                    {{ analyzing ? 'Analyzing...' : 'Refresh Audit' }}
+                  </button>
                 </div>
-             </div>
+
+                <!-- Content Stats -->
+                <div class="border-b border-slate-100 bg-white p-6">
+                  <p class="mb-4 text-[10px] font-black uppercase tracking-widest text-slate-400">Content Stats</p>
+                  <div class="space-y-3">
+                    <div class="flex items-center justify-between">
+                      <span class="text-[11px] font-black uppercase tracking-wide text-slate-400">Word Count</span>
+                      <span class="text-sm font-black text-slate-900">{{ metrics.word_count.toLocaleString() }}</span>
+                    </div>
+                    <div class="flex items-center justify-between">
+                      <span class="text-[11px] font-black uppercase tracking-wide text-slate-400">Read Time</span>
+                      <span class="text-sm font-black text-slate-900">{{ metrics.reading_time_minutes }}m</span>
+                    </div>
+                    <div class="flex items-center justify-between">
+                      <span class="text-[11px] font-black uppercase tracking-wide text-slate-400">KW Density</span>
+                      <span class="text-sm font-black" :class="density.primary > 1 && density.primary < 3 ? 'text-emerald-500' : 'text-amber-500'">{{ density.primary.toFixed(1) }}%</span>
+                    </div>
+                  </div>
+                </div>
+
+                <!-- SERP Preview -->
+                <div class="border-b border-slate-100 bg-white p-6">
+                  <p class="mb-4 text-[10px] font-black uppercase tracking-widest text-slate-400">SERP Preview</p>
+                  <div class="rounded-xl border border-slate-100 bg-slate-50 p-4 text-left">
+                    <p class="mb-1 truncate text-[9px] text-slate-400">https://{{ organization?.slug || 'site' }}.ai/blog/...</p>
+                    <h5 class="mb-1 line-clamp-2 cursor-pointer text-xs font-bold text-blue-600 hover:underline">{{ form.meta_title || form.title || 'Untitled Post' }}</h5>
+                    <p class="line-clamp-3 text-[10px] leading-relaxed text-slate-500">{{ form.meta_description || 'Start writing to preview your meta description here...' }}</p>
+                  </div>
+                </div>
+
+                <!-- AI Probability -->
+                <div class="border-b border-slate-100 bg-white p-6">
+                  <div class="mb-4 flex items-center justify-between">
+                    <p class="text-[10px] font-black uppercase tracking-widest text-slate-400">AI Probability</p>
+                    <span :class="getAiScoreClass(form.ai_content_score)" class="rounded-lg px-2.5 py-1 text-[10px] font-black">{{ form.ai_content_score || 0 }}%</span>
+                  </div>
+                  <div class="mb-4 h-2 w-full overflow-hidden rounded-full bg-slate-100">
+                    <div :class="getAiBgClass(form.ai_content_score)" class="h-full rounded-full transition-all duration-1000" :style="{ width: (form.ai_content_score || 0) + '%' }"></div>
+                  </div>
+                  <p v-if="form.ai_detection_notes" class="text-[10px] font-bold italic leading-relaxed text-slate-400">{{ form.ai_detection_notes }}</p>
+                </div>
+
+                <!-- SEO Checklist -->
+                <div class="border-b border-slate-100 bg-white p-6">
+                  <p class="mb-5 text-[10px] font-black uppercase tracking-widest text-slate-400">Actionable Audit</p>
+                  <div class="space-y-6">
+                    <div v-for="(checks, category) in groupedChecks" :key="category">
+                      <h5 class="mb-3 text-[9px] font-black uppercase tracking-[0.2em] text-slate-400">{{ category }}</h5>
+                      <div class="space-y-3">
+                        <div v-for="check in checks" :key="check.id" class="group flex items-start gap-2.5">
+                          <div class="mt-0.5 flex-shrink-0">
+                            <svg v-if="check.status === 'success'" class="h-3.5 w-3.5 text-emerald-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="4" d="M5 13l4 4L19 7"/></svg>
+                            <svg v-else-if="check.status === 'error'" class="h-3.5 w-3.5 text-rose-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="4" d="M6 18L18 6M6 6l12 12"/></svg>
+                            <svg v-else class="h-3.5 w-3.5 text-amber-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="4" d="M12 9v2m0 4h.01"/></svg>
+                          </div>
+                          <div>
+                            <p class="text-[10px] font-black leading-tight" :class="check.status === 'success' ? 'text-slate-700' : 'text-slate-500'">{{ check.message }}</p>
+                            <p v-if="check.action && check.status !== 'success'" class="mt-0.5 text-[9px] font-bold text-indigo-500 opacity-0 transition-opacity group-hover:opacity-100">{{ check.action }}</p>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <!-- Writing Assistant -->
+                <div class="bg-white p-6">
+                  <div class="mb-5 flex items-center justify-between">
+                    <p class="text-[10px] font-black uppercase tracking-widest text-slate-400">Writing Assistant</p>
+                    <span class="rounded bg-indigo-50 px-2 py-0.5 text-[8px] font-black tracking-tighter text-indigo-600">AI LIVE</span>
+                  </div>
+                  <div class="space-y-4">
+                    <div class="rounded-2xl border border-slate-100 bg-slate-50 p-4">
+                      <p class="mb-2 text-[10px] font-black italic uppercase tracking-widest text-slate-400">Semantic Keywords</p>
+                      <div class="flex flex-wrap gap-1.5">
+                        <span
+                          v-for="kw in semanticKeywords" :key="kw"
+                          @click="addKeyword(kw)"
+                          class="cursor-pointer rounded-lg border border-slate-100 bg-white px-2.5 py-1 text-[10px] font-bold text-slate-600 transition-all hover:border-indigo-200 hover:text-indigo-600"
+                        >+ {{ kw }}</span>
+                      </div>
+                    </div>
+                    <div class="flex gap-2">
+                      <button @click="generateIntro" :disabled="isGeneratingIntro" class="flex-1 rounded-2xl border-2 border-slate-900 bg-white py-3 text-[10px] font-black uppercase text-slate-900 transition-all hover:bg-slate-900 hover:text-white disabled:opacity-50">
+                        {{ isGeneratingIntro ? 'Drafting...' : 'Gen Intro' }}
+                      </button>
+                      <button @click="generateOutline" :disabled="isGeneratingOutline" class="flex-1 rounded-2xl border-2 border-indigo-600 bg-white py-3 text-[10px] font-black uppercase text-indigo-600 transition-all hover:bg-indigo-600 hover:text-white disabled:opacity-50">
+                        {{ isGeneratingOutline ? 'Building...' : 'Outline' }}
+                      </button>
+                    </div>
+                    
+                    <!-- Diagnostic / Alerts -->
+                    <div 
+                      v-if="validationErrors.title || validationErrors.focus_keyword" 
+                      class="rounded-xl border border-rose-100 bg-rose-50 p-3"
+                    >
+                      <div class="flex gap-2">
+                        <svg class="h-4 w-4 shrink-0 text-rose-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.268 15.333c-.77 1.333.192 3 1.732 3z"/></svg>
+                        <p class="text-[9px] font-black uppercase tracking-widest text-rose-600">Action Required</p>
+                      </div>
+                      <p class="mt-1 text-[10px] font-bold leading-relaxed text-rose-900">
+                        {{ validationErrors.title ? '• Post Title is missing' : '' }}
+                        {{ validationErrors.focus_keyword ? '• Focus Keyword is missing (required for Intro)' : '' }}
+                      </p>
+                    </div>
+
+                    <div v-if="hasSelection" class="border-t border-slate-100 pt-4">
+                      <p class="mb-3 text-[9px] font-black uppercase tracking-widest text-indigo-500">Selection Tools</p>
+                      <button @click="refineSelection" :disabled="isRefining" class="w-full rounded-2xl bg-indigo-600 py-3 text-[10px] font-black uppercase text-white shadow-lg shadow-indigo-100 transition-all hover:bg-indigo-700 disabled:opacity-50">
+                        {{ isRefining ? 'Refining...' : 'Refine Tone' }}
+                      </button>
+                    </div>
+                  </div>
+                </div>
+
+              </div>
+            </div>
           </div>
-       </div>
-     </Transition>
+        </div>
+      </Transition>
+
+    </div>
 
     <ConfirmationModal
       :show="showDeleteModal"
@@ -559,7 +768,7 @@
 </template>
 
 <script setup>
-import { ref, reactive, onMounted, computed, watch, nextTick } from 'vue'
+import { ref, reactive, onMounted, onUnmounted, computed, watch, nextTick } from 'vue'
 import { Head, Link, router } from '@inertiajs/vue3'
 import axios from 'axios'
 import _ from 'lodash'
@@ -583,6 +792,11 @@ const humanizing = ref(false)
 const auditing = ref(false)
 const showDeleteModal = ref(false)
 const postToDelete = ref(null)
+const focusMode = ref(false)
+const validationErrors = reactive({
+  title: false,
+  focus_keyword: false
+})
 
 // Forms
 const form = reactive({
@@ -598,6 +812,8 @@ const form = reactive({
   long_tail_keywords: [],
   meta_title: '',
   meta_description: '',
+  canonical_url: '',
+  featured_image_url: '',
   ai_detection_notes: ''
 })
 
@@ -631,9 +847,41 @@ const groupedChecks = computed(() => {
   return groups
 })
 
+const seoTier = computed(() => {
+  const score = form.seo_score || 0
+  if (score >= 90) return { label: 'Perfect', color: 'text-emerald-500', bg: 'bg-emerald-50', border: 'border-emerald-100' }
+  if (score >= 80) return { label: 'Optimized', color: 'text-teal-500', bg: 'bg-teal-50', border: 'border-teal-100' }
+  if (score >= 60) return { label: 'Good', color: 'text-indigo-500', bg: 'bg-indigo-50', border: 'border-indigo-100' }
+  if (score >= 40) return { label: 'Fair', color: 'text-amber-500', bg: 'bg-amber-50', border: 'border-amber-100' }
+  return { label: 'Critical', color: 'text-rose-500', bg: 'bg-rose-50', border: 'border-rose-100' }
+})
+
+const scoreBreakdown = computed(() => {
+  const checks = seoResults.value.checks || []
+  const breakdown = {
+    content: { count: 0, total: 0, label: 'Content' },
+    keywords: { count: 0, total: 0, label: 'Keywords' },
+    meta: { count: 0, total: 0, label: 'Structure' }
+  }
+
+  checks.forEach(c => {
+    const cat = (c.category || '').toLowerCase()
+    let key = 'content'
+    if (cat.includes('keyword')) key = 'keywords'
+    if (cat.includes('meta') || cat.includes('title')) key = 'meta'
+    
+    breakdown[key].total++
+    if (c.status === 'success') breakdown[key].count++
+  })
+
+  return Object.values(breakdown).map(b => ({
+    ...b,
+    percent: b.total > 0 ? Math.round((b.count / b.total) * 100) : 0
+  }))
+})
+
 const semanticKeywords = computed(() => {
   if (!form.focus_keyword) return ['SEO', 'Content', 'Optimization']
-  // Fake semantic keywords for demo, could be powered by API
   return [
     form.focus_keyword + ' Strategy',
     'Best Practices for ' + form.focus_keyword,
@@ -643,6 +891,7 @@ const semanticKeywords = computed(() => {
 })
 
 const isGeneratingIntro = ref(false)
+const isGeneratingOutline = ref(false)
 const isRefining = ref(false)
 const hasSelection = ref(false)
 
@@ -667,19 +916,30 @@ const format = (command, value = null) => {
 }
 
 const handleAiError = (err) => {
+   console.error('[AI Error]', err.response?.status, err.response?.data)
+
    if (err.response?.status === 402) {
-      toast.error('Insufficient Credits! Please top up your organization balance.', {
-         duration: 6000
-      })
-      activeTab.value = 'audit' // Redirect to audit or a billing tab if we had one
+      toast.error('Insufficient Credits — top up your balance to use AI features.')
       return
    }
-   toast.error(err.response?.data?.error || 'AI request failed.')
+   if (err.response?.status === 422) {
+      const messages = Object.values(err.response?.data?.errors || {}).flat().join(' ')
+      toast.error('Validation error: ' + (messages || 'Check your inputs.'))
+      return
+   }
+   if (err.response?.status === 500) {
+      toast.error('Server error — the AI service may be unavailable. Check your API key.')
+      return
+   }
+   toast.error(err.response?.data?.error || err.response?.data?.message || 'AI request failed.')
 }
 
 const generateIntro = async () => {
-   if (!form.title || !form.focus_keyword) {
-      toast.error('Post title and Focus Keyword are required for AI drafting.')
+   validationErrors.title = !form.title
+   validationErrors.focus_keyword = !form.focus_keyword
+
+   if (validationErrors.title || validationErrors.focus_keyword) {
+      toast.error('Post Title and Focus Keyword are required for AI drafting.')
       return
    }
 
@@ -703,6 +963,43 @@ const generateIntro = async () => {
    }
 }
 
+const generateOutline = async () => {
+   validationErrors.title = !form.title
+   
+   if (validationErrors.title) {
+      toast.error('A Post Title is required to generate an outline.')
+      return
+   }
+
+   isGeneratingOutline.value = true
+   try {
+      const resp = await axios.post(route('api.content.generate-outline'), {
+         topic: form.title,
+         keywords: form.focus_keyword ? [form.focus_keyword] : []
+      })
+
+      if (resp.data && resp.data.outline) {
+         const outlineHtml = resp.data.outline
+            .map(section => {
+               const subsHtml = (section.subsections || [])
+                  .map(sub => `<li>${sub}</li>`)
+                  .join('')
+               return `<h2>${section.heading}</h2>${subsHtml ? `<ul>${subsHtml}</ul>` : ''}`
+            })
+            .join('')
+         form.content = outlineHtml + form.content
+         if (editor.value) editor.value.innerHTML = form.content
+         toast.success('Outline generated — start filling in each section!')
+         updateLocalDensity()
+         debouncedAnalysis()
+      }
+   } catch (e) {
+      handleAiError(e)
+   } finally {
+      isGeneratingOutline.value = false
+   }
+}
+
 const refineSelection = async () => {
    const selection = window.getSelection().toString()
    if (!selection) return
@@ -718,8 +1015,6 @@ const refineSelection = async () => {
          const range = window.getSelection().getRangeAt(0)
          range.deleteContents()
          range.insertNode(document.createTextNode(resp.data.refined))
-         
-         // Update form content from editor innerHTML
          if (editor.value) form.content = editor.value.innerHTML
          toast.success('Content refined!')
          debouncedAnalysis()
@@ -731,10 +1026,12 @@ const refineSelection = async () => {
    }
 }
 
-// Update hasSelection state
-document.addEventListener('selectionchange', () => {
+// Update hasSelection state — cleaned up on unmount to avoid memory leaks
+const onSelectionChange = () => {
    hasSelection.value = !!window.getSelection().toString()
-})
+}
+onMounted(() => document.addEventListener('selectionchange', onSelectionChange))
+onUnmounted(() => document.removeEventListener('selectionchange', onSelectionChange))
 
 watch(() => editingPost.value, async (newVal) => {
   if (newVal) {
@@ -779,6 +1076,13 @@ const getAiBgClass = (score) => {
   return 'bg-emerald-500'
 }
 
+// Tab switching with side-effects
+const switchTab = (tab) => {
+  activeTab.value = tab
+  // Clear stale audit result when leaving the audit tab
+  if (tab !== 'audit') auditResult.value = null
+}
+
 // Logic
 const createNewPost = () => {
   Object.assign(form, {
@@ -791,7 +1095,9 @@ const createNewPost = () => {
     seo_score: 0,
     ai_content_score: 0,
     meta_title: '',
-    meta_description: ''
+    meta_description: '',
+    canonical_url: '',
+    featured_image_url: ''
   })
   editingPost.value = true
 }
@@ -800,7 +1106,9 @@ const editPost = (post) => {
   Object.assign(form, {
     ...post,
     meta_title: post.meta_title || '',
-    meta_description: post.meta_description || ''
+    meta_description: post.meta_description || '',
+    canonical_url: post.canonical_url || '',
+    featured_image_url: post.featured_image_url || ''
   })
   editingPost.value = post
   runAnalysis()
@@ -813,6 +1121,7 @@ const closeEditor = () => {
 
 const handleEditorInput = (e) => {
   form.content = e.target.innerHTML
+  updateLocalDensity()
   debouncedAnalysis()
 }
 
@@ -820,7 +1129,7 @@ const runAnalysis = async () => {
   if (!editingPost.value) return
   
   if (!form.id) {
-    toast.warning('Please save the post first to run SEO analysis')
+    // Silently skip for unsaved posts — no toast spam
     return
   }
   
@@ -947,6 +1256,9 @@ const updateLocalDensity = () => {
    density.primary = words.length > 0 ? (occurrences * kwWordCount / words.length) * 100 : 0
 }
 
+// Re-calculate density whenever focus keyword changes
+watch(() => form.focus_keyword, () => updateLocalDensity())
+
 onMounted(() => {
    updateLocalDensity()
 })
@@ -959,8 +1271,13 @@ onMounted(() => {
   letter-spacing: -0.025em;
 }
 .prose p {
-  line-height: 1.75;
+  line-height: 1.8;
   color: #334155;
+  margin-bottom: 1.5rem;
+}
+.prose h2, .prose h3 {
+  margin-top: 2.5rem;
+  margin-bottom: 1rem;
 }
 .custom-scrollbar::-webkit-scrollbar {
   width: 6px;
@@ -974,5 +1291,28 @@ onMounted(() => {
 }
 .custom-scrollbar::-webkit-scrollbar-thumb:hover {
   background: #cbd5e1;
+}
+
+/* Editor Placeholder Logic */
+.editor-placeholder:empty:before {
+  content: attr(data-placeholder);
+  color: #cbd5e1;
+  font-weight: 700;
+  pointer-events: none;
+  display: block; /* For Firefox */
+}
+
+/* Toolbar button helper — plain CSS to avoid Tailwind v4 @apply + hover: conflict */
+.toolbar-btn {
+  padding: 0.375rem 0.75rem;
+  border-radius: 0.5rem;
+  color: #475569;
+  transition: all 0.15s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.toolbar-btn:hover {
+  background-color: #f1f5f9;
 }
 </style>

@@ -48,5 +48,6 @@ import BrandLogo from '../Components/BrandLogo.vue'
 .prose h3 { @apply text-lg font-bold text-slate-900 mb-2; }
 .prose p { @apply text-slate-600 leading-relaxed mb-6; }
 .prose ul { @apply list-disc list-inside text-slate-600 mb-6 space-y-2; }
-.prose a { @apply text-blue-600 font-bold no-underline hover:underline; }
+.prose a { @apply text-blue-600 font-bold no-underline; }
+.prose a:hover { text-decoration: underline; }
 </style>

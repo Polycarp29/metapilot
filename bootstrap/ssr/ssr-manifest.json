@@ -50,12 +50,12 @@
     "/build/assets/AppLayout-BsTgnRgf.css"
   ],
   "resources/js/Layouts/LegalLayout.vue": [
-    "/build/assets/LegalLayout-BnYO4RuC.js",
-    "/build/assets/LegalLayout-CrwjPA-c.css"
+    "/build/assets/LegalLayout-CGs70-Bb.js",
+    "/build/assets/LegalLayout-BnzYVRNu.css"
   ],
-  "resources/js/Layouts/LegalLayout.vue?vue&type=style&index=0&scoped=30f082de&lang.css": [
-    "/build/assets/LegalLayout-BnYO4RuC.js",
-    "/build/assets/LegalLayout-CrwjPA-c.css"
+  "resources/js/Layouts/LegalLayout.vue?vue&type=style&index=0&scoped=12a5438e&lang.css": [
+    "/build/assets/LegalLayout-CGs70-Bb.js",
+    "/build/assets/LegalLayout-BnzYVRNu.css"
   ],
   "resources/js/Pages/Analytics/Dashboard.vue": [
     "/build/assets/Dashboard-FWtD0m-J.js",
@@ -171,12 +171,12 @@
     "/build/assets/Show-D_1cE7sp.css"
   ],
   "resources/js/Pages/Content/Index.vue": [
-    "/build/assets/Index-BNmUdJqn.js",
-    "/build/assets/Index-D7v8NeS0.css"
+    "/build/assets/Index-_CHVKMJR.js",
+    "/build/assets/Index-CbfnyrZS.css"
   ],
   "resources/js/Pages/Content/Index.vue?vue&type=style&index=0&lang.css": [
-    "/build/assets/Index-BNmUdJqn.js",
-    "/build/assets/Index-D7v8NeS0.css"
+    "/build/assets/Index-_CHVKMJR.js",
+    "/build/assets/Index-CbfnyrZS.css"
   ],
   "resources/js/Pages/Dashboard.vue": [
     "/build/assets/Dashboard-ClKfRfjI.js"
@@ -229,13 +229,13 @@
     "/build/assets/Trending-6NTY1OWj.css"
   ],
   "resources/js/Pages/Legal/Cookies.vue": [
-    "/build/assets/Cookies-CcMNhBsC.js"
+    "/build/assets/Cookies-BhfimiB6.js"
   ],
   "resources/js/Pages/Legal/Privacy.vue": [
-    "/build/assets/Privacy-B73CtaiP.js"
+    "/build/assets/Privacy-C283BXAI.js"
   ],
   "resources/js/Pages/Legal/Terms.vue": [
-    "/build/assets/Terms-DKS86sTw.js"
+    "/build/assets/Terms-DOo-0gTg.js"
   ],
   "resources/js/Pages/Pique/Index.vue": [
     "/build/assets/Index-B0zmPVLp.js",
@@ -278,7 +278,7 @@
     "/build/assets/Index-D5fPAv8_.js"
   ],
   "resources/js/Pages/Settings/Index.vue": [
-    "/build/assets/Index-Co5D6y7N.js"
+    "/build/assets/Index-2zK7wu9f.js"
   ],
   "resources/js/Pages/Sitemaps/Index.vue": [
     "/build/assets/Index-BjrqG2SZ.js",
