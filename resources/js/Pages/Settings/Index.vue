@@ -455,6 +455,86 @@
         </div>
       </div>
 
+      <!-- Schedules Tab -->
+      <div v-if="activeTab === 'schedules'" class="space-y-6 animate-fade-in">
+        <div class="bg-white rounded-[2.5rem] border border-slate-100 shadow-premium p-8">
+          <div class="flex items-center gap-4 mb-8">
+            <div class="w-12 h-12 bg-blue-100 rounded-2xl flex items-center justify-center text-blue-600">
+               <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+               </svg>
+            </div>
+            <div>
+               <h2 class="text-xl font-bold text-slate-900">AI Schedules</h2>
+               <p class="text-sm text-slate-500">Manage your automated AI tasks, alerts, and periodic reports.</p>
+            </div>
+          </div>
+
+          <div v-if="piqueScheduledTasks.length" class="grid grid-cols-1 gap-4">
+            <div 
+              v-for="task in piqueScheduledTasks" 
+              :key="task.id"
+              class="group bg-white rounded-3xl border border-slate-100 p-6 flex flex-col md:flex-row md:items-center justify-between gap-6 hover:border-blue-500/30 transition-all hover:shadow-lg hover:shadow-slate-100"
+            >
+              <div class="flex items-center gap-5">
+                <div 
+                  class="w-14 h-14 rounded-2xl flex items-center justify-center shrink-0 shadow-sm"
+                  :class="task.is_active ? 'bg-blue-50 text-blue-600' : 'bg-slate-50 text-slate-400'"
+                >
+                  <svg v-if="task.task_type === 'crawl'" class="w-7 h-7" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                  </svg>
+                  <svg v-else class="w-7 h-7" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />
+                  </svg>
+                </div>
+                <div>
+                  <div class="flex items-center gap-2">
+                    <h3 class="font-bold text-slate-900 text-lg capitalize">{{ task.task_type }}</h3>
+                    <span 
+                      class="px-2 py-0.5 rounded-full text-[10px] font-black uppercase tracking-widest"
+                      :class="task.is_active ? 'bg-green-100 text-green-700' : 'bg-slate-100 text-slate-500'"
+                    >
+                      {{ task.is_active ? 'Active' : 'Paused' }}
+                    </span>
+                  </div>
+                  <p class="text-sm text-slate-500 font-medium">Frequency: <span class="text-slate-900 font-bold capitalize">{{ task.frequency }}</span></p>
+                  <p class="text-xs text-slate-400 mt-1">Next Run: <span class="text-slate-600 font-bold">{{ task.next_run_at || 'Never' }}</span></p>
+                </div>
+              </div>
+
+              <div class="flex items-center gap-4 justify-end">
+                <button 
+                  @click="toggleSchedule(task.id)"
+                  class="px-4 py-2 rounded-xl text-sm font-bold transition-all border"
+                  :class="task.is_active 
+                    ? 'border-amber-200 text-amber-700 hover:bg-amber-50' 
+                    : 'border-blue-200 text-blue-700 hover:bg-blue-50'"
+                >
+                  {{ task.is_active ? 'Pause' : 'Resume' }}
+                </button>
+                <button 
+                  @click="deleteSchedule(task.id)"
+                  class="px-4 py-2 rounded-xl text-sm font-bold border border-slate-100 text-slate-400 hover:text-red-600 hover:border-red-100 transition-all"
+                >
+                  Delete
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <div v-else class="text-center py-20 bg-slate-50 rounded-[3rem] border-2 border-dashed border-slate-200">
+            <div class="w-20 h-20 bg-white rounded-3xl flex items-center justify-center mx-auto mb-6 shadow-sm">
+                <svg class="w-10 h-10 text-slate-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                </svg>
+            </div>
+            <h3 class="text-xl font-bold text-slate-900 mb-2">No active schedules</h3>
+            <p class="text-slate-500 max-w-sm mx-auto">You can ask Pique to schedule weekly crawls or set up automated alerts in the chat interface.</p>
+          </div>
+        </div>
+      </div>
+
       <!-- Team Tab -->
       <div v-if="activeTab === 'team'" class="space-y-6 animate-fade-in">
          <!-- Existing Team UI -->
@@ -616,6 +696,7 @@ const props = defineProps({
   currentUserRole: String,
   aiModels: Array,
   analyticsProperties: Array,
+  piqueScheduledTasks: Array,
   industries: Array
 })
 
@@ -628,6 +709,7 @@ const tabs = [
   { id: 'account', name: 'Account' },
   { id: 'ai', name: 'AI Configuration' },
   { id: 'analytics', name: 'Analytics' },
+  { id: 'schedules', name: 'Schedules' },
   { id: 'team', name: 'Team Members' }
 ]
 
@@ -808,6 +890,21 @@ const cancelInvite = (id) => {
     'Are you sure you want to revoke this invitation? The link sent to the user will become invalid.',
     () => router.delete(route('team-invitations.destroy', id)),
     'Revoke Invitation'
+  )
+}
+
+const toggleSchedule = (id) => {
+  router.patch(route('api.pique.schedules.toggle', id), {}, {
+    preserveScroll: true
+  })
+}
+
+const deleteSchedule = (id) => {
+  openConfirmModal(
+    'Delete AI Schedule',
+    'Are you sure you want to remove this automated task? This cannot be undone.',
+    () => router.delete(route('api.pique.schedules.destroy', id)),
+    'Delete Schedule'
   )
 }
 </script>

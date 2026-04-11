@@ -42,6 +42,16 @@ class OrganizationSettingsController extends Controller
                     'token_expires_at'     => $p->token_expires_at?->toIso8601String(),
                 ];
             }),
+            'piqueScheduledTasks' => $organization->piqueScheduledTasks()->latest()->get()->map(function ($t) {
+                return [
+                    'id'          => $t->id,
+                    'task_type'   => $t->task_type,
+                    'frequency'   => $t->frequency,
+                    'next_run_at' => $t->next_run_at ? $t->next_run_at->toDateTimeString() : null,
+                    'is_active'   => (bool) $t->is_active,
+                    'payload'     => $t->payload,
+                ];
+            }),
             'industries' => \App\Models\Industry::orderBy('name')->get(['name', 'slug']),
         ]);
     }
