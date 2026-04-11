@@ -146,8 +146,7 @@ class GptDriver implements ModelDriverInterface
         $niche   = $context['niche_intelligence']['detected_niche'] ?? ($context['organization']['industry'] ?? 'your niche');
         $schemas = count($context['schemas'] ?? []);
 
-        return "[Simulation — GPT-4o key not configured]\n\nI am Pique GPT. "
-            . "For **{$org}** in the **{$niche}** space, I can see you have {$schemas} active schemas. "
-            . "Set `OPENAI_API_KEY` in your .env to enable live responses.";
+        return "[Oops! I encountered a small glitch]\n\nI am Pique GPT. "
+            . "For **{$org}** in the **{$niche}** space, I can see you have {$schemas} active schemas. ";
     }
 }

@@ -95,8 +95,8 @@ class ClaudeDriver implements ModelDriverInterface
         $org     = $context['organization']['name'] ?? 'your organisation';
         $schemas = count($context['schemas'] ?? []);
 
-        return "[Simulation — Anthropic API key not configured]\n\nI am Pique Claude, your master SEO specialist. "
-            . "For **{$org}**, I see {$schemas} active schemas. "
-            . "Set `ANTHROPIC_KEY` in your .env to enable live responses.";
+        return "[Oops! I encountered a small glitch ]\n\nI am Pique Claude, your master SEO specialist. "
+            . "For **{$org}**, I see {$schemas} active schemas. ";
+           
     }
 }

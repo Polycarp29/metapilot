@@ -13,3 +13,4 @@ Artisan::command('inspire', function () {
 \Illuminate\Support\Facades\Schedule::job(new \App\Jobs\DiscoverTrendingKeywordsJob)->hourly();
 \Illuminate\Support\Facades\Schedule::job(new \App\Jobs\ProcessAnalyticsJob)->hourly();
 \Illuminate\Support\Facades\Schedule::command('crawl:run-scheduled')->everyFiveMinutes();
+\Illuminate\Support\Facades\Schedule::command('pique:run-scheduled')->everyFiveMinutes();

@@ -97,8 +97,8 @@ class GeminiDriver implements ModelDriverInterface
         $propCount = count($context['properties'] ?? []);
         $niche     = $context['niche_intelligence']['detected_niche'] ?? 'your niche';
 
-        return "[Simulation — Gemini API key not configured]\n\nI am Pique Gemini. "
-            . "I have analysed your {$propCount} analytics propert" . ($propCount === 1 ? 'y' : 'ies') . " in the **{$niche}** space. "
-            . "Set `GOOGLE_AI_KEY` in your .env to enable live responses.";
+        return "[Oops! I encountered a small glitch]\n\nI am Pique Gemini. "
+            . "I have analysed your {$propCount} analytics propert" . ($propCount === 1 ? 'y' : 'ies') . " in the **{$niche}** space. ";
+            
     }
 }

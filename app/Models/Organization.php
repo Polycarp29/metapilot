@@ -167,4 +167,12 @@ class Organization extends Model
     {
         return $this->hasMany(PixelSite::class);
     }
+
+    /**
+     * Get the scheduled pique tasks for the organization.
+     */
+    public function piqueScheduledTasks()
+    {
+        return $this->hasMany(PiqueScheduledTask::class);
+    }
 }

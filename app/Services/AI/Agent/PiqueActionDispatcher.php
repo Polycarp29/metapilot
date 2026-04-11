@@ -44,6 +44,7 @@ class PiqueActionDispatcher
         protected AttributionService        $attribution,
         protected OpenAIService             $openAI,
         protected PixelIntelligenceService  $pixelIntelligence,
+        protected PiqueSchedulingService    $piqueScheduling,
     ) {}
 
     /**
@@ -71,13 +72,12 @@ class PiqueActionDispatcher
         }
 
         // 4. On-page SEO audit
-        if ($this->contains($p, ['audit', 'site audit', 'analyze site', 'site health', 'on-page seo'])) {
-            return $this->runContentAudit($organization, $prompt);
+        if ($this->contains($p, ['insight', 'analytics', 'performance', 'doing', 'data', 'visualize'])) {
+            return $this->runAnalyticsInsight($organization, $prompt);
         }
 
-        // 4. Crawl / Scan
-        if ($this->contains($p, ['crawl', 'scan site', 'discover links', 'start crawl', 'find broken links'])) {
-            return $this->runStartCrawl($organization);
+        if ($this->contains($p, ['gsc', 'search console', 'clicks', 'impressions'])) {
+            return $this->runGscPerformance($organization);
         }
 
         // 5. Schema validation / generation
@@ -99,13 +99,13 @@ class PiqueActionDispatcher
             if ($this->contains($p, ['ping', 'verify connection', 'is it working', 'check connection'])) {
                 return $this->runPingPixel($organization);
             }
-            if ($this->contains($p, ['breakdown', 'analysis', 'deep', 'stats', 'performance'])) {
+            if ($this->contains($p, ['breakdown', 'analysis', 'deep', 'stats', 'pixel performance'])) {
                 return $this->runDeepPixelAnalysis($organization);
             }
             return $this->runPixelData($organization);
         }
-        if ($this->contains($p, ['insight', 'performance', 'how is my site'])) {
-            return $this->runAnalyticsInsight($organization);
+        if ($this->contains($p, ['insight', 'analytics insight', 'how is my site', 'google analytics', 'site performance', 'performance data', 'performance report'])) {
+            return $this->runAnalyticsInsight($organization, $prompt);
         }
 
         // 7.5 Attribution Intelligence
@@ -193,6 +193,11 @@ class PiqueActionDispatcher
         // 20. Engagement / traffic quality trend
         if ($this->contains($p, ['engagement trend', 'traffic quality', 'bounce rate', 'how is traffic quality', 'dwell time trend', 'engagement rate', 'quality of traffic'])) {
             return $this->runEngagementTrend($organization);
+        }
+
+        // 21. Scheduling / Automated Tasks
+        if ($this->contains($p, ['schedule', 'periodic', 'automated', 'every', 'weekly', 'daily', 'monthly'])) {
+            return $this->runScheduleAction($organization, $prompt);
         }
 
         return null;
@@ -289,14 +294,119 @@ class PiqueActionDispatcher
         }
     }
 
-    private function runAnalyticsInsight(Organization $organization): array
+    private function runAnalyticsInsight(Organization $organization, string $prompt = ''): array
     {
-        $property = $organization->analyticsProperties()->whereNotNull('property_id')->first();
+        $property = $this->resolveProperty($organization, $prompt);
         if (!$property) {
+            // If multiple properties exist, ask the user to pick one
+            $properties = $organization->analyticsProperties()->whereNotNull('property_id')->get();
+            if ($properties->count() > 1) {
+                return [
+                    'action'     => 'property_select_required',
+                    'label'      => 'Multiple analytics properties found — please specify which one.',
+                    'properties' => $properties->map(fn($p) => ['id' => $p->id, 'name' => $p->name])->toArray(),
+                ];
+            }
             return ['action' => 'analytics_insight', 'status' => 'error', 'label' => 'No connected analytics property found.'];
         }
         $insight = $this->insights->generateWeeklySummary($property);
-        return ['action' => 'analytics_insight', 'data' => $insight, 'label' => "Analytics insight generated for {$property->name}"];
+        $context = $insight->context ?? [];
+        
+        $current = $context['current'] ?? ($context['currentData'] ?? []);
+        $prior   = $context['previous'] ?? ($context['prevData'] ?? []);
+
+        return [
+            'action'   => 'analytics_insight', 
+            'property' => $property->name, 
+            'data'     => $insight, 
+            'label'    => "Analytics insight generated for {$property->name}",
+            'charts'    => [
+                [
+                    'type'     => 'bar',
+                    'title'    => 'User & Session Overview',
+                    'subtitle' => 'Traffic Volume (Last 7 Days)',
+                    'data'     => [
+                        'labels'   => ['Users', 'Sessions'],
+                        'datasets' => [
+                            [
+                                'label'           => 'Current Period',
+                                'data'            => [
+                                    (int) ($current['total_users'] ?? 0),
+                                    (int) ($current['total_sessions'] ?? 0),
+                                ],
+                                'backgroundColor' => '#3b82f6',
+                                'borderRadius'    => 6
+                            ],
+                            [
+                                'label'           => 'Prior Period',
+                                'data'            => [
+                                    (int) ($prior['total_users'] ?? 0),
+                                    (int) ($prior['total_sessions'] ?? 0),
+                                ],
+                                'backgroundColor' => '#94a3b8',
+                                'borderRadius'    => 6
+                            ]
+                        ]
+                    ]
+                ],
+                [
+                    'type'     => 'doughnut',
+                    'title'    => 'Engagement Rate',
+                    'subtitle' => 'Active vs Bounce (Last 7 Days)',
+                    'data'     => [
+                        'labels'   => ['Engaged', 'Not Engaged'],
+                        'datasets' => [[
+                            'data' => [
+                                (float) ($current['engagement_rate'] ?? 0),
+                                100 - (float) ($current['engagement_rate'] ?? 0),
+                            ],
+                            'backgroundColor' => ['#10b981', '#f1f5f9'],
+                            'borderWidth' => 0
+                        ]]
+                    ]
+                ],
+                $this->getGscChart($property)
+            ]
+        ];
+    }
+
+    private function getGscChart(AnalyticsProperty $property): array
+    {
+        $gsc = \App\Models\SearchConsoleMetric::where('analytics_property_id', $property->id)
+            ->orderBy('snapshot_date', 'desc')
+            ->first();
+
+        return [
+            'type' => 'bar',
+            'title' => 'GSC Performance',
+            'subtitle' => 'Clicks vs Impressions (Latest)',
+            'data' => [
+                'labels' => ['Clicks', 'Impressions'],
+                'datasets' => [[
+                    'label' => 'Count',
+                    'data' => [
+                        (int) ($gsc->clicks ?? 0),
+                        (int) ($gsc->impressions ?? 0),
+                    ],
+                    'backgroundColor' => '#6366f1',
+                    'borderRadius' => 6
+                ]]
+            ]
+        ];
+    }
+
+    private function runGscPerformance(Organization $organization): array
+    {
+        $property = $this->resolveConnectedProperty($organization);
+        if (!$property) {
+            return ['action' => 'gsc_performance', 'status' => 'error', 'label' => 'No connected analytics/GSC property found.'];
+        }
+
+        return [
+            'action' => 'gsc_performance',
+            'label'  => "GSC Performance for {$property->name}",
+            'chart'  => $this->getGscChart($property)
+        ];
     }
 
     private function runPixelData(Organization $organization): array
@@ -463,14 +573,14 @@ class PiqueActionDispatcher
         ];
     }
 
-    private function runForecast(Organization $organization): array
+    private function runForecast(Organization $organization, string $prompt = ''): array
     {
-        $property = $organization->analyticsProperties()->whereNotNull('property_id')->first();
+        $property = $this->resolveProperty($organization, $prompt);
         if (!$property) {
             return ['action' => 'forecast', 'status' => 'error', 'label' => 'No connected analytics property to forecast.'];
         }
         $result = $this->forecast->forecast($property->id, 30, 14);
-        return ['action' => 'forecast', 'data' => $result, 'label' => "14-day traffic forecast for {$property->name}"];
+        return ['action' => 'forecast', 'property' => $property->name, 'data' => $result, 'label' => "14-day traffic forecast for {$property->name}"];
     }
 
     private function runBlogTopics(Organization $organization): array
@@ -479,14 +589,14 @@ class PiqueActionDispatcher
         return ['action' => 'blog_topics', 'data' => $topics, 'label' => 'Blog topic suggestions generated'];
     }
 
-    private function runCampaignProposal(Organization $organization): array
+    private function runCampaignProposal(Organization $organization, string $prompt = ''): array
     {
-        $property = $organization->analyticsProperties()->whereNotNull('property_id')->first();
+        $property = $this->resolveProperty($organization, $prompt);
         if (!$property) {
             return ['action' => 'campaign_proposal', 'status' => 'error', 'label' => 'No analytics property to base a campaign on.'];
         }
         $proposal = $this->strategy->proposeCampaign($property);
-        return ['action' => 'campaign_proposal', 'data' => $proposal, 'label' => 'SEO campaign proposal generated'];
+        return ['action' => 'campaign_proposal', 'property' => $property->name, 'data' => $proposal, 'label' => 'SEO campaign proposal generated'];
     }
 
     private function runAiDetection(string $content): array
@@ -534,6 +644,34 @@ class PiqueActionDispatcher
             'properties' => $properties,
             'response'   => "I can help you compile a professional SEO report. Which analytics properties should I include?"
         ];
+    }
+
+    /**
+     * Resolve an analytics property by matching a property name mentioned in the prompt.
+     * Falls back to the first connected property if no match is found.
+     */
+    private function resolveProperty(Organization $organization, string $prompt = ''): ?\App\Models\AnalyticsProperty
+    {
+        $properties = $organization->analyticsProperties()->whereNotNull('property_id')->get();
+        if ($properties->isEmpty()) return null;
+
+        // Try to find a property whose name appears in the prompt (case-insensitive)
+        if (!empty($prompt)) {
+            $pl = strtolower($prompt);
+            foreach ($properties as $prop) {
+                if (str_contains($pl, strtolower($prop->name))) {
+                    return $prop;
+                }
+                // Also match on website_url domain fragment
+                $domain = parse_url($prop->website_url ?? '', PHP_URL_HOST);
+                if ($domain && str_contains($pl, strtolower($domain))) {
+                    return $prop;
+                }
+            }
+        }
+
+        // Default: first connected property
+        return $properties->first();
     }
 
     private function contains(string $prompt, array $needles): bool
@@ -592,10 +730,27 @@ class PiqueActionDispatcher
             }
         }
 
+        $channels = $data['channels'] ?? [];
+        $labels   = array_keys($channels);
+        $values   = array_values($channels);
+
         return [
             'action' => 'attribution_analysis',
-            'label' => 'Attribution and channel analysis complete',
-            'data' => $data
+            'label'  => 'Attribution and channel analysis complete',
+            'data'   => $data,
+            'chart'  => [
+                'type'     => 'doughnut',
+                'title'    => 'Traffic by Channel',
+                'subtitle' => 'Referrer & Source Breakdown',
+                'data'     => [
+                    'labels'   => array_map(fn($l) => ucfirst($l), $labels),
+                    'datasets' => [[
+                        'data'            => $values,
+                        'backgroundColor' => ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#64748b'],
+                        'borderWidth'     => 0
+                    ]]
+                ]
+            ]
         ];
     }
 
@@ -675,6 +830,23 @@ class PiqueActionDispatcher
             'action' => 'page_detail',
             'label'  => "Page detail for {$url}",
             'data'   => $detail,
+            'chart'  => [
+                'type'     => 'doughnut',
+                'title'    => 'Device Split for this Page',
+                'subtitle' => 'Traffic breakdown by hardware',
+                'data'     => [
+                    'labels'   => ['Mobile', 'Desktop', 'Tablet'],
+                    'datasets' => [[
+                        'data'            => [
+                            $detail['by_device']['mobile']  ?? 0,
+                            $detail['by_device']['desktop'] ?? 0,
+                            $detail['by_device']['tablet']  ?? 0,
+                        ],
+                        'backgroundColor' => ['#10b981', '#3b82f6', '#f59e0b'],
+                        'borderWidth'     => 0
+                    ]]
+                ]
+            ]
         ];
     }
 
@@ -723,6 +895,62 @@ class PiqueActionDispatcher
                 'last_7_days'  => $current,
                 'last_14_days' => $prior,
             ],
+            'chart'  => [
+                'type'     => 'line',
+                'title'    => 'Traffic Engagement Trend',
+                'subtitle' => 'Last 7 Days vs Prior 7 Days',
+                'data'     => [
+                    'labels'   => ['Previous Period', 'Current Period'],
+                    'datasets' => [
+                        [
+                            'label'           => 'Total Hits',
+                            'data'            => [$prior['total_hits'], $current['total_hits']],
+                            'borderColor'     => '#3b82f6',
+                            'backgroundColor' => 'rgba(59, 130, 246, 0.1)',
+                            'fill'            => true,
+                            'tension'         => 0.4
+                        ],
+                        [
+                            'label'           => 'Engaged Hits',
+                            'data'            => [
+                                round(($prior['total_hits'] * ($prior['engagement_rate'] ?? 0)) / 100), 
+                                round(($current['total_hits'] * ($current['engagement_rate'] ?? 0)) / 100)
+                            ],
+                            'borderColor'     => '#10b981',
+                            'backgroundColor' => 'rgba(16, 185, 129, 0.1)',
+                            'fill'            => true,
+                            'tension'         => 0.4
+                        ]
+                    ]
+                ]
+            ]
+        ];
+    }
+    private function runScheduleAction(Organization $organization, string $prompt): array
+    {
+        $p = strtolower($prompt);
+        
+        // Basic parser for AI intent
+        $type = $this->contains($p, ['crawl', 'scan']) ? 'crawl' : 'analytics_alert';
+        $freq = $this->contains($p, ['daily', 'every day']) ? 'daily' 
+              : ($this->contains($p, ['monthly']) ? 'monthly' : 'weekly');
+        
+        $params = [
+            'type' => $type,
+            'frequency' => $freq,
+            'run_at' => '08:00', // Default
+            'day_of_week' => 1,    // Monday
+            'payload' => [
+                'prompt_context' => $prompt
+            ]
+        ];
+
+        $result = $this->piqueScheduling->scheduleTask($organization, $params);
+
+        return [
+            'action' => 'schedule_task',
+            'label'  => $result['label'],
+            'data'   => $result,
         ];
     }
 }

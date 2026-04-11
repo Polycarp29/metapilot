@@ -131,6 +131,8 @@ class PiqueContextService
         $siteId = $activeSite?->id;
 
         return [
+            'site_label'      => $activeSite?->label ?? 'All Sites',
+            'site_domain'     => $activeSite?->allowed_domain ?? 'N/A',
             'top_pages'       => $this->pixelIntelligence->getTopPages($organization, 5, 7, $siteId),
             'trend_velocity'  => $this->pixelIntelligence->getTrendVelocity($organization, $siteId),
         ];
@@ -161,6 +163,7 @@ class PiqueContextService
             'users'           => $snapshot->users,
             'sessions'        => $snapshot->sessions,
             'engagement_rate' => $snapshot->engagement_rate,
+            'is_range'        => false, // single-day snapshot, not a date range
         ] : null;
     }
 

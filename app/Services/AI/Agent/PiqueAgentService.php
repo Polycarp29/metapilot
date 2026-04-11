@@ -10,6 +10,23 @@ use Illuminate\Support\Str;
 
 class PiqueAgentService
 {
+    /**
+     * Actions that return live / real-time data and must never be served from cache.
+     */
+    protected const SKIP_CACHE_ACTIONS = [
+        'analytics_insight',
+        'pixel_data',
+        'deep_pixel_analysis',
+        'page_journey',
+        'traffic_velocity',
+        'engagement_trend',
+        'attribution_analysis',
+        'forecast',
+        'lead_intelligence',
+        'pixel_ping',
+        'property_select_required',
+    ];
+
     public function __construct(
         protected PiqueCreditService      $credits,
         protected PiqueContextService     $context,
@@ -95,6 +112,10 @@ class PiqueAgentService
         // 7. Dispatch Action
         $actionResult = $this->dispatcher->dispatch($prompt, $organization, $user);
 
+        // Determine whether to skip caching for this action type (real-time data)
+        $actionType = $actionResult['action'] ?? null;
+        $skipCache  = in_array($actionType, self::SKIP_CACHE_ACTIONS, true);
+
         $response = '';
         if ($stream) {
             // 8. Generate Streamed Response
@@ -120,8 +141,10 @@ class PiqueAgentService
             'context_snapshot' => $metapilotContext,
         ]);
 
-        // 11. Save to Knowledge Base for future similar queries
-        $this->saveKnowledge($organization, $prompt, $response, $actionResult);
+        // 11. Save to Knowledge Base only for non-real-time responses
+        if (!$skipCache) {
+            $this->saveKnowledge($organization, $prompt, $response, $actionResult);
+        }
 
         return [
             'session_id' => $session->session_id,
@@ -176,7 +199,7 @@ class PiqueAgentService
                 'answer_text'   => $answer,
                 'metadata'      => [
                     'action' => $action,
-                    'ttl'    => 7, // Default 7 days
+                    'ttl'    => 1, // 1 day — keep general advice fresh
                     'source' => 'ai_generation'
                 ],
                 'last_used_at'  => now(),

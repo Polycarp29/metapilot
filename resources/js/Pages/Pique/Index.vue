@@ -839,7 +839,20 @@ onMounted(() => {
                             </div>
 
                             <!-- ═══ Crawl UI Panel ═══════════════════════════════════════════ -->
-                            <div v-if="msg.role === 'agent' && msg.action?.chart" class="mt-4 w-full">
+                            <!-- Multiple Charts Support -->
+                            <div v-if="msg.role === 'agent' && msg.action?.charts && msg.action.charts.length > 0" class="mt-4 space-y-6 w-full">
+                                <PiqueChart 
+                                    v-for="(chart, idx) in msg.action.charts" 
+                                    :key="idx"
+                                    :type="chart.type"
+                                    :chartData="chart.data"
+                                    :title="chart.title"
+                                    :subtitle="chart.subtitle"
+                                />
+                            </div>
+
+                            <!-- Single Chart Support (Legacy) -->
+                            <div v-else-if="msg.role === 'agent' && msg.action?.chart" class="mt-4 w-full">
                                 <PiqueChart
                                     :type="msg.action.chart.type"
                                     :chartData="msg.action.chart.data"
