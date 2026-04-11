@@ -8,6 +8,7 @@ use App\Services\ContentManagementService;
 use App\Services\AiContentDetectionService;
 use App\Services\ContentSeoAnalysisService;
 use App\Services\OpenAIService;
+use App\Services\AI\Agent\PiqueCreditService;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
 
@@ -17,17 +18,20 @@ class BlogPostController extends Controller
     protected $aiDetector;
     protected $seoService;
     protected $openAi;
+    protected $credits;
 
     public function __construct(
         ContentManagementService $contentService,
         AiContentDetectionService $aiDetector,
         ContentSeoAnalysisService $seoService,
-        OpenAIService $openAi
+        OpenAIService $openAi,
+        PiqueCreditService $credits
     ) {
         $this->contentService = $contentService;
         $this->aiDetector = $aiDetector;
         $this->seoService = $seoService;
         $this->openAi = $openAi;
+        $this->credits = $credits;
     }
 
     public function index(Request $request)
@@ -108,8 +112,17 @@ class BlogPostController extends Controller
 
     public function analyze(BlogPost $post)
     {
+        $org = auth()->user()->currentOrganization();
+        $cost = 2.0;
+
+        if (!$this->credits->hasEnoughCredits($org, $cost)) {
+            return response()->json(['error' => 'Insufficient credits', 'balance_needed' => $cost], 402);
+        }
+
         $seoResult = $this->seoService->analyze($post);
         $aiResult = $this->aiDetector->analyze($post->content);
+
+        $this->credits->deductCredits($org, auth()->user(), $cost, 'pique-gpt', 'Content SEO & AI Analysis: ' . $post->title);
 
         $metrics = $this->contentService->calculateMetrics($post->content);
 
@@ -132,36 +145,63 @@ class BlogPostController extends Controller
 
     public function generateOutline(Request $request)
     {
+        $org = auth()->user()->currentOrganization();
+        $cost = 1.0;
+
         $request->validate([
             'topic' => 'required|string|max:255',
             'keywords' => 'nullable|array'
         ]);
 
+        if (!$this->credits->hasEnoughCredits($org, $cost)) {
+            return response()->json(['error' => 'Insufficient credits', 'balance_needed' => $cost], 402);
+        }
+
         $outline = $this->openAi->generateBlogOutline($request->topic, $request->keywords ?? []);
+        
+        $this->credits->deductCredits($org, auth()->user(), $cost, 'pique-gpt', 'Generated Outline: ' . $request->topic);
 
         return response()->json($outline);
     }
 
     public function generateIntro(Request $request)
     {
+        $org = auth()->user()->currentOrganization();
+        $cost = 1.0;
+
         $request->validate([
             'title' => 'required|string|max:255',
             'focus_keyword' => 'required|string|max:100'
         ]);
 
+        if (!$this->credits->hasEnoughCredits($org, $cost)) {
+            return response()->json(['error' => 'Insufficient credits', 'balance_needed' => $cost], 402);
+        }
+
         $intro = $this->openAi->generateIntroduction($request->title, $request->focus_keyword);
+        
+        $this->credits->deductCredits($org, auth()->user(), $cost, 'pique-gpt', 'Generated Intro: ' . $request->title);
 
         return response()->json(['intro' => $intro]);
     }
 
     public function refineContent(Request $request)
     {
+        $org = auth()->user()->currentOrganization();
+        $cost = 1.0;
+
         $request->validate([
             'content' => 'required|string',
             'instruction' => 'required|string|max:500'
         ]);
 
+        if (!$this->credits->hasEnoughCredits($org, $cost)) {
+            return response()->json(['error' => 'Insufficient credits', 'balance_needed' => $cost], 402);
+        }
+
         $refined = $this->openAi->refineContent($request->content, $request->instruction);
+        
+        $this->credits->deductCredits($org, auth()->user(), $cost, 'pique-gpt', 'Refined Content Segment');
 
         return response()->json(['refined' => $refined]);
     }

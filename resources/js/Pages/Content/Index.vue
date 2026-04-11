@@ -325,6 +325,20 @@
                             </div>
                          </div>
 
+                         <!-- Rich Text Toolbar -->
+                         <div class="sticky top-0 z-10 flex items-center gap-1 p-2 mb-6 bg-white/80 backdrop-blur-md border border-slate-200 rounded-2xl shadow-sm self-start">
+                            <button @click="format('bold')" class="px-3 py-2 hover:bg-slate-100 rounded-lg text-slate-600 transition-all font-black text-xs" title="Bold">B</button>
+                            <button @click="format('italic')" class="px-3 py-2 hover:bg-slate-100 rounded-lg text-slate-600 italic transition-all font-serif text-xs" title="Italic">I</button>
+                            <button @click="format('underline')" class="px-3 py-2 hover:bg-slate-100 rounded-lg text-slate-600 underline transition-all font-serif text-xs" title="Underline">U</button>
+                            <div class="w-px h-6 bg-slate-200 mx-1"></div>
+                            <button @click="format('formatBlock', 'h2')" class="px-2 py-1 hover:bg-slate-100 rounded-lg text-[10px] font-black text-slate-600 transition-all" title="Heading 2">H2</button>
+                            <button @click="format('formatBlock', 'h3')" class="px-2 py-1 hover:bg-slate-100 rounded-lg text-[10px] font-black text-slate-600 transition-all" title="Heading 3">H3</button>
+                            <div class="w-px h-6 bg-slate-200 mx-1"></div>
+                            <button @click="format('insertUnorderedList')" class="p-2 hover:bg-slate-100 rounded-lg text-slate-600 transition-all" title="Bullet List">
+                               <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16" /></svg>
+                            </button>
+                         </div>
+
                          <!-- Content Editor (Simplified) -->
                          <div 
                            ref="editor"
@@ -634,15 +648,33 @@ const hasSelection = ref(false)
 
 const addKeyword = (kw) => {
    if (!form.content.includes(kw)) {
-      form.content += ` <p><em>${kw}</em></p>`
+      const p = document.createElement('p')
+      p.innerHTML = `<em>${kw}</em>`
       if (editor.value) {
-         editor.value.innerHTML = form.content
+         editor.value.appendChild(p)
+         form.content = editor.value.innerHTML
       }
       toast.success(`Keyword added: ${kw}`)
       debouncedAnalysis()
    } else {
       toast.warning('Keyword already exists in content')
    }
+}
+
+const format = (command, value = null) => {
+   document.execCommand(command, false, value)
+   if (editor.value) form.content = editor.value.innerHTML
+}
+
+const handleAiError = (err) => {
+   if (err.response?.status === 402) {
+      toast.error('Insufficient Credits! Please top up your organization balance.', {
+         duration: 6000
+      })
+      activeTab.value = 'audit' // Redirect to audit or a billing tab if we had one
+      return
+   }
+   toast.error(err.response?.data?.error || 'AI request failed.')
 }
 
 const generateIntro = async () => {
@@ -665,7 +697,7 @@ const generateIntro = async () => {
          debouncedAnalysis()
       }
    } catch (e) {
-      toast.error('Failed to generate introduction.')
+      handleAiError(e)
    } finally {
       isGeneratingIntro.value = false
    }
@@ -693,7 +725,7 @@ const refineSelection = async () => {
          debouncedAnalysis()
       }
    } catch (e) {
-      toast.error('Failed to refine content.')
+      handleAiError(e)
    } finally {
       isRefining.value = false
    }
@@ -803,8 +835,7 @@ const runAnalysis = async () => {
     metrics.reading_time_minutes = res.data.post.reading_time_minutes
     toast.success('Analysis complete')
   } catch (err) {
-    console.error(err)
-    toast.error('Failed to analyze content')
+    handleAiError(err)
   } finally {
     analyzing.value = false
   }
@@ -866,12 +897,15 @@ const runHumanizer = async () => {
         content: humanizer.input,
         tone: humanizer.tone
      })
+     if (res.data.success === false) {
+        toast.error(res.data.message || 'Humanization failed via AI.')
+        return
+     }
      humanizer.output = res.data.humanized_text
      humanizer.result = res.data
      toast.success('Content humanized successfully')
    } catch (err) {
-      console.error(err)
-      toast.error('Humanization failed')
+      handleAiError(err)
    } finally {
       humanizing.value = false
    }
@@ -894,8 +928,7 @@ const runAudit = async () => {
      auditResult.value = res.data
      toast.success('Audit complete')
    } catch (err) {
-      console.error(err)
-      toast.error('Audit failed')
+      handleAiError(err)
    } finally {
       auditing.value = false
    }
