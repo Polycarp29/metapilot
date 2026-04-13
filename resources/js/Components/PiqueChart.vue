@@ -11,7 +11,19 @@
             </div>
         </div>
 
-        <div class="relative h-[300px]">
+        <!-- Empty state: all values are zero / no data yet -->
+        <div v-if="isEmpty" class="relative h-[300px] flex flex-col items-center justify-center gap-3 bg-slate-50/60 rounded-2xl border border-dashed border-slate-200">
+            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-10 h-10 text-slate-300">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M3 13.125C3 12.504 3.504 12 4.125 12h2.25c.621 0 1.125.504 1.125 1.125v6.75C7.5 20.496 6.996 21 6.375 21h-2.25A1.125 1.125 0 0 1 3 19.875v-6.75ZM9.75 8.625c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125v11.25c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 0 1-1.125-1.125V8.625ZM16.5 4.125c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125V19.875c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 0 1-1.125-1.125V4.125Z" />
+            </svg>
+            <p class="text-[12px] font-bold text-slate-400 uppercase tracking-widest">No data available yet</p>
+            <p class="text-[11px] text-slate-400 max-w-xs text-center leading-relaxed">
+                Data will appear here once your connected properties start reporting metrics.
+            </p>
+        </div>
+
+        <!-- Live chart -->
+        <div v-else class="relative h-[300px]">
             <Bar
                 v-if="type === 'bar'"
                 :data="chartData"
@@ -70,6 +82,20 @@ const props = defineProps({
         type: String,
         default: 'bar', // bar, line, doughnut
     }
+});
+
+/**
+ * True when every dataset value is 0 or the datasets array is empty.
+ * Prevents Chart.js rendering a blank white canvas with no visual cue.
+ */
+const isEmpty = computed(() => {
+    const datasets = props.chartData?.datasets ?? [];
+    if (!datasets.length) return true;
+    const total = datasets.reduce((sum, ds) => {
+        const vals = Array.isArray(ds.data) ? ds.data : [];
+        return sum + vals.reduce((s, v) => s + (Number(v) || 0), 0);
+    }, 0);
+    return total === 0;
 });
 
 const chartOptions = computed(() => ({

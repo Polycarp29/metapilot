@@ -15,9 +15,11 @@ class PiqueAgentService
      */
     protected const SKIP_CACHE_ACTIONS = [
         'analytics_insight',
+        'keyword_research',         // SERP data is live — never serve from a stale cached answer
         'pixel_data',
         'deep_pixel_analysis',
         'page_journey',
+        'extended_page_analysis',   // live pixel data — always fresh
         'traffic_velocity',
         'engagement_trend',
         'attribution_analysis',
@@ -109,23 +111,35 @@ class PiqueAgentService
             ->values()
             ->toArray();
 
-        // 7. Dispatch Action
-        $actionResult = $this->dispatcher->dispatch($prompt, $organization, $user);
+        try {
+            // 7. Dispatch Action
+            $actionResult = $this->dispatcher->dispatch($prompt, $organization, $user);
 
-        // Determine whether to skip caching for this action type (real-time data)
-        $actionType = $actionResult['action'] ?? null;
-        $skipCache  = in_array($actionType, self::SKIP_CACHE_ACTIONS, true);
+            // Determine whether to skip caching for this action type (real-time data)
+            $actionType = $actionResult['action'] ?? null;
+            $skipCache  = in_array($actionType, self::SKIP_CACHE_ACTIONS, true);
 
-        $response = '';
-        if ($stream) {
-            // 8. Generate Streamed Response
-            $driver->generateStreamedResponse($prompt, $metapilotContext, $history, $systemPrompt, $actionResult, function($chunk) use (&$response, $onChunk) {
-                $response .= $chunk;
-                if ($onChunk) $onChunk($chunk);
-            });
-        } else {
-            // 8. Generate Full Response
-            $response = $driver->generateResponse($prompt, $metapilotContext, $history, $systemPrompt, $actionResult);
+            $response = '';
+            if ($stream) {
+                // 8. Generate Streamed Response
+                $driver->generateStreamedResponse($prompt, $metapilotContext, $history, $systemPrompt, $actionResult, function($chunk) use (&$response, $onChunk) {
+                    $response .= $chunk;
+                    if ($onChunk) $onChunk($chunk);
+                });
+            } else {
+                // 8. Generate Full Response
+                $response = $driver->generateResponse($prompt, $metapilotContext, $history, $systemPrompt, $actionResult);
+            }
+        } catch (\Throwable $e) {
+            \Illuminate\Support\Facades\Log::error('Pique process error: ' . $e->getMessage(), [
+                'prompt' => $prompt,
+                'trace'  => $e->getTraceAsString()
+            ]);
+            return [
+                'session_id' => $session->session_id,
+                'error'      => 'I encountered an unexpected error while processing your request. Please try again or rephrase your question.',
+                'debug'      => config('app.debug') ? $e->getMessage() : null
+            ];
         }
 
         // 9. Auto-generate Title if missing (first turn)

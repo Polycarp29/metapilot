@@ -13,6 +13,8 @@ use App\Services\ContentSeoAnalysisService;
 use App\Services\SchemaValidationService;
 use App\Services\GscService;
 use App\Services\InsightService;
+use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Str;
 use App\Services\ForecastService;
 use App\Services\BlogTopicSuggestionService;
 use App\Services\StrategyService;
@@ -22,8 +24,6 @@ use App\Services\NicheDetectionService;
 use App\Services\OpenAIService;
 use App\Services\LeadScoringService;
 use App\Services\AttributionService;
-use Illuminate\Support\Facades\Log;
-use Illuminate\Support\Str;
 
 class PiqueActionDispatcher
 {
@@ -62,7 +62,7 @@ class PiqueActionDispatcher
 
         // 2. Keyword research
         if ($this->contains($p, ['research keyword', 'keyword research', 'search for keyword', 'find keywords'])) {
-            $query = $this->extractQuotedOrLastWords($prompt, 3);
+            $query = $this->buildKeywordQuery($prompt, $organization);
             return $this->runKeywordResearch($organization, $query);
         }
 
@@ -162,7 +162,13 @@ class PiqueActionDispatcher
             return $this->runNicheDetection($organization);
         }
 
-        // 15. Page journey — top visited pages from pixel
+        // 15. Extended page analysis — "more pages", "analyse all pages", etc.
+        //     Must be checked BEFORE the standard page journey to catch follow-up requests.
+        if ($this->contains($p, ['more pages', 'analyse pages', 'analyze pages', 'all pages', 'show more pages', 'more urls', 'other pages', 'rest of pages', 'expand pages', 'analyse all', 'analyze all', 'full page list', 'every page', 'all urls', 'show all pages', 'more page data'])) {
+            return $this->runExtendedPageAnalysis($organization);
+        }
+
+        // 15b. Page journey — top visited pages from pixel (standard — top 10)
         if ($this->contains($p, ['top pages', 'most visited', 'popular pages', 'which pages', 'page traffic', 'visited the most', 'page performance', 'what pages'])) {
             return $this->runPageJourney($organization);
         }
@@ -213,7 +219,34 @@ class PiqueActionDispatcher
     private function runKeywordResearch(Organization $organization, string $query): array
     {
         $result = $this->keywords->research($organization, $query);
-        return ['action' => 'keyword_research', 'query' => $query, 'data' => $result, 'label' => "Keyword Research: \"{$query}\""];
+
+        // Strip raw organic SERP results — they contain competitor URLs and snippets that
+        // the LLM will misinterpret as keyword tool recommendations. Only pass curated metrics.
+        $safeResults = [
+            'intent'           => $result['intent']           ?? null,
+            'niche'            => $result['niche']            ?? null,
+            'growth_rate'      => $result['growth_rate']      ?? 0,
+            'current_interest' => $result['current_interest'] ?? 0,
+            'cached'           => $result['cached']           ?? false,
+            'last_searched_at' => $result['last_searched_at'] ?? 'just now',
+            // Include only the top 5 related queries / questions — not full SERP pages
+            'related_queries'  => array_slice(
+                $result['results']['relatedSearches'] ?? $result['results']['relatedQueries'] ?? [],
+                0, 8
+            ),
+            'people_also_ask'  => array_slice(
+                array_column($result['results']['peopleAlsoAsk'] ?? [], 'question'),
+                0, 6
+            ),
+            'top_serpurlcount' => count($result['results']['organic'] ?? []),
+        ];
+
+        return [
+            'action' => 'keyword_research',
+            'query'  => $query,
+            'data'   => $safeResults,
+            'label'  => "Keyword Research: \"{$query}\"",
+        ];
     }
 
     private function runDiscoverTrending(Organization $organization): array
@@ -296,102 +329,79 @@ class PiqueActionDispatcher
 
     private function runAnalyticsInsight(Organization $organization, string $prompt = ''): array
     {
-        $property = $this->resolveProperty($organization, $prompt);
-        if (!$property) {
-            // If multiple properties exist, ask the user to pick one
-            $properties = $organization->analyticsProperties()->whereNotNull('property_id')->get();
-            if ($properties->count() > 1) {
-                return [
-                    'action'     => 'property_select_required',
-                    'label'      => 'Multiple analytics properties found — please specify which one.',
-                    'properties' => $properties->map(fn($p) => ['id' => $p->id, 'name' => $p->name])->toArray(),
-                ];
+        try {
+            $property = $this->resolveProperty($organization, $prompt);
+            if (!$property) {
+                // If multiple properties exist, ask the user to pick one
+                $properties = $organization->analyticsProperties()->whereNotNull('property_id')->get();
+                if ($properties->count() > 1) {
+                    return [
+                        'action'     => 'property_select_required',
+                        'label'      => 'Multiple analytics properties found — please specify which one.',
+                        'properties' => $properties->map(fn($p) => ['id' => $p->id, 'name' => $p->name])->toArray(),
+                    ];
+                }
+                return ['action' => 'analytics_insight', 'status' => 'error', 'label' => 'No connected analytics property found.'];
             }
-            return ['action' => 'analytics_insight', 'status' => 'error', 'label' => 'No connected analytics property found.'];
-        }
-        $insight = $this->insights->generateWeeklySummary($property);
-        $context = $insight->context ?? [];
-        
-        $current = $context['current'] ?? ($context['currentData'] ?? []);
-        $prior   = $context['previous'] ?? ($context['prevData'] ?? []);
+            $insight = $this->insights->generateWeeklySummary($property);
+            $context = $insight->context ?? [];
 
-        return [
-            'action'   => 'analytics_insight', 
-            'property' => $property->name, 
-            'data'     => $insight, 
-            'label'    => "Analytics insight generated for {$property->name}",
-            'charts'    => [
-                [
-                    'type'     => 'bar',
-                    'title'    => 'User & Session Overview',
-                    'subtitle' => 'Traffic Volume (Last 7 Days)',
-                    'data'     => [
-                        'labels'   => ['Users', 'Sessions'],
-                        'datasets' => [
-                            [
-                                'label'           => 'Current Period',
-                                'data'            => [
-                                    (int) ($current['total_users'] ?? 0),
-                                    (int) ($current['total_sessions'] ?? 0),
-                                ],
-                                'backgroundColor' => '#3b82f6',
-                                'borderRadius'    => 6
-                            ],
-                            [
-                                'label'           => 'Prior Period',
-                                'data'            => [
-                                    (int) ($prior['total_users'] ?? 0),
-                                    (int) ($prior['total_sessions'] ?? 0),
-                                ],
-                                'backgroundColor' => '#94a3b8',
-                                'borderRadius'    => 6
-                            ]
-                        ]
-                    ]
-                ],
-                [
-                    'type'     => 'doughnut',
-                    'title'    => 'Engagement Rate',
-                    'subtitle' => 'Active vs Bounce (Last 7 Days)',
-                    'data'     => [
-                        'labels'   => ['Engaged', 'Not Engaged'],
-                        'datasets' => [[
-                            'data' => [
-                                (float) ($current['engagement_rate'] ?? 0),
-                                100 - (float) ($current['engagement_rate'] ?? 0),
-                            ],
-                            'backgroundColor' => ['#10b981', '#f1f5f9'],
-                            'borderWidth' => 0
-                        ]]
-                    ]
-                ],
-                $this->getGscChart($property)
-            ]
-        ];
+            $current = $context['current'] ?? ($context['currentData'] ?? []);
+            // Build charts array, skipping any that have no data (avoids blank renders)
+            $gscChart = $this->getGscChart($property); // returns null when no GSC data
+
+            $charts = array_values(array_filter([
+                $gscChart,
+            ]));
+
+            return [
+                'action'   => 'analytics_insight',
+                'property' => $property->name,
+                'insight'  => $insight->summary ?? 'Analytics overview retrieved.',
+                'charts'   => $charts,
+            ];
+        } catch (\Throwable $e) {
+            Log::error('Pique analytics insight error: ' . $e->getMessage());
+            return [
+                'action' => 'analytics_insight',
+                'status' => 'error',
+                'error'  => 'I encountered an error retrieving your analytics metrics. This is usually temporary.',
+            ];
+        }
     }
 
-    private function getGscChart(AnalyticsProperty $property): array
+    /**
+     * Build a GSC bar chart for analytics_insight.
+     * Returns null when there is no data so it can be cleanly filtered from the charts array
+     * rather than rendering a blank canvas with two zero-height bars.
+     */
+    private function getGscChart(AnalyticsProperty $property): ?array
     {
         $gsc = \App\Models\SearchConsoleMetric::where('analytics_property_id', $property->id)
             ->orderBy('snapshot_date', 'desc')
             ->first();
 
+        $clicks      = (int) ($gsc->clicks ?? 0);
+        $impressions = (int) ($gsc->impressions ?? 0);
+
+        // Skip entirely when there's nothing to show — avoids a blank chart render
+        if ($clicks === 0 && $impressions === 0) {
+            return null;
+        }
+
         return [
-            'type' => 'bar',
-            'title' => 'GSC Performance',
-            'subtitle' => 'Clicks vs Impressions (Latest)',
-            'data' => [
-                'labels' => ['Clicks', 'Impressions'],
+            'type'     => 'bar',
+            'title'    => 'GSC Performance',
+            'subtitle' => 'Clicks vs Impressions (Latest Snapshot)',
+            'data'     => [
+                'labels'   => ['Clicks', 'Impressions'],
                 'datasets' => [[
-                    'label' => 'Count',
-                    'data' => [
-                        (int) ($gsc->clicks ?? 0),
-                        (int) ($gsc->impressions ?? 0),
-                    ],
+                    'label'           => 'Count',
+                    'data'            => [$clicks, $impressions],
                     'backgroundColor' => '#6366f1',
-                    'borderRadius' => 6
-                ]]
-            ]
+                    'borderRadius'    => 6,
+                ]],
+            ],
         ];
     }
 
@@ -706,6 +716,53 @@ class PiqueActionDispatcher
         return implode(' ', array_slice($words, -$fallbackWords));
     }
 
+    /**
+     * Build a meaningful keyword query from the user prompt + organisation context.
+     *
+     * Priority order:
+     *   1. An explicitly quoted term in the prompt (e.g. "sports betting odds")
+     *   2. A recognisable topic extracted from the prompt after stripping intent verbs
+     *   3. The organisation's niche + domain as a seed query
+     */
+    private function buildKeywordQuery(string $prompt, Organization $organization): string
+    {
+        // 1. Quoted phrase wins immediately
+        if (preg_match('/"([^"]+)"/', $prompt, $m)) return trim($m[1]);
+        if (preg_match("/[''']([^''']+)[''']/", $prompt, $m)) return trim($m[1]);
+
+        // 2. Strip common intent verbs and meta-words from the prompt,
+        //    then take what remains as the topic.
+        $stopWords  = [
+            'research', 'keyword', 'keywords', 'find', 'search', 'for', 'my',
+            'site', 'website', 'niche', 'give', 'me', 'some', 'do', 'a', 'an',
+            'the', 'best', 'top', 'get', 'run', 'show', 'please', 'can', 'you',
+            'about', 'related', 'to', 'and', 'with', 'on', 'in',
+        ];
+        $words   = preg_split('/\s+/', strtolower(trim($prompt)));
+        $cleaned = array_filter($words, fn($w) => !in_array($w, $stopWords, true));
+        $topic   = trim(implode(' ', $cleaned));
+
+        // 3. If meaningful text remains, prefix with org niche for SEO context
+        $niche = $organization->nicheIntelligence?->detected_niche
+            ?? ($organization->settings['industry'] ?? null);
+
+        if (strlen($topic) >= 3) {
+            // If the topic sounds like it's already a real phrase, trust it
+            return $topic;
+        }
+
+        // 4. Absolute fallback: niche + domain seed
+        $domain = $organization->allowed_domain ?? '';
+        if ($niche) {
+            return $niche;
+        }
+        if ($domain) {
+            return parse_url('https://' . ltrim($domain, '/'), PHP_URL_HOST) ?? $domain;
+        }
+
+        return 'seo keywords';
+    }
+
     private function extractKeywordsFromPrompt(string $prompt): array
     {
         // Try to find a "keywords:" or "for: X, Y, Z" pattern
@@ -717,72 +774,137 @@ class PiqueActionDispatcher
 
     private function runAttributionAnalysis(\App\Models\Organization $organization): array
     {
-        $data = $this->attribution->analyze($organization);
-        
-        // Enrich with Keyword Inference for top pages
-        $property = $organization->analyticsProperties()->first();
+        try {
+            $data = $this->attribution->analyze($organization);
 
-        if ($property) {
-            foreach ($data['top_links'] as &$link) {
-                $url = $link['page_url'];
-                $keywords = $this->gsc->getTopKeywordsForUrl($property, $url);
-                $link['inferred_keywords'] = array_slice($keywords, 0, 5);
+            // Enrich with Keyword Inference for top pages
+            $property = $organization->analyticsProperties()->first();
+            if ($property) {
+                foreach ($data['top_links'] as &$link) {
+                    $url      = $link['page_url'];
+                    $keywords = $this->gsc->getTopKeywordsForUrl($property, $url);
+                    $link['inferred_keywords'] = array_slice($keywords, 0, 5);
+                }
             }
+
+            // Channel doughnut — only include channels with traffic
+            $channels      = $data['channels'] ?? [];
+            $activeChannels = array_filter($channels, fn($ch) => ($ch['hits'] ?? 0) > 0);
+            $channelLabels  = array_map(fn($l) => ucfirst($l), array_keys($activeChannels));
+            $channelValues  = array_column(array_values($activeChannels), 'hits');
+
+            // City bar chart (top 8 cities by hits)
+            $cities      = array_slice($data['cities'] ?? [], 0, 8);
+            $cityLabels  = array_map(fn($c) => ($c['city'] ?? 'Unknown') . ' (' . ($c['country_code'] ?? '') . ')', $cities);
+            $cityValues  = array_column($cities, 'hits');
+
+            return [
+                'action' => 'attribution_analysis',
+                'data'   => $data,
+                'charts' => [], // Will be populated if needed, or left to LLM to summarize
+            ];
+        } catch (\Throwable $e) {
+            Log::error('Pique attribution analysis error: ' . $e->getMessage());
+            return [
+                'action' => 'attribution_analysis',
+                'error'  => 'I was unable to analyze your traffic attribution at this moment.',
+            ];
         }
-
-        $channels = $data['channels'] ?? [];
-        $labels   = array_keys($channels);
-        $values   = array_values($channels);
-
-        return [
-            'action' => 'attribution_analysis',
-            'label'  => 'Attribution and channel analysis complete',
-            'data'   => $data,
-            'chart'  => [
-                'type'     => 'doughnut',
-                'title'    => 'Traffic by Channel',
-                'subtitle' => 'Referrer & Source Breakdown',
-                'data'     => [
-                    'labels'   => array_map(fn($l) => ucfirst($l), $labels),
-                    'datasets' => [[
-                        'data'            => $values,
-                        'backgroundColor' => ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#64748b'],
-                        'borderWidth'     => 0
-                    ]]
-                ]
-            ]
-        ];
     }
+
 
     // ─── Pixel Journey Action Runners (Pique-only via PixelIntelligenceService) ─
 
     private function runPageJourney(Organization $organization): array
     {
-        $topPages    = $this->pixelIntelligence->getTopPages($organization, 10, 7);
-        $velocity    = $this->pixelIntelligence->getTrendVelocity($organization);
+        $topPages = $this->pixelIntelligence->getTopPages($organization, 10, 7);
+        $velocity = $this->pixelIntelligence->getTrendVelocity($organization);
+
+        $chartLabels = collect($topPages)->pluck('path')->map(fn($p) => Str::limit($p, 25))->toArray();
+        $chartValues = collect($topPages)->pluck('total_hits')->toArray();
 
         return [
-            'action'          => 'page_journey',
-            'label'           => 'Page journey intelligence retrieved',
-            'data'            => [
-                'top_pages'       => $topPages,
-                'rising_pages'    => $velocity['rising'],
-                'falling_pages'   => $velocity['falling'],
+            'action' => 'page_journey',
+            'label'  => 'Page journey intelligence retrieved',
+            'data'   => [
+                'top_pages'    => $topPages,
+                'rising_pages' => $velocity['rising'],
+                'falling_pages'=> $velocity['falling'],
             ],
             'chart' => [
-                'type' => 'bar',
-                'title' => 'Top Pages by Traffic',
-                'subtitle' => 'Most visited pages recently',
-                'data' => [
-                    'labels' => collect($topPages)->pluck('url')->map(fn($url) => Str::limit($url, 20))->toArray(),
+                'type'     => 'bar',
+                'title'    => 'Top Pages by Traffic',
+                'subtitle' => 'Most visited pages (last 7 days)',
+                'data'     => [
+                    'labels'   => $chartLabels,
                     'datasets' => [[
-                        'label' => 'Hits',
-                        'data' => collect($topPages)->pluck('hit_count')->toArray(),
+                        'label'           => 'Hits',
+                        'data'            => $chartValues,
                         'backgroundColor' => '#10b981',
-                        'borderRadius' => 6,
-                    ]]
-                ]
-            ]
+                        'borderRadius'    => 6,
+                    ]],
+                ],
+            ],
+        ];
+    }
+
+    /**
+     * Extended page analysis — returns up to 25 pages with velocity merged in.
+     * Triggered when user asks to "show more pages", "analyse all pages", etc.
+     */
+    private function runExtendedPageAnalysis(Organization $organization): array
+    {
+        $topPages = $this->pixelIntelligence->getTopPages($organization, 25, 14); // 14-day window for more coverage
+        $velocity = $this->pixelIntelligence->getTrendVelocity($organization);
+
+        // Build a velocity lookup so we can annotate each page
+        $risingUrls  = collect($velocity['rising'])->pluck('delta_pct', 'url')->toArray();
+        $fallingUrls = collect($velocity['falling'])->pluck('delta_pct', 'url')->toArray();
+
+        $enriched = array_map(function ($page) use ($risingUrls, $fallingUrls) {
+            $url = $page['url'] ?? '';
+            $page['trend'] = isset($risingUrls[$url])
+                ? ['direction' => 'rising',  'delta_pct' => $risingUrls[$url]]
+                : (isset($fallingUrls[$url])
+                    ? ['direction' => 'falling', 'delta_pct' => $fallingUrls[$url]]
+                    : ['direction' => 'stable',  'delta_pct' => 0]);
+            return $page;
+        }, $topPages);
+
+        $chartLabels = collect($enriched)->pluck('path')->map(fn($p) => Str::limit($p, 20))->toArray();
+        $chartValues = collect($enriched)->pluck('total_hits')->toArray();
+        $chartColors = collect($enriched)->map(function ($p) {
+            return match ($p['trend']['direction']) {
+                'rising'  => '#10b981',
+                'falling' => '#ef4444',
+                default   => '#6366f1',
+            };
+        })->toArray();
+
+        return [
+            'action' => 'extended_page_analysis',
+            'label'  => 'Extended page analysis: ' . count($enriched) . ' pages (last 14 days)',
+            'data'   => [
+                'pages'        => $enriched,
+                'total_pages'  => count($enriched),
+                'period_days'  => 14,
+                'rising_count' => count($velocity['rising']),
+                'falling_count'=> count($velocity['falling']),
+            ],
+            'chart'  => [
+                'type'     => 'bar',
+                'title'    => 'All Pages — Traffic Overview',
+                'subtitle' => count($enriched) . ' pages | Last 14 Days | Green = Rising · Red = Falling',
+                'data'     => [
+                    'labels'   => $chartLabels,
+                    'datasets' => [[
+                        'label'           => 'Total Hits',
+                        'data'            => $chartValues,
+                        'backgroundColor' => $chartColors,
+                        'borderRadius'    => 5,
+                    ]],
+                ],
+            ],
         ];
     }
 

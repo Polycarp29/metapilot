@@ -8,6 +8,7 @@ use App\Services\Crawler\CrawlerManager;
 use Illuminate\Http\Request;
 use Illuminate\Support\Str;
 use Inertia\Inertia;
+use Illuminate\Support\Facades\Log;
 
 class PiqueTheAgentController extends Controller
 {
@@ -56,37 +57,43 @@ class PiqueTheAgentController extends Controller
 
         if ($request->boolean('stream')) {
             return response()->stream(function () use ($organization, $request) {
-                // We wrap the process call to catch the metadata
-                $fullResult = $this->agent->process(
-                    $organization,
-                    auth()->user(),
-                    $request->prompt,
-                    $request->model,
-                    $request->session_id,
-                    true, // stream
-                    function ($chunk) {
-                        echo "data: " . json_encode(['chunk' => $chunk]) . "\n\n";
+                try {
+                    // We wrap the process call to catch the metadata
+                    $fullResult = $this->agent->process(
+                        $organization,
+                        auth()->user(),
+                        $request->prompt,
+                        $request->model,
+                        $request->session_id,
+                        true, // stream
+                        function ($chunk) {
+                            echo "data: " . json_encode(['chunk' => $chunk]) . "\n\n";
+                            if (ob_get_level() > 0) ob_flush();
+                            flush();
+                        }
+                    );
+                    
+                    // Check if process returned an error instead of a session
+                    if (isset($fullResult['error'])) {
+                        echo "data: " . json_encode(['error' => $fullResult['error']]) . "\n\n";
                         if (ob_get_level() > 0) ob_flush();
                         flush();
+                        return;
                     }
-                );
-                
-                // Check if process returned an error instead of a session
-                if (isset($fullResult['error'])) {
-                     echo "data: " . json_encode(['error' => $fullResult['error']]) . "\n\n";
-                     if (ob_get_level() > 0) ob_flush();
-                     flush();
-                     return;
-                }
 
-                // Finally send the full result metadata (session_id, action) so the frontend can finalize
-                echo "data: " . json_encode([
-                    'session_id' => $fullResult['session_id'] ?? null,
-                    'action'     => $fullResult['action'] ?? null,
-                    'done'       => true
-                ]) . "\n\n";
-                if (ob_get_level() > 0) ob_flush();
-                flush();
+                    // Finally send the full result metadata (session_id, action) so the frontend can finalize
+                    echo "data: " . json_encode([
+                        'session_id' => $fullResult['session_id'] ?? null,
+                        'action'     => $fullResult['action'] ?? null,
+                        'done'       => true
+                    ]) . "\n\n";
+                } catch (\Exception $e) {
+                    \Illuminate\Support\Facades\Log::error('Pique stream crash: ' . $e->getMessage());
+                    echo "data: " . json_encode(['error' => 'An error occurred during response streaming.', 'debug' => config('app.debug') ? $e->getMessage() : null]) . "\n\n";
+                } finally {
+                    if (ob_get_level() > 0) ob_flush();
+                    flush();
+                }
             }, 200, [
                 'Content-Type'      => 'text/event-stream',
                 'X-Accel-Buffering' => 'no',

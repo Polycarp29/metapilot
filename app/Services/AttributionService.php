@@ -23,7 +23,10 @@ class AttributionService
         // 2. Country Attribution Analysis
         $countryStats = $this->getCountryStats($organization, $startDate);
 
-        // 3. High-Performing Landing Pages (The "Links that are doing well")
+        // 3. City Attribution Analysis
+        $cityStats = $this->getCityStats($organization, $startDate);
+
+        // 4. High-Performing Landing Pages (The "Links that are doing well")
         $topLinks = $this->getTopPerformingLinks($organization, $startDate);
 
         return [
@@ -33,6 +36,7 @@ class AttributionService
             ],
             'channels'  => $channelStats,
             'countries' => $countryStats,
+            'cities'    => $cityStats,
             'top_links' => $topLinks,
         ];
     }
@@ -131,23 +135,61 @@ class AttributionService
     }
 
     /**
-     * Group metrics by country.
+     * Group metrics by country — returns resolved country name alongside code.
      */
     private function getCountryStats(Organization $organization, Carbon $startDate): array
     {
         return AdTrackEvent::where('organization_id', $organization->id)
             ->where('created_at', '>=', $startDate)
             ->where('is_bot', false)
-            ->select('country_code', 
-                DB::raw('count(*) as hits'), 
-                DB::raw('sum(case when duration_seconds >= 30 then 1 else 0 end) as engaged_hits')
+            ->whereNotNull('country_code')
+            ->select(
+                'country_code',
+                DB::raw('count(*) as hits'),
+                DB::raw('sum(case when duration_seconds >= 30 then 1 else 0 end) as engaged_hits'),
+                DB::raw('avg(duration_seconds) as avg_dwell')
             )
             ->groupBy('country_code')
             ->orderByDesc('hits')
             ->limit(10)
             ->get()
-            ->map(function($row) {
-                $row->engagement_rate = $row->hits > 0 ? round(($row->engaged_hits / $row->hits) * 100, 1) : 0;
+            ->map(function ($row) {
+                $row->engagement_rate = $row->hits > 0
+                    ? round(($row->engaged_hits / $row->hits) * 100, 1)
+                    : 0;
+                $row->avg_dwell = (int) round($row->avg_dwell ?? 0);
+                return $row;
+            })
+            ->toArray();
+    }
+
+    /**
+     * Group metrics by city — provides real city names for Pique to report on.
+     * Never anonymized; if city is null the row is excluded.
+     */
+    private function getCityStats(Organization $organization, Carbon $startDate): array
+    {
+        return AdTrackEvent::where('organization_id', $organization->id)
+            ->where('created_at', '>=', $startDate)
+            ->where('is_bot', false)
+            ->whereNotNull('city')
+            ->where('city', '!=', '')
+            ->select(
+                'city',
+                'country_code',
+                DB::raw('count(*) as hits'),
+                DB::raw('sum(case when duration_seconds >= 30 OR max_scroll_depth >= 50 then 1 else 0 end) as engaged_hits'),
+                DB::raw('avg(duration_seconds) as avg_dwell')
+            )
+            ->groupBy('city', 'country_code')
+            ->orderByDesc('hits')
+            ->limit(10)
+            ->get()
+            ->map(function ($row) {
+                $row->engagement_rate = $row->hits > 0
+                    ? round(($row->engaged_hits / $row->hits) * 100, 1)
+                    : 0;
+                $row->avg_dwell = (int) round($row->avg_dwell ?? 0);
                 return $row;
             })
             ->toArray();
@@ -168,7 +210,7 @@ class AttributionService
             )
             ->groupBy('page_url')
             ->orderByDesc('hits')
-            ->limit(5)
+            ->limit(10)
             ->get()
             ->toArray();
     }

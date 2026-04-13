@@ -356,13 +356,17 @@ const sendMessage = async () => {
     });
 
     try {
+        // Read the token fresh from the DOM for every request
+        const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content');
+
         const response = await fetch(route('api.pique.ask'), {
             method: 'POST',
+            credentials: 'include', // CRITICAL: Send session cookies for CSRF validation
             headers: {
                 'Content-Type': 'application/json',
                 'Accept': 'text/event-stream',
                 'X-Requested-With': 'XMLHttpRequest',
-                'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content'),
+                'X-CSRF-TOKEN': csrfToken,
             },
             body: JSON.stringify({
                 prompt: userText,
@@ -376,7 +380,15 @@ const sendMessage = async () => {
             const errBody = await response.text();
             let errJson = {};
             try { errJson = JSON.parse(errBody); } catch(e) {}
-            throw new Error(`${response.status} ${response.statusText}${errJson.error ? ': ' + errJson.error : ''}`);
+            
+            let message = `${response.status} ${response.statusText}`;
+            if (response.status === 419) {
+                message = "Session expired or CSRF mismatch. Please refresh the page.";
+            } else if (errJson.error) {
+                message = errJson.error;
+            }
+            
+            throw new Error(message);
         }
 
         const reader = response.body.getReader();
@@ -393,7 +405,13 @@ const sendMessage = async () => {
 
             for (const line of lines) {
                 if (line.startsWith('data: ')) {
-                    const data = JSON.parse(line.substring(6));
+                    let data;
+                    try {
+                        data = JSON.parse(line.substring(6));
+                    } catch (e) {
+                        console.error('Failed to parse SSE line', e);
+                        continue;
+                    }
 
                     if (data.error) {
                         throw new Error(data.error);
@@ -1171,32 +1189,57 @@ onMounted(() => {
                 <!-- Input Area -->
                 <div class="p-6 bg-white/40 backdrop-blur-md border-t border-white/40">
                     <div
-                        class="max-w-4xl mx-auto relative flex items-end bg-white rounded-3xl  border border-slate-200 p-2 pl-6 focus-within:ring-1 focus-within:ring-blue-950/20 transition-all duration-300">
-                        <textarea v-model="userInput" @keydown.enter.prevent="sendMessage" rows="1"
-                            placeholder="Message Pique..."
-                            class="flex-1 bg-transparent border-none focus:ring-0 py-4 px-2 text-[15px] resize-none overflow-hidden max-h-40 placeholder:text-slate-400"
-                            @input="e => { e.target.style.height = 'auto'; e.target.style.height = e.target.scrollHeight + 'px' }"></textarea>
+                        class="max-w-4xl mx-auto relative flex items-end rounded-3xl border p-2 pl-6 transition-all duration-300"
+                        :class="isTyping
+                            ? 'bg-slate-50 border-slate-200 ring-1 ring-slate-200/60 opacity-80'
+                            : 'bg-white border-slate-200 focus-within:ring-1 focus-within:ring-blue-950/20'"
+                    >
+                        <!-- Thinking indicator shown inline when locked -->
+                        <div v-if="isTyping" class="flex items-center gap-2 flex-1 py-4 px-2 select-none">
+                            <div class="flex gap-0.5 items-center">
+                                <div class="w-1.5 h-1.5 rounded-full bg-blue-400 animate-bounce" style="animation-delay:0ms"></div>
+                                <div class="w-1.5 h-1.5 rounded-full bg-blue-500 animate-bounce" style="animation-delay:120ms"></div>
+                                <div class="w-1.5 h-1.5 rounded-full bg-blue-600 animate-bounce" style="animation-delay:240ms"></div>
+                            </div>
+                            <span class="text-[13px] text-slate-400 font-medium italic">Pique is thinking&hellip;</span>
+                        </div>
 
-                        <div class="flex items-center p-2">
-                            <button class="p-2.5 text-slate-400 hover:text-blue-600 transition-colors">
-                                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2"
-                                    stroke="currentColor" class="w-5 h-5">
-                                    <path stroke-linecap="round" stroke-linejoin="round"
-                                        d="m18.375 12.739-7.693 7.693a4.5 4.5 0 0 1-6.364-6.364l10.94-10.94A3 3 0 1 1 19.5 7.372L8.552 18.32m.009-.01-.01.01m5.699-9.941-7.81 7.81a1.5 1.5 0 0 0 2.112 2.13" />
+                        <textarea
+                            v-if="!isTyping"
+                            v-model="userInput"
+                            @keydown.enter.exact.prevent="sendMessage"
+                            rows="1"
+                            placeholder="Message Pique…"
+                            class="flex-1 bg-transparent border-none focus:ring-0 py-4 px-2 text-[15px] resize-none overflow-hidden max-h-40 placeholder:text-slate-400 outline-none"
+                            @input="e => { e.target.style.height = 'auto'; e.target.style.height = e.target.scrollHeight + 'px' }"
+                        ></textarea>
+
+                        <div class="flex items-center p-2 flex-shrink-0">
+                            <!-- Lock icon while AI is responding -->
+                            <div v-if="isTyping" class="p-3 bg-slate-100 rounded-2xl text-slate-300 cursor-not-allowed">
+                                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2.5" stroke="currentColor" class="w-5 h-5">
+                                    <path stroke-linecap="round" stroke-linejoin="round" d="M16.5 10.5V6.75a4.5 4.5 0 1 0-9 0v3.75m-.75 11.25h10.5a2.25 2.25 0 0 0 2.25-2.25v-6.75a2.25 2.25 0 0 0-2.25-2.25H6.75a2.25 2.25 0 0 0-2.25 2.25v6.75a2.25 2.25 0 0 0 2.25 2.25Z" />
                                 </svg>
-                            </button>
-                            <button @click="sendMessage" :disabled="!userInput.trim()"
-                                class="p-3 bg-blue-600 disabled:bg-slate-300 text-white rounded-2xl transition-all  active:scale-90">
-                                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"
-                                    stroke-width="2.5" stroke="currentColor" class="w-5 h-5">
-                                    <path stroke-linecap="round" stroke-linejoin="round"
-                                        d="M6 12 3.269 3.125A59.769 59.769 0 0 1 21.485 12 59.768 59.768 0 0 1 3.27 20.875L5.999 12Zm0 0h7.5" />
+                            </div>
+
+                            <!-- Send button when ready -->
+                            <button
+                                v-else
+                                @click="sendMessage"
+                                :disabled="!userInput.trim()"
+                                class="p-3 bg-blue-600 disabled:bg-slate-300 text-white rounded-2xl transition-all active:scale-90"
+                            >
+                                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2.5" stroke="currentColor" class="w-5 h-5">
+                                    <path stroke-linecap="round" stroke-linejoin="round" d="M6 12 3.269 3.125A59.769 59.769 0 0 1 21.485 12 59.768 59.768 0 0 1 3.27 20.875L5.999 12Zm0 0h7.5" />
                                 </svg>
                             </button>
                         </div>
                     </div>
-                    <div class="text-center mt-3 text-[10px] text-slate-400 font-medium uppercase tracking-widest">
-                        Pique may occasionally provide AI-generated SEO insights. Verify important data.
+                    <div class="text-center mt-3 text-[10px] font-medium uppercase tracking-widest transition-colors duration-300"
+                        :class="isTyping ? 'text-blue-400' : 'text-slate-400'"
+                    >
+                        <span v-if="isTyping">Pique is generating a response — input locked until complete</span>
+                        <span v-else>Pique may occasionally provide AI-generated SEO insights. Verify important data.</span>
                     </div>
                 </div>
             </main>
