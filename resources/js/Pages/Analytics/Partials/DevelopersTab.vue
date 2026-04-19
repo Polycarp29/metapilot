@@ -831,9 +831,11 @@ const fmt = (iso) => {
 // ─── Lifecycle ────────────────────────────────────────────────────────────────
 onMounted(() => {
     updateSnippet()
-    fetchEvents()
+    // NOTE: fetchEvents() and fetchAnalytics() are intentionally NOT called here.
+    // The selectedSiteId watcher below fires { immediate: true } on mount, which
+    // already calls both. Calling them here too caused 4 parallel API requests
+    // every time the tab loaded, stalling the UI while all competed for the DB.
     fetchConnectionStatus()
-    fetchAnalytics()
     eventsInterval    = setInterval(fetchEvents, 60000)
     connInterval      = setInterval(fetchConnectionStatus, 30000)
     analyticsInterval = setInterval(fetchAnalytics, 300000) // every 5 min

@@ -14,6 +14,7 @@ use App\Models\Sitemap;
 use App\Models\SitemapLink;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\File;
 use Illuminate\Support\Facades\Http;
@@ -806,19 +807,6 @@ class CdnTrackingController extends Controller
             ? round((($todayHits - $yesterdayHits) / $yesterdayHits) * 100, 1)
             : null;
 
-        // --- Bounce Rate Calculation (Sessions with only 1 event) ---
-        $bouncesByPage = (clone $queryBase)
-            ->where('created_at', '>=', $thirtyDaysAgo)
-            ->selectRaw("page_url, session_id, COUNT(*) as session_count")
-            ->groupBy('page_url', 'session_id')
-            ->get()
-            ->groupBy('page_url')
-            ->map(function($sessions) {
-                $totalSessions = $sessions->count();
-                $bounces = $sessions->filter(fn($s) => $s->session_count === 1)->count();
-                return $totalSessions > 0 ? round(($bounces / $totalSessions) * 100, 1) : 0;
-            });
-
         // ── 3. Top pages with 14-day sparkline, delta & bottleneck ──────────────
         $pagesPage    = max(1, (int) $request->input('pages_page', 1));
         $pagesPerPage = min(50, max(1, (int) $request->input('pages_per_page', 10)));
@@ -846,6 +834,30 @@ class CdnTrackingController extends Controller
         // 14-day sparkline per top page
         $fourteenDaysAgo = now()->subDays(13)->startOfDay();
         $topPageUrls = $topPageRows->pluck('page_url')->toArray();
+
+        // --- Bounce Rate Calculation (SQL subquery, scoped to current page's URLs only) ---
+        // Previously loaded ALL session rows into PHP memory (O(n) on total events), causing
+        // timeouts on large orgs. Now runs a single SQL subquery restricted to the current
+        // page's 10 URLs, keeping the computation inside the database.
+        $bouncesByPage = collect();
+        if (!empty($topPageUrls)) {
+            $bouncesByPage = DB::table(function ($sub) use ($orgId, $request, $thirtyDaysAgo, $topPageUrls) {
+                $sub->from('ad_track_events')
+                    ->selectRaw('page_url, session_id, COUNT(*) as session_count')
+                    ->where('organization_id', $orgId)
+                    ->whereNotNull('page_url')
+                    ->whereIn('page_url', $topPageUrls)
+                    ->where('created_at', '>=', $thirtyDaysAgo)
+                    ->when($request->filled('pixel_site_id'), fn($q) => $q->where('pixel_site_id', $request->pixel_site_id))
+                    ->when($request->boolean('exclude_bots'), fn($q) => $q->where('is_bot', false))
+                    ->groupBy('page_url', 'session_id');
+            }, 'session_counts')
+            ->selectRaw('page_url, COUNT(*) as total_sessions, SUM(CASE WHEN session_count = 1 THEN 1 ELSE 0 END) as bounce_count')
+            ->groupBy('page_url')
+            ->get()
+            ->keyBy('page_url')
+            ->map(fn($r) => $r->total_sessions > 0 ? round(($r->bounce_count / $r->total_sessions) * 100, 1) : 0);
+        }
 
         $sparklineRaw = AdTrackEvent::where('organization_id', $orgId)
             ->when($request->pixel_site_id, fn($q, $id) => $q->where('pixel_site_id', $id))
