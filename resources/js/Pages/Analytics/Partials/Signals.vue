@@ -5,6 +5,6 @@ import AppLayout from '../../../Layouts/AppLayout.vue';
 
 <template>
     <AppLayout>
-        <!--We will include signal data here-->
+        <!--We will include signal data here--> 
     </AppLayout>
 </template>
