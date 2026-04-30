@@ -22,6 +22,7 @@ export default defineConfig({
     ],
     resolve: {
         alias: {
+            '@': '/home/z3uxie/Desktop/MyProjects/Json_ld manager/resources/js',
             ziggy: 'vendor/tightenco/ziggy/dist',
         },
     },

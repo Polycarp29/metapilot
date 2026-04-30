@@ -499,6 +499,11 @@ class CdnTrackingController extends Controller
             }
         }
 
+        // Filter by Conversion
+        if ($request->boolean('only_conversions')) {
+            $query->where('click_count', '>', 0);
+        }
+
         // Filter by Device
         if ($request->filled('device') && $request->device !== 'all') {
             $query->where('device_type', $request->device);
@@ -528,7 +533,17 @@ class CdnTrackingController extends Controller
         }
 
         $perPage = $request->input('per_page', 25);
+        
+        // Include is_returning by checking if ip_hash appeared before the event's created_at
         $events = $query->orderBy('created_at', 'desc')->paginate($perPage);
+
+        $events->getCollection()->transform(function($event) {
+            $event->is_returning = AdTrackEvent::where('organization_id', $event->organization_id)
+                ->where('ip_hash', $event->ip_hash)
+                ->where('created_at', '<', $event->created_at)
+                ->exists();
+            return $event;
+        });
 
         return response()->json($events);
     }
