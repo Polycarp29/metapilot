@@ -1,1 +1,0 @@
-import{_ as r}from"./AppLayout-BXLih6r3.js";import{m as o,f as t}from"./app-D3YlFOg7.js";import"./Toaster-S54IQzmT.js";import"./useToastStore-DOSuO3sK.js";import"./_plugin-vue_export-helper-DlAUqK2U.js";import"./BrandLogo-Bbgrxd_z.js";/* empty css            */const l={__name:"Signals",setup(m){return(p,a)=>(t(),o(r))}};export{l as default};

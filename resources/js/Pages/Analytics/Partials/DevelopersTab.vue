@@ -624,11 +624,8 @@ const clearAttributionSearch = () => {
 }
 
 const drillToPath = (pageUrl) => {
-    pathFilter.value = pageUrl
-    filters.value.page = 1
-    fetchEvents()
-    // scroll to log
-    document.getElementById('intel-log')?.scrollIntoView({ behavior: 'smooth' })
+    const url = `/site_analysis?path=${encodeURIComponent(pageUrl)}${selectedSiteId.value ? '&site_id=' + selectedSiteId.value : ''}`;
+    window.location.href = url;
 }
 
 const nextPage = () => {
@@ -1221,6 +1218,13 @@ const openHealthModal = (site = null) => {
                                                 <button @click.stop="page.showRecs = !page.showRecs" class="p-1 text-slate-300 hover:text-indigo-600 transition-colors">
                                                     <svg class="w-3.5 h-3.5" :class="{ 'rotate-180': page.showRecs }" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M19 9l-7 7-7-7"/></svg>
                                                 </button>
+                                                <a :href="`/site_analysis?path=${encodeURIComponent(page.page_url)}${selectedSiteId ? '&site_id=' + selectedSiteId : ''}`"
+                                                   @click.stop
+                                                   class="flex items-center gap-1 px-2 py-1 bg-indigo-50 hover:bg-indigo-100 text-indigo-600 text-[8px] font-black rounded-lg border border-indigo-100 transition-all uppercase tracking-tight"
+                                                   title="Open per-path deep-dive analysis">
+                                                    <svg class="w-2.5 h-2.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/></svg>
+                                                    Deep Dive
+                                                </a>
                                             </div>
                                             <div class="flex items-center gap-2">
                                                 <span v-for="k in page.matched_keywords.slice(0, 3)" :key="k.query" class="text-[8px] font-bold text-slate-400">#{{ k.query.replace(/\s+/g, '') }}</span>
