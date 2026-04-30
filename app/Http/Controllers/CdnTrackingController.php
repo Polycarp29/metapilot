@@ -361,7 +361,7 @@ class CdnTrackingController extends Controller
             'line'            => $request->line,
             'col'             => $request->col,
             'filename'        => $request->filename,
-            'user_agent'      => $request->header('User-Agent'),
+            'user_agent'      => substr($request->header('User-Agent'), 0, 1000),
             'ip_hash'         => hash('sha256', $request->ip()),
             'load_time_ms'    => $request->load_time_ms,
             'error_type'      => $request->error_type ?? 'js_error',
