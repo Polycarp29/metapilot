@@ -280,8 +280,16 @@
   "resources/js/Pages/Schemas/Index.vue": [
     "/build/assets/Index-Cg6SWOje.js"
   ],
+  "resources/js/Pages/Settings/ArchiveManager.vue": [
+    "/build/assets/ArchiveManager-CJO3yTul.js",
+    "/build/assets/ArchiveManager-D61FvuFU.css"
+  ],
+  "resources/js/Pages/Settings/ArchiveManager.vue?vue&type=style&index=0&scoped=17d00009&lang.css": [
+    "/build/assets/ArchiveManager-CJO3yTul.js",
+    "/build/assets/ArchiveManager-D61FvuFU.css"
+  ],
   "resources/js/Pages/Settings/Index.vue": [
-    "/build/assets/Index-BA8zvjvG.js"
+    "/build/assets/Index-CXJSJPBH.js"
   ],
   "resources/js/Pages/Sitemaps/Index.vue": [
     "/build/assets/Index-BftvZQm5.js",

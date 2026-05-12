@@ -23,6 +23,12 @@ return Application::configure(basePath: dirname(__DIR__))
             \Illuminate\Http\Middleware\AddLinkHeadersForPreloadedAssets::class,
         ]);
 
+        // Apply bot firewall to API routes too — prevents automated scanners
+        // from hammering API endpoints without passing through the firewall.
+        $middleware->api(append: [
+            \App\Http\Middleware\BotProtectionMiddleware::class,
+        ]);
+
         $middleware->alias([
             // 'admin' => \App\Http\Middleware\AdminMiddleware::class,
         ]);
