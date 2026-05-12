@@ -1209,36 +1209,7 @@ class CdnTrackingController extends Controller
         });
     }
 
-    /**
-     * Trigger job for automated schema injection.
-     */
-    private function triggerSchemaInjection(PixelSite $site, string $url, array $metadata)
-    {
-        $truncatedMetadata = [
-            'title' => substr($metadata['title'] ?? '', 0, 255),
-            'description' => substr($metadata['description'] ?? '', 0, 500),
-            'h1' => substr($metadata['h1'] ?? '', 0, 255),
-            'content_type' => $metadata['content_type'] ?? 'website',
-            'og_image' => $metadata['og_image'] ?? null
-        ];
 
-        $urlHash = hash('sha256', $this->normalizeUrlForHash($url));
-
-                ];
-            }
-        }
-
-        return CdnPageSchema::updateOrCreate(
-            ['pixel_site_id' => $site->id, 'url_hash' => $urlHash],
-            [
-                'url' => $url,
-                'schema_type' => $type,
-                'schema_json' => $schema,
-                'is_auto_generated' => true,
-                'last_injected_at' => now()
-            ]
-        );
-    }
 
     /**
      * Get aggregated web analysis data for the Developers "Web Analysis" tab.
