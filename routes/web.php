@@ -149,6 +149,18 @@ Route::middleware(['auth', 'verified'])->group(function () {
     // Organization Settings
     Route::get('settings', [\App\Http\Controllers\OrganizationSettingsController::class, 'index'])->name('organization.settings');
     Route::put('settings', [\App\Http\Controllers\OrganizationSettingsController::class, 'update'])->name('organization.update');
+    Route::get('settings/archive', [\App\Http\Controllers\OrganizationSettingsController::class, 'archiveManager'])->name('organization.archive');
+
+    // Archive Retrieval API (Session-based for UI)
+    Route::prefix('api/archive')->name('organization.archive.api.')->group(function () {
+        Route::get('{table}', [\App\Http\Controllers\Api\ArchiveController::class, 'show'])
+            ->name('show')
+            ->where('table', '[a-z_]+');
+
+        Route::get('{table}/stats', [\App\Http\Controllers\Api\ArchiveController::class, 'stats'])
+            ->name('stats')
+            ->where('table', '[a-z_]+');
+    });
 
     // Organization Selection
     Route::get('organizations/select', [\App\Http\Controllers\OrganizationController::class, 'select'])->name('organizations.select');

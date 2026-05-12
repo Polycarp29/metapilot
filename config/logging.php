@@ -123,6 +123,21 @@ return [
             'handler' => NullHandler::class,
         ],
 
+        /*
+        |----------------------------------------------------------------------
+        | Security Engine Log Channel
+        |----------------------------------------------------------------------
+        | Dedicated channel for bot firewall blocks, DB backups, and archive
+        | operations. Rotates daily and keeps 30 days of history.
+        */
+        'security' => [
+            'driver'              => 'daily',
+            'path'                => storage_path('logs/security.log'),
+            'level'               => 'info',
+            'days'                => 30,
+            'replace_placeholders'=> true,
+        ],
+
         'emergency' => [
             'path' => storage_path('logs/laravel.log'),
         ],

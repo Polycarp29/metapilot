@@ -63,6 +63,27 @@ return [
             ]) : [],
         ],
 
+        /*
+        |----------------------------------------------------------------------
+        | Archive Database Connection
+        |----------------------------------------------------------------------
+        | Dedicated read/write connection for the archive database.
+        | Falls back to primary DB credentials when ARCHIVE_DB_* vars are unset.
+        */
+        'archive' => [
+            'driver'    => 'mysql',
+            'host'      => env('ARCHIVE_DB_HOST', env('DB_HOST', '127.0.0.1')),
+            'port'      => env('ARCHIVE_DB_PORT', env('DB_PORT', '3306')),
+            'database'  => env('ARCHIVE_DB_DATABASE', 'jsonld_manager_archive'),
+            'username'  => env('ARCHIVE_DB_USERNAME', env('DB_USERNAME', 'root')),
+            'password'  => env('ARCHIVE_DB_PASSWORD', env('DB_PASSWORD', '')),
+            'charset'   => 'utf8mb4',
+            'collation' => 'utf8mb4_unicode_ci',
+            'prefix'    => '',
+            'strict'    => true,
+            'engine'    => null,
+        ],
+
         'mariadb' => [
             'driver' => 'mariadb',
             'url' => env('DB_URL'),

@@ -535,6 +535,69 @@
         </div>
       </div>
 
+      <!-- Security & Infrastructure Tab -->
+      <div v-if="activeTab === 'security'" class="space-y-6 animate-fade-in">
+        <div class="bg-white rounded-[2.5rem] border border-slate-100 shadow-premium p-8">
+          <div class="flex items-center gap-4 mb-8">
+            <div class="w-12 h-12 bg-rose-100 rounded-2xl flex items-center justify-center text-rose-600">
+               <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
+               </svg>
+            </div>
+            <div>
+               <h2 class="text-xl font-bold text-slate-900">Security & Infrastructure</h2>
+               <p class="text-sm text-slate-500">Manage your data lifecycle, backups, and bot protection settings.</p>
+            </div>
+          </div>
+
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-8">
+             <!-- Database Archiving Card -->
+             <div class="p-8 rounded-3xl border border-slate-100 bg-slate-50/50 flex flex-col justify-between">
+                <div>
+                   <div class="flex items-center gap-3 mb-4">
+                      <div class="w-10 h-10 rounded-xl bg-blue-100 text-blue-600 flex items-center justify-center">
+                         <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 7v10c0 2.21 3.582 4 8 4s8-1.79 8-4V7M4 7c0 2.21 3.582 4 8 4s8-1.79 8-4M4 7c0-2.21 3.582-4 8-4s8 1.79 8 4m0 5c0 2.21-3.582 4-8 4s-8-1.79-8-4" /></svg>
+                      </div>
+                      <h3 class="font-bold text-slate-900">Database Archiving</h3>
+                   </div>
+                   <p class="text-sm text-slate-500 leading-relaxed mb-6">
+                      Historical data older than 90 days is automatically moved to a dedicated storage database every Sunday at 00:30 AM to maintain peak application performance.
+                   </p>
+                </div>
+                <Link 
+                   :href="route('organization.archive')"
+                   class="inline-flex items-center justify-center gap-2 bg-white border border-slate-200 px-6 py-3 rounded-xl font-bold text-slate-700 hover:border-blue-500 hover:text-blue-600 transition-all shadow-sm active:scale-95"
+                >
+                   Open Archive Manager
+                   <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14 5l7 7m0 0l-7 7m7-7H3" /></svg>
+                </Link>
+             </div>
+
+             <!-- Bot Firewall Card -->
+             <div class="p-8 rounded-3xl border border-slate-100 bg-slate-50/50 flex flex-col justify-between">
+                <div>
+                   <div class="flex items-center gap-3 mb-4">
+                      <div class="w-10 h-10 rounded-xl bg-rose-100 text-rose-600 flex items-center justify-center">
+                         <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 00-2 2z" /></svg>
+                      </div>
+                      <h3 class="font-bold text-slate-900">Bot Firewall</h3>
+                   </div>
+                   <p class="text-sm text-slate-500 leading-relaxed mb-6">
+                      Advanced multi-signal firewall automatically detects and blocks malicious automated scanners and scrapers based on request scoring.
+                   </p>
+                   <div class="flex items-center gap-2 mb-6">
+                      <span class="w-2 h-2 rounded-full bg-green-500 animate-pulse"></span>
+                      <span class="text-xs font-bold text-slate-400 uppercase tracking-widest">Protection Active</span>
+                   </div>
+                </div>
+                <div class="p-3 bg-white border border-slate-100 rounded-xl text-center">
+                   <p class="text-[10px] font-black text-slate-300 uppercase tracking-[0.2em]">Daily Security Log Integrated</p>
+                </div>
+             </div>
+          </div>
+        </div>
+      </div>
+
       <!-- Team Tab -->
       <div v-if="activeTab === 'team'" class="space-y-6 animate-fade-in">
          <!-- Existing Team UI -->
@@ -685,7 +748,7 @@
 
 <script setup>
 import { ref, computed, onMounted } from 'vue'
-import { useForm, router, usePage } from '@inertiajs/vue3'
+import { useForm, router, usePage, Link } from '@inertiajs/vue3'
 import AppLayout from '../../Layouts/AppLayout.vue'
 import ConfirmationModal from '../../Components/ConfirmationModal.vue'
 
@@ -710,6 +773,7 @@ const tabs = [
   { id: 'ai', name: 'AI Configuration' },
   { id: 'analytics', name: 'Analytics' },
   { id: 'schedules', name: 'Schedules' },
+  { id: 'security', name: 'Security & Infrastructure' },
   { id: 'team', name: 'Team Members' }
 ]
 

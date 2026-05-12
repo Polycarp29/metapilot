@@ -97,4 +97,48 @@ class OrganizationSettingsController extends Controller
 
         return back()->with('message', 'Organization settings updated.');
     }
+
+    /**
+     * Render the Archive Manager UI.
+     */
+    public function archiveManager()
+    {
+        $organization = auth()->user()->currentOrganization();
+        
+        if (auth()->user()->getRoleIn($organization) !== 'owner') {
+            abort(403, 'Only owners can access the archive manager.');
+        }
+
+        $tables = config('security.archive_tables', []);
+        $tableStats = [];
+
+        foreach ($tables as $table) {
+            try {
+                $stats = \Illuminate\Support\Facades\DB::connection('archive')
+                    ->table($table)
+                    ->where('organization_id', $organization->id)
+                    ->selectRaw('COUNT(*) as total, MIN(created_at) as oldest, MAX(created_at) as newest')
+                    ->first();
+
+                $tableStats[] = [
+                    'table'   => $table,
+                    'rows'    => (int) ($stats->total ?? 0),
+                    'oldest'  => $stats->oldest ?? null,
+                    'newest'  => $stats->newest ?? null,
+                ];
+            } catch (\Exception $e) {
+                $tableStats[] = [
+                    'table'  => $table,
+                    'rows'   => 0,
+                    'oldest' => null,
+                    'newest' => null,
+                    'error'  => 'Not accessible',
+                ];
+            }
+        }
+
+        return Inertia::render('Settings/ArchiveManager', [
+            'tableStats' => $tableStats,
+        ]);
+    }
 }
