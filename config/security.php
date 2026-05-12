@@ -19,7 +19,7 @@ return [
     */
 
     // How old (in days) a row must be before it is eligible for archiving.
-    'archive_threshold_days' => (int) env('ARCHIVE_THRESHOLD_DAYS', 90),
+    'archive_threshold_days' => (int) env('ARCHIVE_THRESHOLD_DAYS', 50),
 
     // Number of rows processed per INSERT/DELETE cycle (prevents OOM on large tables).
     'archive_chunk_size' => (int) env('ARCHIVE_CHUNK_SIZE', 500),
