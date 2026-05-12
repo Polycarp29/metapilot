@@ -17,6 +17,14 @@ Schedule::job(new \App\Jobs\ProcessAnalyticsJob)->hourly();
 Schedule::command('crawl:run-scheduled')->everyFiveMinutes();
 Schedule::command('pique:run-scheduled')->everyFiveMinutes();
 
+// ── Background Queue ──────────────────────────────────────────────────────
+// Processes async jobs (like CDN schema generation) every minute.
+// Using --stop-when-empty ensures it doesn't stay resident in memory.
+Schedule::command('queue:work --stop-when-empty')
+    ->everyMinute()
+    ->withoutOverlapping()
+    ->runInBackground();
+
 // ── Security Engine ────────────────────────────────────────────────────────
 // Daily compressed mysqldump of the primary database (01:00 AM)
 Schedule::command('db:backup')
