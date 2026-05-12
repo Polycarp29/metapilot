@@ -271,14 +271,22 @@ class CdnTrackingController extends Controller
             }
 
             // 2. Auto-Generate Schema (Enforced by 'schema' module)
-            if (in_array('schema', $activeModules) && $request->metadata) {
-                $exists = CdnPageSchema::where('pixel_site_id', $pixelSite->id)
-                    ->where('url_hash', $urlHash)
-                    ->exists();
+            if (in_array('schema', $activeModules) && !empty($request->metadata)) {
+                $lockKey = "schema_gen_{$pixelSite->id}_{$urlHash}";
                 
-                if (!$exists) {
-                    $this->generateSchemaForPage($pixelSite, $request->page_url, $request->metadata);
-                }
+                // Use a 2-minute lock to prevent duplicate AI requests for the same URL
+                \Illuminate\Support\Facades\Cache::lock($lockKey, 120)->get(function () use ($pixelSite, $request, $urlHash) {
+                    $exists = CdnPageSchema::where('pixel_site_id', $pixelSite->id)
+                        ->where('url_hash', $urlHash)
+                        ->exists();
+                    
+                    if (!$exists) {
+                        // Truncate metadata fields to prevent excessive data streaming
+                        $cleanMeta = array_map(fn($v) => is_string($v) ? mb_substr($v, 0, 500) : $v, $request->metadata);
+                        
+                        \App\Jobs\GenerateCdnSchemaJob::dispatch($pixelSite, $request->page_url, $cleanMeta);
+                    }
+                });
             }
 
         // --- Mark pixel as verified on first domain-confirmed hit ---
@@ -1202,60 +1210,20 @@ class CdnTrackingController extends Controller
     }
 
     /**
-     * Generate and cache a JSON-LD schema for a specific page hit.
+     * Trigger job for automated schema injection.
      */
-    private function generateSchemaForPage(PixelSite $site, string $url, array $metadata)
+    private function triggerSchemaInjection(PixelSite $site, string $url, array $metadata)
     {
+        $truncatedMetadata = [
+            'title' => substr($metadata['title'] ?? '', 0, 255),
+            'description' => substr($metadata['description'] ?? '', 0, 500),
+            'h1' => substr($metadata['h1'] ?? '', 0, 255),
+            'content_type' => $metadata['content_type'] ?? 'website',
+            'og_image' => $metadata['og_image'] ?? null
+        ];
+
         $urlHash = hash('sha256', $this->normalizeUrlForHash($url));
 
-        
-        // Detect schema type from metadata or URL
-        $type = $metadata['content_type'] ?? 'website';
-        if ($type === 'article') {
-            $schema = [
-                '@context' => 'https://schema.org',
-                '@type' => 'Article',
-                'headline' => $metadata['title'] ?? $metadata['h1'],
-                'description' => $metadata['description'],
-                'url' => $url,
-                'image' => $metadata['og_image'],
-                'author' => [
-                    '@type' => 'Organization',
-                    'name' => $site->label
-                ]
-            ];
-        } else {
-            // Enhanced logic: Try to use AI analysis if we have metadata
-            try {
-                $aiService = app(\App\Services\OpenAIService::class);
-                $aiService->setModelFromOrganization($site->organization);
-                
-                // Construct pseudo-html from metadata for extraction
-                $pseudoHtml = "<html><head><title>" . ($metadata['title'] ?? '') . "</title>";
-                $pseudoHtml .= "<meta name='description' content='" . ($metadata['description'] ?? '') . "'>";
-                $pseudoHtml .= "</head><body><h1>" . ($metadata['h1'] ?? '') . "</h1></body></html>";
-
-                $aiData = $aiService->extractProfessionalSchemaData($url, $pseudoHtml);
-                
-                if ($aiData && !empty($aiData['data'])) {
-                    $schema = $aiData['data'];
-                    // Ensure @context and @type are set if missing from AI returned data
-                    if (!isset($schema['@context'])) $schema['@context'] = 'https://schema.org';
-                    if (!isset($schema['@type'])) $schema['@type'] = $aiData['type'] ?? 'WebPage';
-                }
-            } catch (\Exception $e) {
-                Log::error("CDN Auto-Schema AI Failure: " . $e->getMessage());
-            }
-
-            // Fallback if AI fails or wasn't used
-            if (!isset($schema)) {
-                $schema = [
-                    '@context' => 'https://schema.org',
-                    '@type' => 'WebPage',
-                    'name' => $metadata['title'] ?? ($metadata['h1'] ?? 'Untitled Page'),
-                    'description' => $metadata['description'] ?? '',
-                    'url' => $url,
-                    'primaryImageOfPage' => $metadata['og_image'] ?? null
                 ];
             }
         }
