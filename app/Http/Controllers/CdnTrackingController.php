@@ -2,6 +2,8 @@
 
 namespace App\Http\Controllers;
 
+use App\Jobs\GenerateCdnSchemaJob;
+use App\Jobs\RecordCdnDiscoveryJob;
 use App\Models\AdCampaign;
 use App\Models\AdTrackEvent;
 use App\Models\CdnError;
@@ -166,39 +168,43 @@ class CdnTrackingController extends Controller
         // --- Parse UA and Geo ---
         $ua         = $request->header('User-Agent');
         $deviceData = $this->parseUserAgent($ua);
-        
-        // Improved IP detection for proxies/CDNs
-        $clientIp = $request->header('CF-Connecting-IP') ?? $request->ip();
-        if (!$request->header('CF-Connecting-IP') && $request->header('X-Forwarded-For')) {
-            $ips = explode(',', $request->header('X-Forwarded-For'));
-            $clientIp = trim($ips[0]);
-        }
-        
-        $geo = $this->getGeoData($clientIp);
+
+        // --- IP Detection (CDN headers first, no external HTTP blocking) ---
+        $clientIp = $request->header('CF-Connecting-IP')
+            ?? ($request->header('X-Forwarded-For')
+                ? trim(explode(',', $request->header('X-Forwarded-For'))[0])
+                : $request->ip());
+
+        // FIX 1: Geo is resolved from fast CDN headers or Redis cache.
+        // We never block the web worker with a synchronous external HTTP call.
+        // The country_code is sourced from: CF-IPCountry > X-Vercel-IP-Country > Redis cache.
+        $countryCode = $request->header('CF-IPCountry')
+            ?? $request->header('X-Vercel-IP-Country')
+            ?? $request->header('X-App-Country')
+            ?? Cache::get("geoip_country_{$clientIp}");
+        $city = Cache::get("geoip_city_{$clientIp}");
 
         // Normalize URL for consistent hashing
         $normalizedUrl = $this->normalizeUrlForHash($request->page_url);
         $urlHash = $normalizedUrl ? hash('sha256', $normalizedUrl) : null;
 
-
-        // --- Metadata Enrichment ---
-        $meta = $request->metadata ?? [];
+        // --- Sanitize metadata BEFORE any DB write ---
+        // Truncate all string fields to 500 chars to prevent large payload storage
+        $meta = is_array($request->metadata) ? $request->metadata : [];
+        $meta = array_map(fn($v) => is_string($v) ? mb_substr($v, 0, 500) : $v, $meta);
         if ($request->has('is_engaged')) {
             $meta['is_engaged'] = (bool) $request->is_engaged;
         }
 
-        // --- Upsert the hit ---
+        // --- Upsert the hit (metadata is now clean before reaching DB) ---
         $hit = AdTrackEvent::updateOrCreate(
             ['page_view_id' => $request->page_view_id],
             [
                 'organization_id'    => $organization->id,
                 'pixel_site_id'      => $pixelSite->id,
                 'site_token'         => $request->token,
-                'country_code'       => ($geo['country_code'] ?? null) 
-                                        ?? $request->header('CF-IPCountry')
-                                        ?? $request->header('X-Vercel-IP-Country')
-                                        ?? $request->header('X-App-Country'),
-                'city'               => $geo['city'] ?? null,
+                'country_code'       => $countryCode,
+                'city'               => $city,
                 'browser'            => $deviceData['browser'],
                 'platform'           => $deviceData['platform'],
                 'device_type'        => $deviceData['device_type'],
@@ -214,7 +220,7 @@ class CdnTrackingController extends Controller
                 'utm_source'         => $request->utm_source,
                 'utm_medium'         => $request->utm_medium,
                 'utm_campaign'       => $request->utm_campaign,
-                'ip_hash'            => hash('sha256', $request->ip()),
+                'ip_hash'            => hash('sha256', $clientIp),
                 'metadata'           => $meta,
                 'is_bot'             => $deviceData['is_bot'] ?? false,
             ]
@@ -271,22 +277,23 @@ class CdnTrackingController extends Controller
             }
 
             // 2. Auto-Generate Schema (Enforced by 'schema' module)
-            if (in_array('schema', $activeModules) && !empty($request->metadata)) {
-                $lockKey = "schema_gen_{$pixelSite->id}_{$urlHash}";
-                
-                // Use a 2-minute lock to prevent duplicate AI requests for the same URL
-                \Illuminate\Support\Facades\Cache::lock($lockKey, 120)->get(function () use ($pixelSite, $request, $urlHash) {
-                    $exists = CdnPageSchema::where('pixel_site_id', $pixelSite->id)
+            // FIX 6: Lock uses get() which silently skips — deduplication is now enforced
+            // by the unique DB index on (pixel_site_id, url_hash) + firstOrCreate in the job.
+            if (in_array('schema', $activeModules) && !empty($meta) && $urlHash) {
+                $schemaKey = "schema_dispatched_{$pixelSite->id}_{$urlHash}";
+
+                if (!Cache::has($schemaKey)) {
+                    $schemaExists = CdnPageSchema::where('pixel_site_id', $pixelSite->id)
                         ->where('url_hash', $urlHash)
                         ->exists();
-                    
-                    if (!$exists) {
-                        // Truncate metadata fields to prevent excessive data streaming
-                        $cleanMeta = array_map(fn($v) => is_string($v) ? mb_substr($v, 0, 500) : $v, $request->metadata);
-                        
-                        \App\Jobs\GenerateCdnSchemaJob::dispatch($pixelSite, $request->page_url, $cleanMeta);
+
+                    if (!$schemaExists) {
+                        // Mark as dispatched for 10 minutes to prevent duplicate jobs
+                        Cache::put($schemaKey, true, 600);
+                        // $meta is already sanitized (Fix 7) — dispatch is safe
+                        GenerateCdnSchemaJob::dispatch($pixelSite, $request->page_url, $meta);
                     }
-                });
+                }
             }
 
         // --- Mark pixel as verified on first domain-confirmed hit ---
@@ -294,40 +301,25 @@ class CdnTrackingController extends Controller
             $pixelSite->update(['pixel_verified_at' => now()]);
         }
 
-        // --- Live Page Discovery ---
-        if ($urlHash && $request->page_url) {
-            $isNewPage = !AdTrackEvent::where('pixel_site_id', $pixelSite->id)
-                ->where('page_view_id', '!=', $request->page_view_id)
-                ->where('page_url', $request->page_url)
-                ->exists();
+        // --- FIX 3: Live Page Discovery (Cache Guard + Async Job) ---
+        // Instead of 3 synchronous DB operations per new page, we:
+        // 1. Check a 5-min Redis cache key — returns in < 1ms on warm hits
+        // 2. Only on genuine new pages: dispatch RecordCdnDiscoveryJob asynchronously
+        // Bots are skipped entirely to prevent bot-flood write storms.
+        if ($urlHash && $request->page_url && !($deviceData['is_bot'] ?? false)) {
+            $discoveryCacheKey = "cdn_seen_{$pixelSite->id}_{$urlHash}";
 
-            if ($isNewPage) {
-                $discoverySitemap = $this->resolveDiscoverySitemap($organization, $pixelSite);
-                $crawlMode = $discoverySitemap->crawl_mode;
+            if (!Cache::has($discoveryCacheKey)) {
+                // Mark as seen for 5 minutes — prevents burst duplicate discovery
+                Cache::put($discoveryCacheKey, true, 300);
 
-                if ($crawlMode === 'cdn') {
-                    // ── Silent CDN Discovery: record URL directly from pixel metadata ──
-                    $meta = is_array($request->metadata) ? $request->metadata : [];
-                    SitemapLink::firstOrCreate(
-                        ['sitemap_id' => $discoverySitemap->id, 'url_hash' => $urlHash],
-                        [
-                            'url'          => $request->page_url,
-                            'title'        => $meta['title'] ?? null,
-                            'status_code'  => 200,
-                            'cdn_active'   => true,
-                            'cdn_hit_count'    => 1,
-                            'cdn_last_seen_at' => now(),
-                        ]
-                    );
-                } else {
-                    // ── Aggressive Crawl: dispatch Scrapy spider for full extraction ──
-                    app(\App\Services\Crawler\CrawlerManager::class)->dispatch(
-                        $discoverySitemap->id,
-                        $request->page_url,
-                        0,
-                        ['job_id' => 'cdn-discovery-' . $urlHash, 'render_js' => true]
-                    );
-                }
+                // Dispatch async — no blocking DB writes in the web worker
+                RecordCdnDiscoveryJob::dispatch(
+                    $pixelSite->id,
+                    $request->page_url,
+                    $urlHash,
+                    $meta  // already sanitized by Fix 7
+                );
             }
         }
 
@@ -542,14 +534,22 @@ class CdnTrackingController extends Controller
 
         $perPage = $request->input('per_page', 25);
         
-        // Include is_returning by checking if ip_hash appeared before the event's created_at
         $events = $query->orderBy('created_at', 'desc')->paginate($perPage);
 
-        $events->getCollection()->transform(function($event) {
-            $event->is_returning = AdTrackEvent::where('organization_id', $event->organization_id)
-                ->where('ip_hash', $event->ip_hash)
-                ->where('created_at', '<', $event->created_at)
-                ->exists();
+        // FIX 2: Bulk check for returning users to avoid N+1 queries
+        $ipHashes = $events->pluck('ip_hash')->unique()->toArray();
+        $earliestDate = $events->min('created_at');
+        
+        $returningHashes = AdTrackEvent::whereIn('ip_hash', $ipHashes)
+            ->where('organization_id', $organization->id)
+            ->where('created_at', '<', $earliestDate)
+            ->distinct()
+            ->pluck('ip_hash')
+            ->flip()
+            ->toArray();
+
+        $events->getCollection()->transform(function($event) use ($returningHashes) {
+            $event->is_returning = isset($returningHashes[$event->ip_hash]);
             return $event;
         });
 
@@ -1106,32 +1106,36 @@ class CdnTrackingController extends Controller
                 'count'      => (int) $r->count,
             ])->values();
 
-        return response()->json([
-            'daily_history'  => $dailyHistory,
-            'top_pages'      => $topPages,
-            'pages_total'    => $pagesTotal,
-            'pages_page'     => $pagesPage,
-            'pages_per_page' => $pagesPerPage,
-            'top_referrers'  => $topReferrers,
-            'trend_velocity' => ['rising' => $rising, 'falling' => $falling],
-            'by_country'     => $byCountry,
-            'by_device'      => $byDevice,
-            'by_city'        => $byCity,
-            'site_health'    => [
-                'slow_pages'          => $slowPages,
-                'error_type_breakdown'=> $errorTypeBreakdown,
-                'alerts_last_24h'     => $alertsLast24h,
-            ],
-            'summary'        => [
-                'today_hits'     => $todayHits,
-                'yesterday_hits' => $yesterdayHits,
-                'today_delta'    => $todayDelta,
-                'last7_hits'     => $last7,
-                'prev7_hits'     => $prev7,
-                'week_delta'     => $weekDelta,
-                'last30_hits'    => $geoRaw->sum('count'),
-            ],
-        ]);
+        $cacheKey = "analytics_org_{$orgId}_site_" . ($request->pixel_site_id ?? 'all') . "_" . ($request->boolean('exclude_bots') ? 'nobots' : 'all');
+        
+        return Cache::remember($cacheKey, 300, function() use ($dailyHistory, $topPages, $pagesTotal, $pagesPage, $pagesPerPage, $topReferrers, $rising, $falling, $byCountry, $byDevice, $byCity, $slowPages, $errorTypeBreakdown, $alertsLast24h, $todayHits, $yesterdayHits, $todayDelta, $last7, $prev7, $weekDelta, $geoRaw) {
+            return response()->json([
+                'daily_history'  => $dailyHistory,
+                'top_pages'      => $topPages,
+                'pages_total'    => $pagesTotal,
+                'pages_page'     => $pagesPage,
+                'pages_per_page' => $pagesPerPage,
+                'top_referrers'  => $topReferrers,
+                'trend_velocity' => ['rising' => $rising, 'falling' => $falling],
+                'by_country'     => $byCountry,
+                'by_device'      => $byDevice,
+                'by_city'        => $byCity,
+                'site_health'    => [
+                    'slow_pages'          => $slowPages,
+                    'error_type_breakdown'=> $errorTypeBreakdown,
+                    'alerts_last_24h'     => $alertsLast24h,
+                ],
+                'summary'        => [
+                    'today_hits'     => $todayHits,
+                    'yesterday_hits' => $yesterdayHits,
+                    'today_delta'    => $todayDelta,
+                    'last7_hits'     => $last7 ?? 0,
+                    'prev7_hits'     => $prev7 ?? 0,
+                    'week_delta'     => $weekDelta,
+                    'last30_hits'    => $geoRaw->sum('count'),
+                ],
+            ]);
+        });
     }
 
     // -------------------------------------------------------------------------
@@ -1178,36 +1182,7 @@ class CdnTrackingController extends Controller
         return ['browser' => $browser, 'platform' => $platform, 'device_type' => $device, 'is_bot' => $isBot];
     }
 
-    protected function getGeoData($ip): ?array
-    {
-        if (!$ip || $ip === '127.0.0.1' || $ip === '::1') return null;
 
-        return Cache::remember("geoip_{$ip}", 86400, function () use ($ip) {
-            // Priority 1: ipapi.co (1000/day, HTTPS)
-            try {
-                $response = Http::timeout(2)->get("https://ipapi.co/{$ip}/json/");
-                if ($response->successful() && $response->json('country_code')) {
-                    return [
-                        'country_code' => strtoupper($response->json('country_code')),
-                        'city'         => $response->json('city'),
-                    ];
-                }
-            } catch (\Exception $e) {}
-
-            // Priority 2: ip-api.com (Reliable secondary, HTTP but backend-safe)
-            try {
-                $response = Http::timeout(2)->get("http://ip-api.com/json/{$ip}");
-                if ($response->successful() && $response->json('status') === 'success') {
-                    return [
-                        'country_code' => strtoupper($response->json('countryCode')),
-                        'city'         => $response->json('city'),
-                    ];
-                }
-            } catch (\Exception $e) {}
-
-            return null;
-        });
-    }
 
 
 
@@ -1343,13 +1318,12 @@ class CdnTrackingController extends Controller
             ->get()
             ->pluck('count', 'date');
 
-        // Global Health Score (All organization's sitemap links)
-        $sitemapService = app(\App\Services\SitemapService::class);
-        $totalLinks = SitemapLink::whereHas('sitemap', function($q) use ($organization) {
-            $q->where('organization_id', $organization->id);
-        })->with('sitemap')->get();
-        
-        $healthScore = $totalLinks->avg(fn($l) => $sitemapService->calculateSeoScore($l));
+        // FIX 4: Global Health Score (Optimized SQL AVG)
+        $healthScore = SitemapLink::whereHas('sitemap', function($q) use ($organization) {
+                $q->where('organization_id', $organization->id);
+            })
+            ->whereNotNull('seo_score')
+            ->avg('seo_score') ?? 0;
 
         return response()->json([
             'sitemaps'       => $sitemaps,
@@ -1717,14 +1691,13 @@ class CdnTrackingController extends Controller
             }
         }
 
-        // 3. Generate schema (Internal call)
-        $schema = $this->generateSchemaForPage($pixelSite, $request->url, $metadata);
+        // 3. Generate schema (Asynchronous dispatch - FIX 5)
+        GenerateCdnSchemaJob::dispatch($pixelSite, $request->url, $metadata);
 
         return response()->json([
             'success' => true,
-            'message' => 'AI Schema synthesized and injected successfully.',
-            'schema'  => $schema->schema_json,
-        ]);
+            'message' => 'AI Schema generation queued. It will be available shortly.',
+        ], 202);
     }
 
     /**
@@ -1779,31 +1752,7 @@ class CdnTrackingController extends Controller
         ]);
     }
 
-    /**
-     * Find or auto-create the organisation's CDN discovery sitemap.
-     *
-     * The discovery sitemap is a special sitemap used as the landing zone for
-     * pages found passively (CDN) or aggressively (Scrapy) via pixel traffic.
-     * It is created once and reused for all subsequent discoveries.
-     */
-    private function resolveDiscoverySitemap(Organization $organization, PixelSite $pixelSite): Sitemap
-    {
-        return Sitemap::firstOrCreate(
-            [
-                'organization_id' => $organization->id,
-                'pixel_site_id'   => $pixelSite->id,
-                'is_discovery'    => true,
-            ],
-            [
-                'user_id'    => $organization->users()->first()?->id,
-                'name'       => 'CDN Discovery — ' . ($pixelSite->allowed_domain ?? $pixelSite->label),
-                'site_url'   => $pixelSite->allowed_domain ? 'https://' . $pixelSite->allowed_domain : null,
-                'filename'   => 'cdn-discovery-' . $pixelSite->id . '-' . $organization->id . '.xml',
-                'crawl_mode' => 'cdn',   // default: silent; user can switch to aggressive in settings
-                'is_index'   => false,
-            ]
-        );
-    }
+
 
     /**
      * Normalize a URL for consistent hashing (strips scheme, lowercases, trims trailing slash).

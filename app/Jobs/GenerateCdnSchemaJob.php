@@ -26,6 +26,12 @@ class GenerateCdnSchemaJob implements ShouldQueue
      */
     public $timeout = 60;
 
+    /**
+     * Route to the dedicated CDN queue so schema jobs don't
+     * compete with fast discovery jobs on the default queue.
+     */
+    public $queue = 'cdn';
+
     protected $pixelSite;
     protected $url;
     protected $metadata;
@@ -36,8 +42,8 @@ class GenerateCdnSchemaJob implements ShouldQueue
     public function __construct(PixelSite $pixelSite, string $url, array $metadata)
     {
         $this->pixelSite = $pixelSite;
-        $this->url = $url;
-        $this->metadata = $metadata;
+        $this->url       = $url;
+        $this->metadata  = $metadata;
     }
 
     /**
@@ -45,9 +51,13 @@ class GenerateCdnSchemaJob implements ShouldQueue
      */
     public function handle(): void
     {
-        $urlHash = hash('sha256', strtolower(rtrim(preg_replace('/^www\./', '', parse_url($this->url, PHP_URL_HOST) . parse_url($this->url, PHP_URL_PATH)), '/')));
+        $urlHash = hash('sha256', strtolower(rtrim(
+            preg_replace('/^www\./', '', parse_url($this->url, PHP_URL_HOST) . parse_url($this->url, PHP_URL_PATH)),
+            '/'
+        )));
 
         // Final deduplication check before starting expensive AI work
+        // Uses firstOrCreate so even on race conditions only one row is ever written
         if (CdnPageSchema::where('pixel_site_id', $this->pixelSite->id)->where('url_hash', $urlHash)->exists()) {
             return;
         }
@@ -55,34 +65,40 @@ class GenerateCdnSchemaJob implements ShouldQueue
         try {
             $aiService = app(OpenAIService::class);
             $aiService->setModelFromOrganization($this->pixelSite->organization);
-            
+
             // Construct pseudo-html from metadata for extraction
-            $pseudoHtml = "<html><head><title>" . ($this->metadata['title'] ?? '') . "</title>";
+            $pseudoHtml  = "<html><head><title>" . ($this->metadata['title'] ?? '') . "</title>";
             $pseudoHtml .= "<meta name='description' content='" . ($this->metadata['description'] ?? '') . "'>";
             $pseudoHtml .= "</head><body><h1>" . ($this->metadata['h1'] ?? '') . "</h1></body></html>";
 
             $aiData = $aiService->extractProfessionalSchemaData($this->url, $pseudoHtml);
-            
+
             if ($aiData && !empty($aiData['data'])) {
                 $schema = $aiData['data'];
                 if (!isset($schema['@context'])) $schema['@context'] = 'https://schema.org';
-                if (!isset($schema['@type'])) $schema['@type'] = $aiData['type'] ?? 'WebPage';
+                if (!isset($schema['@type']))    $schema['@type']    = $aiData['type'] ?? 'WebPage';
 
-                CdnPageSchema::create([
-                    'pixel_site_id' => $this->pixelSite->id,
-                    'url'           => $this->url,
-                    'url_hash'      => $urlHash,
-                    'schema_type'   => $schema['@type'],
-                    'schema_json'   => $schema,
-                    'is_auto_generated' => true,
-                    'last_injected_at'  => now(),
-                ]);
+                // Use firstOrCreate instead of create — race-safe at DB level
+                // The unique index on (pixel_site_id, url_hash) enforces this at DB level too
+                CdnPageSchema::firstOrCreate(
+                    [
+                        'pixel_site_id' => $this->pixelSite->id,
+                        'url_hash'      => $urlHash,
+                    ],
+                    [
+                        'url'               => $this->url,
+                        'schema_type'       => $schema['@type'],
+                        'schema_json'       => $schema,
+                        'is_auto_generated' => true,
+                        'last_injected_at'  => now(),
+                    ]
+                );
             }
         } catch (\Exception $e) {
-            Log::error("CDN Background Schema Generation Failure", [
+            Log::error('CDN Background Schema Generation Failure', [
                 'pixel_site_id' => $this->pixelSite->id,
                 'url'           => $this->url,
-                'error'         => $e->getMessage()
+                'error'         => $e->getMessage(),
             ]);
             throw $e;
         }
