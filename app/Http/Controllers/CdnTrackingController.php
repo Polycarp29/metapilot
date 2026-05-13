@@ -1192,7 +1192,16 @@ class CdnTrackingController extends Controller
         if (!$organization) return response()->json(['error' => 'Organization not found'], 404);
 
         $pixelSiteId = $request->input('pixel_site_id');
-        $pixelSite = $pixelSiteId ? PixelSite::where('organization_id', $organization->id)->find($pixelSiteId) : null;
+        $orgId = $organization->id;
+        
+        // Cache Key varies by pixel_site_id and pagination
+        $cacheKey = "web_analysis_v2_{$orgId}_site_" . ($pixelSiteId ?? 'all') . 
+                    "_p" . $request->input('sitemaps_page', 1) . 
+                    "_lp" . $request->input('per_page', 25) . 
+                    "_s" . md5($request->input('search', ''));
+
+        return Cache::remember($cacheKey, 300, function() use ($organization, $orgId, $request, $pixelSiteId) {
+            $pixelSite = $pixelSiteId ? PixelSite::where('organization_id', $orgId)->find($pixelSiteId) : null;
 
         // 1. Sitemaps (with Pagination)
         $sitemapsPage = $request->input('sitemaps_page', 1);
@@ -1356,7 +1365,8 @@ class CdnTrackingController extends Controller
                 'injections' => $days->map(fn($d) => (int) $injectionTrend->get($d, 0)),
             ],
         ]);
-    }
+    });
+}
 
     /**
      * Export web analysis as a professional PDF report.
