@@ -514,12 +514,12 @@ class CdnTrackingController extends Controller
             $query->where('country_code', $request->country);
         }
 
-        // Date Range
+        // Date Range (Optimized for Index Usage: avoiding whereDate)
         if ($request->filled('start_date')) {
-            $query->whereDate('created_at', '>=', $request->start_date);
+            $query->where('created_at', '>=', $request->start_date . ' 00:00:00');
         }
         if ($request->filled('end_date')) {
-            $query->whereDate('created_at', '<=', $request->end_date);
+            $query->where('created_at', '<=', $request->end_date . ' 23:59:59');
         }
 
         // Search (URL, Session, City)
@@ -786,7 +786,8 @@ class CdnTrackingController extends Controller
         $thirtyDaysAgo = now()->subDays(29)->startOfDay();
 
         $queryBase = AdTrackEvent::where('organization_id', $orgId)
-            ->when($request->pixel_site_id, fn($q, $id) => $q->where('pixel_site_id', $id));
+            ->when($request->pixel_site_id, fn($q, $id) => $q->where('pixel_site_id', $id))
+            ->where('created_at', '>=', $thirtyDaysAgo); // FIX: Restrict to 30 days by default for performance
 
         // Filters
         if ($request->boolean('exclude_bots')) $queryBase->where('is_bot', false);
@@ -846,8 +847,8 @@ class CdnTrackingController extends Controller
                 AVG(max_scroll_depth) as avg_scroll,
                 AVG(click_count) as avg_clicks,
                 SUM(CASE WHEN (gclid IS NOT NULL OR utm_campaign IS NOT NULL OR google_campaign_id IS NOT NULL) THEN 1 ELSE 0 END) as ad_hits,
-                SUM(CASE WHEN DATE(created_at) = CURDATE() THEN 1 ELSE 0 END) as today_count,
-                SUM(CASE WHEN DATE(created_at) = CURDATE() - INTERVAL 1 DAY THEN 1 ELSE 0 END) as yesterday_count")
+                SUM(CASE WHEN created_at >= CURDATE() THEN 1 ELSE 0 END) as today_count,
+                SUM(CASE WHEN created_at >= DATE_SUB(CURDATE(), INTERVAL 1 DAY) AND created_at < CURDATE() THEN 1 ELSE 0 END) as yesterday_count")
             ->groupBy('page_url')
             ->orderByDesc('total_hits')
             ->offset($pagesOffset)
