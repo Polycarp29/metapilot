@@ -781,28 +781,24 @@ class CdnTrackingController extends Controller
             return response()->json(['error' => 'Organization not found'], 404);
         }
 
-        $orgId = $organization->id;
+        $cacheKey = "cdn_analytics_v2_{$orgId}_site_" . ($pixelSiteId ?? 'all') . "_" . ($excludeBots ? 'nobots' : 'all');
+        
+        return Cache::remember($cacheKey, 300, function() use ($organization, $orgId, $request, $thirtyDaysAgo) {
+            $queryBase = AdTrackEvent::where('organization_id', $orgId)
+                ->when($request->pixel_site_id, fn($q, $id) => $q->where('pixel_site_id', $id))
+                ->where('created_at', '>=', $thirtyDaysAgo);
 
-        $thirtyDaysAgo = now()->subDays(29)->startOfDay();
-
-        $queryBase = AdTrackEvent::where('organization_id', $orgId)
-            ->when($request->pixel_site_id, fn($q, $id) => $q->where('pixel_site_id', $id))
-            ->where('created_at', '>=', $thirtyDaysAgo); // FIX: Restrict to 30 days by default for performance
-
-        // Filters
-        if ($request->boolean('exclude_bots')) $queryBase->where('is_bot', false);
-        if ($request->filled('utm_source'))   $queryBase->where('utm_source', 'like', '%' . $request->utm_source . '%');
-        if ($request->filled('utm_medium'))   $queryBase->where('utm_medium', 'like', '%' . $request->utm_medium . '%');
-        if ($request->filled('utm_campaign')) $queryBase->where('utm_campaign', 'like', '%' . $request->utm_campaign . '%');
-        if ($request->filled('gclid'))        $queryBase->where('gclid', $request->gclid);
-
-        $rawDaily = (clone $queryBase)
-            ->selectRaw("DATE(created_at) as date, COUNT(*) as total,
-                SUM(CASE WHEN (gclid IS NOT NULL OR utm_campaign IS NOT NULL OR google_campaign_id IS NOT NULL) THEN 1 ELSE 0 END) as ad_hits")
-            ->groupByRaw('DATE(created_at)')
-            ->orderByRaw('DATE(created_at)')
-            ->get()
-            ->keyBy('date');
+            if ($request->boolean('exclude_bots')) $queryBase->where('is_bot', false);
+            
+            // ── 1. Daily History (Optimized for Index Usage) ─────────────────────
+            // We fetch raw dates and group in PHP to avoid index-breaking DATE() SQL functions
+            $rawDaily = (clone $queryBase)
+                ->selectRaw("SUBSTRING(created_at, 1, 10) as date, COUNT(*) as total,
+                    SUM(CASE WHEN (gclid IS NOT NULL OR utm_campaign IS NOT NULL OR google_campaign_id IS NOT NULL) THEN 1 ELSE 0 END) as ad_hits")
+                ->groupByRaw("SUBSTRING(created_at, 1, 10)")
+                ->orderByRaw("SUBSTRING(created_at, 1, 10)")
+                ->get()
+                ->keyBy('date');
 
         // Fill every day in the 30-day window (even days with zero hits)
         $dailyHistory = [];
@@ -1106,9 +1102,6 @@ class CdnTrackingController extends Controller
                 'count'      => (int) $r->count,
             ])->values();
 
-        $cacheKey = "analytics_org_{$orgId}_site_" . ($request->pixel_site_id ?? 'all') . "_" . ($request->boolean('exclude_bots') ? 'nobots' : 'all');
-        
-        return Cache::remember($cacheKey, 300, function() use ($dailyHistory, $topPages, $pagesTotal, $pagesPage, $pagesPerPage, $topReferrers, $rising, $falling, $byCountry, $byDevice, $byCity, $slowPages, $errorTypeBreakdown, $alertsLast24h, $todayHits, $yesterdayHits, $todayDelta, $last7, $prev7, $weekDelta, $geoRaw) {
             return response()->json([
                 'daily_history'  => $dailyHistory,
                 'top_pages'      => $topPages,
