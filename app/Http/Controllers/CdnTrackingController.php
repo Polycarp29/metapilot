@@ -780,8 +780,12 @@ class CdnTrackingController extends Controller
         if (!$organization) {
             return response()->json(['error' => 'Organization not found'], 404);
         }
+        $orgId = $organization->id;
+        $pixelSiteId = $request->pixel_site_id;
+        $excludeBots = $request->boolean('exclude_bots');
+        $thirtyDaysAgo = now()->subDays(29)->startOfDay();
 
-        $cacheKey = "cdn_analytics_v2_{$orgId}_site_" . ($pixelSiteId ?? 'all') . "_" . ($excludeBots ? 'nobots' : 'all');
+        $cacheKey = "cdn_analytics_v3_{$orgId}_site_" . ($pixelSiteId ?? 'all') . "_" . ($excludeBots ? 'nobots' : 'all');
         
         return Cache::remember($cacheKey, 300, function() use ($organization, $orgId, $request, $thirtyDaysAgo) {
             $queryBase = AdTrackEvent::where('organization_id', $orgId)
