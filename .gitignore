@@ -22,3 +22,14 @@ Homestead.json
 Homestead.yaml
 Thumbs.db
 venv
+/deployment
+debug_tags.py
+start_engine.sh
+start_worker.sh
+today_dump.json
+verify_pique_fixes.php
+supervisor-worker.conf
+check_pique.php
+
+
+
