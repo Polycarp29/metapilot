@@ -261,7 +261,7 @@ class AnalyticsAggregatorService
                     ];
                     $result = [];
                     foreach ($essential as $key => $config) {
-                        $result[$key] = $this->fetchDimensionBreakdown($property, $startDate, $endDate, $config['dim'], $config['metrics']);
+                        $result[$key] = $this->ga4Service->fetchDimensionBreakdown($property, $startDate, $endDate, $config['dim'], $config['metrics']);
                     }
                     return $result;
                 });

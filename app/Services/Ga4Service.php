@@ -31,9 +31,11 @@ class Ga4Service
         }
 
         if (!$property->refresh_token) {
-            Log::warning("GA4 client init skipped — no refresh token for property: {$property->id}");
+            Log::error("GA4 Auth Failed: No refresh token for property {$property->id}");
             return;
         }
+
+        Log::info("GA4 Client Initializing for property {$property->id}");
 
         // UserRefreshCredentials handles token refresh automatically on each request
         // We do NOT manually pre-refresh here to avoid double 401 storms.
@@ -151,16 +153,19 @@ class Ga4Service
                 ],
             ]);
 
-            Log::debug("GA4 Request (Daily) for Property ID: {$property->property_id}", [
-                'start_date' => $startDate,
-                'end_date' => $endDate
-            ]);
+            Log::info("GA4 FETCH START (Daily): Property {$property->id} (GA ID: {$property->property_id}) | Range: {$startDate} to {$endDate}");
 
             $response = $this->client->runReport($request);
             
-            Log::debug("GA4 Response (Daily) for Property ID: {$property->property_id}", [
-                'row_count' => $response->getRowCount()
-            ]);
+            $rowCount = $response->getRowCount();
+            Log::info("GA4 FETCH SUCCESS (Daily): Received {$rowCount} rows for Property {$property->id}");
+
+            if ($rowCount > 0) {
+                $sample = $response->getRows()[0]->getMetricValues()[0]->getValue();
+                Log::debug("GA4 DATA SAMPLE (Daily): First row activeUsers = {$sample}");
+            } else {
+                Log::warning("GA4 DATA EMPTY (Daily): Google returned 0 rows for Property {$property->id}. Check if the GA4 property has traffic in this range.");
+            }
 
             return $this->parseReportResponse($response);
         } catch (\Exception $e) {
@@ -203,13 +208,12 @@ class Ga4Service
                 ],
             ]);
 
-            Log::debug("GA4 Request (Aggregate) for Property ID: {$property->property_id}");
+            Log::info("GA4 FETCH START (Aggregate): Property {$property->id} (GA ID: {$property->property_id}) | Range: {$startDate} to {$endDate}");
 
             $response = $this->client->runReport($request);
 
-            Log::debug("GA4 Response (Aggregate) for Property ID: {$property->property_id}", [
-                'row_count' => $response->getRowCount()
-            ]);
+            $rowCount = $response->getRowCount();
+            Log::info("GA4 FETCH SUCCESS (Aggregate): Received {$rowCount} rows for Property {$property->id}");
 
             if ($response->getRowCount() > 0) {
                 $metricValues = $response->getRows()[0]->getMetricValues();
