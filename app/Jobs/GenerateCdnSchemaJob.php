@@ -26,12 +26,6 @@ class GenerateCdnSchemaJob implements ShouldQueue
      */
     public $timeout = 60;
 
-    /**
-     * Route to the dedicated CDN queue so schema jobs don't
-     * compete with fast discovery jobs on the default queue.
-     */
-    public $queue = 'cdn';
-
     protected $pixelSite;
     protected $url;
     protected $metadata;
@@ -44,6 +38,7 @@ class GenerateCdnSchemaJob implements ShouldQueue
         $this->pixelSite = $pixelSite;
         $this->url       = $url;
         $this->metadata  = $metadata;
+        $this->queue     = 'cdn';
     }
 
     /**
