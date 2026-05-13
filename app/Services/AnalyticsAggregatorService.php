@@ -25,6 +25,16 @@ class AnalyticsAggregatorService
      */
     public function getOverview($propertyId, $startDate, $endDate)
     {
+        // Cache the full overview for 5 minutes per property+range.
+        // This prevents the current vs comparison double-hit on GA4.
+        $cacheKey = "analytics_overview_{$propertyId}_{$startDate}_{$endDate}";
+        return \Illuminate\Support\Facades\Cache::remember($cacheKey, 300, function () use ($propertyId, $startDate, $endDate) {
+            return $this->computeOverview($propertyId, $startDate, $endDate);
+        });
+    }
+
+    protected function computeOverview($propertyId, $startDate, $endDate)
+    {
         // 1. Get the latest record in the range to pull the JSON breakdowns
         $latestRecord = MetricSnapshot::where('analytics_property_id', $propertyId)
             ->whereBetween('snapshot_date', [$startDate, $endDate])
@@ -234,9 +244,27 @@ class AnalyticsAggregatorService
                 'by_audience' => $latestRecord->by_audience ?? [],
             ];
         } else {
-            // Fetch live breakdowns directly from API as a fallback
+            // Fetch live breakdowns directly from API as a fallback.
+            // PERF: Cache this for 5 minutes to prevent hammering the GA4 API on every page load.
+            $cacheKey = "ga4_breakdowns_{$propertyId}_{$startDate}_{$endDate}";
             try {
-                $breakdowns = $this->ga4Service->fetchBreakdowns($property, $startDate, $endDate) ?? [];
+                $breakdowns = \Illuminate\Support\Facades\Cache::remember($cacheKey, 300, function () use ($property, $startDate, $endDate) {
+                    // Only fetch the 4 most critical breakdowns for speed.
+                    // unifiedPageScreen (234K rows) is intentionally excluded from the live path.
+                    $essential = [
+                        'by_page'    => ['dim' => 'pagePath',            'metrics' => ['activeUsers', 'bounceRate', 'averageSessionDuration']],
+                        'by_source'  => ['dim' => 'sessionSourceMedium', 'metrics' => ['activeUsers']],
+                        'by_device'  => ['dim' => 'deviceCategory',      'metrics' => ['activeUsers', 'bounceRate']],
+                        'by_country' => ['dim' => 'country',             'metrics' => ['activeUsers']],
+                        'by_city'    => ['dim' => 'city',                'metrics' => ['activeUsers']],
+                        'by_event'   => ['dim' => 'eventName',           'metrics' => ['activeUsers', 'eventCount', 'conversions']],
+                    ];
+                    $result = [];
+                    foreach ($essential as $key => $config) {
+                        $result[$key] = $this->fetchDimensionBreakdown($property, $startDate, $endDate, $config['dim'], $config['metrics']);
+                    }
+                    return $result;
+                });
             } catch (\Exception $e) {
                 \Illuminate\Support\Facades\Log::warning("Live breakdown fetch failed for property {$propertyId}: " . $e->getMessage());
                 $breakdowns = [];

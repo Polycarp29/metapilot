@@ -797,11 +797,10 @@ class CdnTrackingController extends Controller
         if ($request->filled('gclid'))        $queryBase->where('gclid', $request->gclid);
 
         $rawDaily = (clone $queryBase)
-            ->where('created_at', '>=', $thirtyDaysAgo)
             ->selectRaw("DATE(created_at) as date, COUNT(*) as total,
                 SUM(CASE WHEN (gclid IS NOT NULL OR utm_campaign IS NOT NULL OR google_campaign_id IS NOT NULL) THEN 1 ELSE 0 END) as ad_hits")
-            ->groupBy('date')
-            ->orderBy('date')
+            ->groupByRaw('DATE(created_at)')
+            ->orderByRaw('DATE(created_at)')
             ->get()
             ->keyBy('date');
 
