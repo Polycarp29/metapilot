@@ -1319,12 +1319,19 @@ class CdnTrackingController extends Controller
             ->get()
             ->pluck('count', 'date');
 
-        // FIX 4: Global Health Score (Optimized SQL AVG)
-        $healthScore = SitemapLink::whereHas('sitemap', function($q) use ($organization) {
-                $q->where('organization_id', $organization->id);
-            })
-            ->whereNotNull('seo_score')
-            ->avg('seo_score') ?? 0;
+        // Global Health Score (Optimized Memory Usage with cursor())
+        $sitemapService = app(\App\Services\SitemapService::class);
+        $totalLinksQuery = SitemapLink::whereHas('sitemap', function($q) use ($organization) {
+            $q->where('organization_id', $organization->id);
+        });
+
+        $totalScore = 0;
+        $count = 0;
+        foreach ($totalLinksQuery->cursor() as $link) {
+            $totalScore += $sitemapService->calculateSeoScore($link);
+            $count++;
+        }
+        $healthScore = $count > 0 ? $totalScore / $count : 0;
 
         return response()->json([
             'sitemaps'       => $sitemaps,

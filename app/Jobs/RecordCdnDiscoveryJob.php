@@ -29,7 +29,6 @@ class RecordCdnDiscoveryJob implements ShouldQueue
 
     public $tries   = 3;
     public $timeout = 30;
-    public $queue   = 'cdn';
 
     protected int    $pixelSiteId;
     protected string $url;
@@ -42,6 +41,7 @@ class RecordCdnDiscoveryJob implements ShouldQueue
         $this->url         = $url;
         $this->urlHash     = $urlHash;
         $this->meta        = $meta;
+        $this->queue       = 'cdn';
     }
 
     public function handle(): void
