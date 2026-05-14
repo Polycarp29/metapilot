@@ -29,37 +29,43 @@ Identify your project paths (standard example):
 2.  **Configure `.env`**:
     Ensure `REDIS_HOST`, `APP_URL` (pointing to Laravel), and `REDIS_PREFIX` match your Laravel settings.
 
-## 3. Laravel Automation (Scheduler & Queues)
+## 4. CDN Ingestion Pipeline (High-Scale)
 
-### A. Crontab (Crucial for Scanners)
-The scanners (Keywords and Analytics) depend on the Laravel scheduler.
-1. Run `crontab -e`
-2. Add: `* * * * * cd /var/www/metapilot && php artisan schedule:run >> /dev/null 2>&1`
+The CDN tracking system now uses an asynchronous **"Fast Buffer"** architecture to handle millions of hits without crashing the database.
 
-### B. Supervisor (Background Workers)
-Copy configs from `deployment/` to `/etc/supervisor/conf.d/`:
-
-| Config File | Service |
-| :--- | :--- |
-| `laravel-worker.conf` | Processes Scanners & Job Queues |
-| `crawler-consumer.conf` | Processes Crawler Results |
-| `crawler-api.conf` | Python Crawler API (Port 5000) |
-| `analytics-worker.conf` | Python Analytics Worker |
-
-**Command to start everything:**
-```bash
-sudo supervisorctl reread
-sudo supervisorctl update
-sudo supervisorctl start all
+### A. Environment Configuration
+Ensure your `.env` supports Redis and higher limits:
+```env
+QUEUE_CONNECTION=redis
+CDN_MAX_DAILY_HITS=1000000
+CDN_TOKEN_RATE_LIMIT_RPM=300
 ```
+
+### B. Supervisor Setup (Crucial)
+You must run dedicated workers for the `cdn-ingestion` queue to prevent lag.
+
+**Config: `/etc/supervisor/conf.d/cdn-worker.conf`**
+```ini
+[program:cdn-worker]
+command=php /var/www/metapilot/artisan queue:work --queue=cdn-ingestion --sleep=1 --tries=3
+numprocs=4
+autostart=true
+autorestart=true
+user=www-data
+```
+
+### C. Health & Monitoring
+Monitor the ingestion pipeline in real-time:
+- **Status Command**: `php artisan cdn:status` (Shows queue lag, throughput, and bot ratios)
+- **Purge Command**: `php artisan cdn:purge-garbage` (Run via CRON to clean up bot data)
 
 ## 5. Network & Security (Nginx)
 - **Laravel**: Your existing Nginx config should handle the Laravel bit.
-- **Python API**: Since it's on port `5000`, it's recommended to keep it blocked from the public. Laravel talks to it via `localhost:5000`, so no extra Nginx config is needed unless you want to access the crawler status from a separate domain.
+- **Python API**: Since it's on port `5000`, it's recommended to keep it blocked from the public. Laravel talks to it via `localhost:5000`.
 
 ## 6. Testing the Connection
-- Run `curl http://localhost:5000/health`. It should return `{"status": "healthy"}`.
-- Trigger a crawl in Laravel. Monitor logs:
-- Laravel: `tail -f storage/logs/laravel.log`
-- Analytics Engine: `tail -f /var/www/analytics-engine/engine.log`
-- Analytics Worker: `tail -f /var/www/analytics-engine/worker.log`
+- Run `curl http://localhost:5000/health`.
+- Trigger a pixel hit. Monitor the queue: `php artisan cdn:status`.
+- Monitor logs:
+    - Laravel: `tail -f storage/logs/laravel.log`
+    - CDN Worker: `tail -f storage/logs/cdn-worker.log`

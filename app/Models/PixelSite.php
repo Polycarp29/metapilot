@@ -19,12 +19,22 @@ class PixelSite extends Model
         'allowed_domain',
         'enabled_modules',
         'pixel_verified_at',
+        'tracking_enabled',
     ];
 
     protected $casts = [
-        'pixel_verified_at' => 'datetime',
-        'enabled_modules' => 'json',
+        'pixel_verified_at'  => 'datetime',
+        'enabled_modules'    => 'json',
+        'tracking_enabled'   => 'boolean',
     ];
+
+    /**
+     * Convenience check used by CDN endpoints to gate ingestion.
+     */
+    public function isTrackingActive(): bool
+    {
+        return (bool) $this->tracking_enabled;
+    }
 
     protected static function booted()
     {
@@ -43,5 +53,10 @@ class PixelSite extends Model
     public function adTrackEvents(): HasMany
     {
         return $this->hasMany(AdTrackEvent::class);
+    }
+
+    public function cdnErrors(): HasMany
+    {
+        return $this->hasMany(CdnError::class);
     }
 }

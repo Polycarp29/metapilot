@@ -220,8 +220,12 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::get('/page-source', [\App\Http\Controllers\CdnTrackingController::class, 'getPageSource'])->name('page-source');
 
         // Multi-Site Pixel Management
-        Route::apiResource('pixel-sites', \App\Http\Controllers\PixelSiteController::class);
+        // Extra action routes MUST be declared before apiResource so that
+        // the specific paths (e.g. /toggle-tracking) are matched before the
+        // wildcard PUT|PATCH {pixel_site} update route.
         Route::post('pixel-sites/{pixel_site}/regenerate-token', [\App\Http\Controllers\PixelSiteController::class, 'regenerateToken'])->name('pixel-sites.regenerate-token');
+        Route::patch('pixel-sites/{pixel_site}/toggle-tracking', [\App\Http\Controllers\PixelSiteController::class, 'toggleTracking'])->name('pixel-sites.toggle-tracking');
+        Route::apiResource('pixel-sites', \App\Http\Controllers\PixelSiteController::class);
     });
 
     // Keyword Management

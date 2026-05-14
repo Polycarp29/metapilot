@@ -52,8 +52,8 @@ class BotFirewallService
         }
 
         // ── Rate limit check ───────────────────────────────────────────────
-        $rpm    = $this->getRequestRate($ip);
-        $limit  = config('security.bot_rate_limit_rpm', 300);
+        $rpm   = $this->getRequestRate($ip);
+        $limit = config('security.bot_rate_limit_rpm', 60);
 
         if ($rpm > $limit) {
             $score += 60;
@@ -148,4 +148,45 @@ class BotFirewallService
 
         return $count + 1;
     }
+
+    // =========================================================================
+    // CDN-specific guards
+    // =========================================================================
+
+    public function checkTokenRateLimit(string $token): bool
+    {
+        $key   = 'security:token_rate:' . substr($token, 0, 8);
+        $count = (int) Cache::get($key, 0);
+
+        if ($count === 0) {
+            Cache::put($key, 1, 60);
+        } else {
+            Cache::increment($key);
+        }
+
+        $limit = config('security.cdn_token_rate_limit_rpm', 300);
+        return ($count + 1) > $limit;
+    }
+
+    public function checkDailyHitCap(int $pixelSiteId): bool
+    {
+        $key   = 'cdn:daily_hits:' . $pixelSiteId . ':' . now()->format('Y-m-d');
+        $count = (int) Cache::get($key, 0);
+        $cap   = config('security.cdn_max_daily_hits_per_site', 1000000);
+
+        return $count >= $cap;
+    }
+
+    public function incrementDailyHitCounter(int $pixelSiteId): void
+    {
+        $key    = 'cdn:daily_hits:' . $pixelSiteId . ':' . now()->format('Y-m-d');
+        $ttlSec = now()->secondsUntilEndOfDay() + 1;
+
+        if (!Cache::has($key)) {
+            Cache::put($key, 1, $ttlSec);
+        } else {
+            Cache::increment($key);
+        }
+    }
+
 }
