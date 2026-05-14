@@ -39,9 +39,10 @@ class PixelSiteController extends Controller
         }
 
         $pixelSite = $organization->pixelSites()->create([
-            'label'          => $request->label,
-            'ads_site_token' => (string) Str::uuid(),
-            'allowed_domain' => $request->allowed_domain ?: null,
+            'label'            => $request->label,
+            'ads_site_token'   => (string) Str::uuid(),
+            'allowed_domain'   => $request->allowed_domain ?: null,
+            'tracking_enabled' => true,
         ]);
 
         return response()->json([
@@ -90,8 +91,6 @@ class PixelSiteController extends Controller
             return response()->json(['error' => 'Unauthorized'], 403);
         }
 
-        // Don't allow deleting the last site? Or just delete it.
-        // For now, let's just delete it.
         $pixelSite->delete();
 
         return response()->json([
@@ -116,6 +115,35 @@ class PixelSiteController extends Controller
         return response()->json([
             'message'    => 'Token regenerated successfully',
             'pixel_site' => $pixelSite,
+        ]);
+    }
+
+    /**
+     * Toggle CDN hit ingestion on/off for a pixel site.
+     *
+     * When disabled:
+     *  - trackHit()        returns 204 silently (JS client sees success, no retry loops)
+     *  - logError()        returns 204 silently
+     *  - verifyConnection() returns {ok: false, tracking_paused: true}
+     *
+     * This lets you immediately stop writing garbage from a problematic embedded site
+     * without deleting the pixel site record or rotating the token.
+     */
+    public function toggleTracking(Request $request, PixelSite $pixelSite)
+    {
+        $organization = $request->user()->currentOrganization();
+        if (!$organization || $pixelSite->organization_id !== $organization->id) {
+            return response()->json(['error' => 'Unauthorized'], 403);
+        }
+
+        $newState = !$pixelSite->tracking_enabled;
+        $pixelSite->update(['tracking_enabled' => $newState]);
+
+        return response()->json([
+            'tracking_enabled' => $newState,
+            'message'          => $newState
+                ? 'Tracking resumed. The CDN pixel is now accepting hits.'
+                : 'Tracking paused. All incoming CDN hits are being silently dropped.',
         ]);
     }
 }

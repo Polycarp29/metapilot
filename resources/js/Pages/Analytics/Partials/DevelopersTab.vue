@@ -781,6 +781,21 @@ const regenerateToken = async () => {
     }
 }
 
+const isTogglingTracking = ref(false)
+const toggleSiteTracking = async () => {
+    if (!selectedSiteId.value) return
+    isTogglingTracking.value = true
+    try {
+        const { data } = await axios.patch(route('google-ads.pixel-sites.toggle-tracking', { pixel_site: selectedSiteId.value }))
+        toast.success(data.message)
+        await fetchConnectionStatus()
+    } catch (e) {
+        toast.error('Failed to toggle tracking status')
+    } finally {
+        isTogglingTracking.value = false
+    }
+}
+
 const createSite = async () => {
     isCreatingSite.value = true
     try {
@@ -1478,7 +1493,21 @@ const openHealthModal = (site = null) => {
                         <input v-model="selectedCampaignId" placeholder="e.g. fb_ads_winter_campaign" class="w-full bg-white/5 border-white/10 focus:border-indigo-500 focus:ring-0 rounded-2xl text-[11px] font-bold text-white py-4 px-6" />
                     </div>
                     <div class="space-y-3">
-                        <label class="block text-[10px] font-black text-slate-500 uppercase tracking-widest ml-1">Identification Source</label>
+                        <div class="flex items-center justify-between ml-1">
+                            <label class="text-[10px] font-black text-slate-500 uppercase tracking-widest">Identification Source</label>
+                            <div v-if="selectedSite" class="flex items-center gap-2">
+                                <span class="text-[9px] font-black uppercase tracking-widest" :class="selectedSite.tracking_enabled ? 'text-emerald-500' : 'text-rose-500'">
+                                    {{ selectedSite.tracking_enabled ? 'Ingestion Active' : 'Ingestion Paused' }}
+                                </span>
+                                <button @click="toggleSiteTracking" 
+                                    :disabled="isTogglingTracking"
+                                    class="w-8 h-4 rounded-full transition-all relative flex items-center px-0.5"
+                                    :class="[selectedSite.tracking_enabled ? 'bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.4)]' : 'bg-slate-700', isTogglingTracking ? 'opacity-50' : '']"
+                                >
+                                    <div class="w-3 h-3 bg-white rounded-full transition-all" :class="{ 'translate-x-4': selectedSite.tracking_enabled }"></div>
+                                </button>
+                            </div>
+                        </div>
                         <select v-model="selectedSiteId" class="w-full bg-slate-800 border-white/10 focus:border-indigo-500 focus:ring-0 rounded-2xl text-[11px] font-bold text-white py-4 px-6 appearance-none cursor-pointer">
                             <option :value="null">System Selection...</option>
                             <option v-for="site in pixelSites" :key="site.id" :value="site.id">{{ site.label }} ({{ site.total_hits }} hits)</option>

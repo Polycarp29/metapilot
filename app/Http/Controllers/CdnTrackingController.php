@@ -74,261 +74,51 @@ class CdnTrackingController extends Controller
     public function trackHit(Request $request)
     {
         $request->validate([
-            'token'        => 'required|uuid',
-            'page_view_id' => 'required|string|max:50',
-            'page_url'     => 'nullable|url',
+            'token'            => 'required|uuid',
+            'page_view_id'     => 'required|string|max:50',
+            'page_url'         => 'nullable|url',
             'duration_seconds' => 'nullable|integer',
             'max_scroll_depth' => 'nullable|integer',
-            '_ts'          => 'required|integer',
-            '_sig'         => 'required|string',
+            '_ts'              => 'required|integer',
+            '_sig'             => 'required|string',
         ]);
 
         $pixelSite = PixelSite::where('ads_site_token', $request->token)->first();
         if (!$pixelSite) {
-            return response()->json(['error' => 'Invalid token'], 403)
-                ->withHeaders($this->corsHeaders());
+            return response()->json(['error' => 'Invalid token'], 403)->withHeaders($this->corsHeaders());
         }
 
-        $organization = $pixelSite->organization;
-
-        // --- Security: Domain Pinning ---
-        if ($pixelSite->allowed_domain) {
-            $origin  = $request->header('Origin', '');
-            $referer = $request->header('Referer', '');
-            $allowed = strtolower(trim($pixelSite->allowed_domain, '/'));
- 
-            $originHost  = strtolower(parse_url($origin,  PHP_URL_HOST) ?? '');
-            $refererHost = strtolower(parse_url($referer, PHP_URL_HOST) ?? '');
- 
-            // Strip www. for comparison
-            $normalise = fn($h) => preg_replace('/^www\./', '', $h);
-            $cleanAllowed = $normalise($allowed);
- 
-            $checkDomain = function($host) use ($cleanAllowed, $normalise) {
-                if (!$host) return false;
-                $host = $normalise($host);
-                return $host === $cleanAllowed || str_ends_with($host, '.' . $cleanAllowed);
-            };
- 
-            if (!$checkDomain($originHost) && !$checkDomain($refererHost)) {
-                Log::warning('Pixel domain pinning violation', [
-                    'expected' => $allowed,
-                    'origin'   => $originHost,
-                    'referer'  => $refererHost,
-                    'token'    => substr($request->token, 0, 8) . '...',
-                ]);
-                return response()->json(['error' => 'Domain not authorised'], 403)
-                    ->withHeaders($this->corsHeaders());
-            }
+        if (!$pixelSite->isTrackingActive()) {
+            return response()->json(null, 204)->withHeaders($this->corsHeaders());
         }
 
-        // --- Security: HMAC Replay Attack Prevention ---
-        $ts        = (int) $request->_ts;
-        $signature = $request->_sig;
-        $now       = time();
-
-        if (abs($now - $ts) > 300) {
-            return response()->json(['error' => 'Request expired'], 403)
-                ->withHeaders($this->corsHeaders());
+        /** @var \App\Services\BotFirewallService $firewall */
+        $firewall = app(\App\Services\BotFirewallService::class);
+        if ($firewall->checkTokenRateLimit($request->token)) {
+            return response()->json(['error' => 'Too many requests'], 429)->withHeaders($this->corsHeaders());
         }
 
-        $expected = hash_hmac(
-            'sha256',
-            $request->token . $request->page_view_id . $ts,
-            $pixelSite->ads_site_token
-        );
-
-        if ($signature === 'nosig') {
-            Log::info('Pixel hit received without signature (nosig)', [
-                'pixel_site_id' => $pixelSite->id,
-                'page_view_id'  => $request->page_view_id,
-                'referrer'      => $request->header('Referer'),
-            ]);
-        } elseif ($signature === 'invalid-sig') {
-             Log::warning('Pixel hit received with deliberate "invalid-sig" (likely test or bypass attempt)', [
-                'pixel_site_id' => $pixelSite->id,
-                'page_view_id'  => $request->page_view_id,
-                'ip'            => $request->ip(),
-            ]);
-            return response()->json(['error' => 'Invalid signature format'], 403)
-                ->withHeaders($this->corsHeaders());
-        } elseif (!hash_equals($expected, $signature)) {
-            Log::warning('Pixel HMAC validation failed: Mismatch', [
-                'pixel_site_id' => $pixelSite->id,
-                'page_view_id'  => $request->page_view_id,
-                'received_sig'  => $signature,
-                'expected_sig'  => $expected,
-                'payload_used'  => $request->token . $request->page_view_id . $ts,
-                'key_used_prefix' => substr($pixelSite->ads_site_token, 0, 8) . '...',
-            ]);
-            return response()->json(['error' => 'Signature mismatch'], 403)
-                ->withHeaders($this->corsHeaders());
+        if ($firewall->checkDailyHitCap($pixelSite->id)) {
+            return response()->json(null, 204)->withHeaders($this->corsHeaders());
         }
 
-        // --- Parse UA and Geo ---
-        $ua         = $request->header('User-Agent');
-        $deviceData = $this->parseUserAgent($ua);
+        \App\Jobs\ProcessCdnHitJob::dispatch(
+            $request->all(),
+            array_change_key_case($request->headers->all(), CASE_LOWER),
+            $request->ip(),
+            (string) $request->header('User-Agent', '')
+        )->onQueue('cdn-ingestion');
 
-        // --- IP Detection (CDN headers first, no external HTTP blocking) ---
-        $clientIp = $request->header('CF-Connecting-IP')
-            ?? ($request->header('X-Forwarded-For')
-                ? trim(explode(',', $request->header('X-Forwarded-For'))[0])
-                : $request->ip());
+        $firewall->incrementDailyHitCounter($pixelSite->id);
 
-        // FIX 1: Geo is resolved from fast CDN headers or Redis cache.
-        // We never block the web worker with a synchronous external HTTP call.
-        // The country_code is sourced from: CF-IPCountry > X-Vercel-IP-Country > Redis cache.
-        $countryCode = $request->header('CF-IPCountry')
-            ?? $request->header('X-Vercel-IP-Country')
-            ?? $request->header('X-App-Country')
-            ?? Cache::get("geoip_country_{$clientIp}");
-        $city = Cache::get("geoip_city_{$clientIp}");
-
-        // Normalize URL for consistent hashing
-        $normalizedUrl = $this->normalizeUrlForHash($request->page_url);
-        $urlHash = $normalizedUrl ? hash('sha256', $normalizedUrl) : null;
-
-        // --- Sanitize metadata BEFORE any DB write ---
-        // Truncate all string fields to 500 chars to prevent large payload storage
-        $meta = is_array($request->metadata) ? $request->metadata : [];
-        $meta = array_map(fn($v) => is_string($v) ? mb_substr($v, 0, 500) : $v, $meta);
-        if ($request->has('is_engaged')) {
-            $meta['is_engaged'] = (bool) $request->is_engaged;
-        }
-
-        // --- Upsert the hit (metadata is now clean before reaching DB) ---
-        $hit = AdTrackEvent::updateOrCreate(
-            ['page_view_id' => $request->page_view_id],
-            [
-                'organization_id'    => $organization->id,
-                'pixel_site_id'      => $pixelSite->id,
-                'site_token'         => $request->token,
-                'country_code'       => $countryCode,
-                'city'               => $city,
-                'browser'            => $deviceData['browser'],
-                'platform'           => $deviceData['platform'],
-                'device_type'        => $deviceData['device_type'],
-                'screen_resolution'  => $request->screen_resolution,
-                'duration_seconds'   => $request->duration_seconds ?? 0,
-                'max_scroll_depth'   => $request->max_scroll_depth ?? 0,
-                'click_count'        => $request->click_count      ?? 0,
-                'google_campaign_id' => $request->campaign_id,
-                'page_url'           => $request->page_url,
-                'referrer'           => $request->referrer,
-                'session_id'         => $request->session_id,
-                'gclid'              => $request->gclid,
-                'utm_source'         => $request->utm_source,
-                'utm_medium'         => $request->utm_medium,
-                'utm_campaign'       => $request->utm_campaign,
-                'ip_hash'            => hash('sha256', $clientIp),
-                'metadata'           => $meta,
-                'is_bot'             => $deviceData['is_bot'] ?? false,
-            ]
-        );
-
-            // --- Intelligence Platform Integration ---
-            $requestedModules = $request->input('modules', []);
-            if (is_string($requestedModules)) $requestedModules = explode(',', $requestedModules);
-            
-            $enabledModules = $pixelSite->enabled_modules ?? ['click', 'schema'];
-            $activeModules  = array_intersect($requestedModules, $enabledModules);
-
-            // 1. Link to SitemapLink (Enforced by 'click' module)
-            if (in_array('click', $activeModules)) {
-                $sitemapLink = SitemapLink::whereHas('sitemap', function($q) use ($organization) {
-                    $q->where('organization_id', $organization->id);
-                })->where('url_hash', $urlHash)->first();
-
-                if ($sitemapLink) {
-                    $sitemapLink->increment('cdn_hit_count');
-                    $clicks = (int) ($request->click_count ?? 0);
-                    if ($clicks > 0) {
-                        $sitemapLink->increment('cdn_click_count', $clicks);
-                    }
-                    
-                    // Recalculate Engagement Score: (Click Rate * 80) + (Volume Bonus * 20)
-                    $totalHits = $sitemapLink->cdn_hit_count;
-                    $totalClicks = $sitemapLink->cdn_click_count;
-                    $clickRate = $totalHits > 0 ? ($totalClicks / $totalHits) : 0;
-                    $volumeBonus = min(1, $totalHits / 100); // Max bonus at 100 hits
-                    
-                    $engagementScore = ($clickRate * 80) + ($volumeBonus * 20);
-
-                    $sitemapLink->update([
-                        'cdn_active' => true,
-                        'cdn_last_seen_at' => now(),
-                        'cdn_engagement_score' => min(100, $engagementScore)
-                    ]);
-                }
-
-                // 1.5 Link to AdCampaign (Organization Scoped)
-                if ($request->campaign_id) {
-                    $adCampaign = AdCampaign::where('organization_id', $organization->id)
-                        ->where('google_campaign_id', $request->campaign_id)
-                        ->first();
-                    
-                    if ($adCampaign) {
-                        $cMetrics = $adCampaign->metrics ?? [];
-                        $cMetrics['internal_hits'] = ($cMetrics['internal_hits'] ?? 0) + 1;
-                        $cMetrics['internal_clicks'] = ($cMetrics['internal_clicks'] ?? 0) + (int) ($request->click_count ?? 0);
-                        $adCampaign->update(['metrics' => $cMetrics]);
-                    }
-                }
-            }
-
-            // 2. Auto-Generate Schema (Enforced by 'schema' module)
-            // FIX 6: Lock uses get() which silently skips — deduplication is now enforced
-            // by the unique DB index on (pixel_site_id, url_hash) + firstOrCreate in the job.
-            if (in_array('schema', $activeModules) && !empty($meta) && $urlHash) {
-                $schemaKey = "schema_dispatched_{$pixelSite->id}_{$urlHash}";
-
-                if (!Cache::has($schemaKey)) {
-                    $schemaExists = CdnPageSchema::where('pixel_site_id', $pixelSite->id)
-                        ->where('url_hash', $urlHash)
-                        ->exists();
-
-                    if (!$schemaExists) {
-                        // Mark as dispatched for 10 minutes to prevent duplicate jobs
-                        Cache::put($schemaKey, true, 600);
-                        // $meta is already sanitized (Fix 7) — dispatch is safe
-                        GenerateCdnSchemaJob::dispatch($pixelSite, $request->page_url, $meta);
-                    }
-                }
-            }
-
-        // --- Mark pixel as verified on first domain-confirmed hit ---
-        if (!$pixelSite->pixel_verified_at) {
-            $pixelSite->update(['pixel_verified_at' => now()]);
-        }
-
-        // --- FIX 3: Live Page Discovery (Cache Guard + Async Job) ---
-        // Instead of 3 synchronous DB operations per new page, we:
-        // 1. Check a 5-min Redis cache key — returns in < 1ms on warm hits
-        // 2. Only on genuine new pages: dispatch RecordCdnDiscoveryJob asynchronously
-        // Bots are skipped entirely to prevent bot-flood write storms.
-        if ($urlHash && $request->page_url && !($deviceData['is_bot'] ?? false)) {
-            $discoveryCacheKey = "cdn_seen_{$pixelSite->id}_{$urlHash}";
-
-            if (!Cache::has($discoveryCacheKey)) {
-                // Mark as seen for 5 minutes — prevents burst duplicate discovery
-                Cache::put($discoveryCacheKey, true, 300);
-
-                // Dispatch async — no blocking DB writes in the web worker
-                RecordCdnDiscoveryJob::dispatch(
-                    $pixelSite->id,
-                    $request->page_url,
-                    $urlHash,
-                    $meta  // already sanitized by Fix 7
-                );
-            }
+        // Heartbeat: Log 1% of incoming traffic to web logs for health monitoring
+        if (rand(1, 100) === 1) {
+            Log::info("CDN Hit Buffered", ['site' => $pixelSite->id, 'ip_hash' => substr(hash('sha256', $request->ip()), 0, 8)]);
         }
 
         return response()->json(null, 204)->withHeaders($this->corsHeaders());
     }
 
-    /**
-     * Log a client-side error from the tracker.
-     */
     public function logError(Request $request)
     {
         $request->validate([
@@ -339,34 +129,19 @@ class CdnTrackingController extends Controller
         ]);
 
         $pixelSite = PixelSite::where('ads_site_token', $request->token)->first();
-        if (!$pixelSite) return response()->json(['error' => 'Invalid token'], 403)->withHeaders($this->corsHeaders());
-
-        // Validate signature (using _err suffix as implemented in JS)
-        $expected = hash_hmac('sha256', $pixelSite->ads_site_token . $request->page_view_id . '_err' . $request->_ts, $pixelSite->ads_site_token);
-        
-        // Skip signature check if it fails but log it for investigation (security feature)
-        if (!hash_equals($expected, $request->_sig)) {
-             Log::warning("CDN Error Signature Mismatch", ['expected' => $expected, 'received' => $request->_sig]);
-             // For now we still log the error but mark it as unsigned if we had a field for it
+        if (!$pixelSite) {
+            return response()->json(['error' => 'Invalid token'], 403)->withHeaders($this->corsHeaders());
         }
 
-        CdnError::create([
-            'pixel_site_id'   => $pixelSite->id,
-            'organization_id' => $pixelSite->organization_id,
-            'page_view_id'    => $request->page_view_id,
-            'url'             => $request->url,
-            'message'         => $request->message,
-            'stack'           => $request->stack,
-            'source'          => $request->source ?? 'window',
-            'line'            => $request->line,
-            'col'             => $request->col,
-            'filename'        => $request->filename,
-            'user_agent'      => substr($request->header('User-Agent'), 0, 1000),
-            'ip_hash'         => hash('sha256', $request->ip()),
-            'load_time_ms'    => $request->load_time_ms,
-            'error_type'      => $request->error_type ?? 'js_error',
-            'http_status'     => $request->http_status,
-        ]);
+        if (!$pixelSite->isTrackingActive()) {
+            return response()->json(null, 204)->withHeaders($this->corsHeaders());
+        }
+
+        \App\Jobs\ProcessCdnErrorJob::dispatch(
+            $request->all(),
+            $request->ip(),
+            (string) $request->header('User-Agent', '')
+        )->onQueue('cdn-ingestion');
 
         return response(null, 204)->withHeaders($this->corsHeaders());
     }
@@ -391,6 +166,17 @@ class CdnTrackingController extends Controller
         if (!$pixelSite) {
             return response()->json(['ok' => false, 'error' => 'Invalid token'], 403)
                 ->withHeaders($this->corsHeaders());
+        }
+
+        // ── Tracking toggle gate ──────────────────────────────────────────
+        // If the site owner has paused tracking, report it to the JS client
+        // so the tracker knows not to fire any further hits.
+        if (!$pixelSite->isTrackingActive()) {
+            return response()->json([
+                'ok'             => false,
+                'tracking_paused' => true,
+                'error'          => 'Tracking is currently disabled for this site.',
+            ], 200)->withHeaders($this->corsHeaders());
         }
 
         // Check if the calling domain matches the allowed_domain
@@ -695,6 +481,7 @@ class CdnTrackingController extends Controller
                 'total_hits'        => $site->total_hits,
                 'hits_last_24h'     => $site->hits_last_24h,
                 'enabled_modules'   => $site->enabled_modules,
+                'tracking_enabled'  => (bool) $site->tracking_enabled,
                 'status'            => $status,
             ];
         });
