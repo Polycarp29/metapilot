@@ -38,8 +38,8 @@ class CdnAnalyticsService
     public function analyze(array $payload, string $cacheKey = ''): array
     {
         try {
-            $response = Http::timeout(15)
-                ->retry(2, 200, fn($e) => !($e instanceof \Illuminate\Http\Client\ConnectionException))
+            $response = Http::timeout(60)
+                ->withHeaders(['Accept' => 'application/json'])
                 ->post("{$this->baseUrl}/analyze/cdn", $payload);
 
             if ($response->successful()) {
@@ -147,12 +147,12 @@ class CdnAnalyticsService
                 ->get()->toArray();
         }
 
-        // 4. Sparkline (14-day per page)
+        // 4. Sparkline (14 day trend) - Limit to top 20 pages to keep it fast
         $sparklineRaw = [];
-        if (!empty($topPageUrls)) {
+        if ($topPageUrls) {
             $sparklineRaw = \App\Models\AdTrackEvent::where('organization_id', $orgId)
                 ->when($pixelSiteId, fn($q, $id) => $q->where('pixel_site_id', $id))
-                ->whereIn('page_url', $topPageUrls)
+                ->whereIn('page_url', array_slice($topPageUrls, 0, 20))
                 ->where('created_at', '>=', $fourteenDaysAgo)
                 ->selectRaw("page_url, DATE(created_at) as date, COUNT(*) as cnt")
                 ->groupBy('page_url', 'date')
