@@ -21,7 +21,7 @@ class CdnAnalyticsService
 
     public function __construct()
     {
-        $this->baseUrl = rtrim(config('services.python_engine.url', 'http://127.0.0.1:8001'), '/');
+        $this->baseUrl = rtrim(config('services.python_engine.url', 'http://localhost:8001'), '/');
     }
 
     /**
