@@ -14,6 +14,7 @@ use App\Models\PixelSite;
 use App\Models\Schema;
 use App\Models\Sitemap;
 use App\Models\SitemapLink;
+use App\Services\CdnAnalyticsService;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -105,7 +106,7 @@ class CdnTrackingController extends Controller
         \App\Jobs\ProcessCdnHitJob::dispatch(
             $request->all(),
             array_change_key_case($request->headers->all(), CASE_LOWER),
-            $request->ip(),
+            (string) $request->ip(),
             (string) $request->header('User-Agent', '')
         )->onQueue('cdn-ingestion');
 
@@ -567,360 +568,65 @@ class CdnTrackingController extends Controller
         if (!$organization) {
             return response()->json(['error' => 'Organization not found'], 404);
         }
-        $orgId = $organization->id;
-        $pixelSiteId = $request->pixel_site_id;
-        $excludeBots = $request->boolean('exclude_bots');
-        $thirtyDaysAgo = now()->subDays(29)->startOfDay();
 
-        $cacheKey = "cdn_analytics_v3_{$orgId}_site_" . ($pixelSiteId ?? 'all') . "_" . ($excludeBots ? 'nobots' : 'all');
-        
-        return Cache::remember($cacheKey, 300, function() use ($organization, $orgId, $request, $thirtyDaysAgo) {
-            $queryBase = AdTrackEvent::where('organization_id', $orgId)
-                ->when($request->pixel_site_id, fn($q, $id) => $q->where('pixel_site_id', $id))
-                ->where('created_at', '>=', $thirtyDaysAgo);
-
-            if ($request->boolean('exclude_bots')) $queryBase->where('is_bot', false);
-            
-            // ── 1. Daily History (Optimized for Index Usage) ─────────────────────
-            // We fetch raw dates and group in PHP to avoid index-breaking DATE() SQL functions
-            $rawDaily = (clone $queryBase)
-                ->selectRaw("SUBSTRING(created_at, 1, 10) as date, COUNT(*) as total,
-                    SUM(CASE WHEN (gclid IS NOT NULL OR utm_campaign IS NOT NULL OR google_campaign_id IS NOT NULL) THEN 1 ELSE 0 END) as ad_hits")
-                ->groupByRaw("SUBSTRING(created_at, 1, 10)")
-                ->orderByRaw("SUBSTRING(created_at, 1, 10)")
-                ->get()
-                ->keyBy('date');
-
-        // Fill every day in the 30-day window (even days with zero hits)
-        $dailyHistory = [];
-        for ($i = 29; $i >= 0; $i--) {
-            $d = now()->subDays($i)->format('Y-m-d');
-            $dailyHistory[] = [
-                'date'    => $d,
-                'label'   => now()->subDays($i)->format('M j'),
-                'total'   => (int) ($rawDaily[$d]->total   ?? 0),
-                'ad_hits' => (int) ($rawDaily[$d]->ad_hits ?? 0),
-            ];
-        }
-
-        // ── 2. Summary: today vs yesterday, 7d vs prev-7d ───────────────────
-        $todayStr     = now()->format('Y-m-d');
-        $yesterdayStr = now()->subDay()->format('Y-m-d');
-        $todayHits     = (int) ($rawDaily[$todayStr]->total     ?? 0);
-        $yesterdayHits = (int) ($rawDaily[$yesterdayStr]->total ?? 0);
-
-        $last7  = array_sum(array_column(array_slice($dailyHistory, -7),  'total'));
-        $prev7  = array_sum(array_column(array_slice($dailyHistory, -14, 7), 'total'));
-        $weekDelta = $prev7 > 0 ? round((($last7 - $prev7) / $prev7) * 100, 1) : null;
-
-        $todayDelta = $yesterdayHits > 0
-            ? round((($todayHits - $yesterdayHits) / $yesterdayHits) * 100, 1)
-            : null;
-
-        // ── 3. Top pages with 14-day sparkline, delta & bottleneck ──────────────
+        $orgId        = $organization->id;
+        $pixelSiteId  = $request->pixel_site_id;
+        $excludeBots  = $request->boolean('exclude_bots');
         $pagesPage    = max(1, (int) $request->input('pages_page', 1));
         $pagesPerPage = min(50, max(1, (int) $request->input('pages_per_page', 10)));
-        $pagesOffset  = ($pagesPage - 1) * $pagesPerPage;
+        $normalizeIds = $request->boolean('normalize_ids', false);
 
-        // Count distinct pages first for pagination meta
-        $pagesTotal = (clone $queryBase)->whereNotNull('page_url')->distinct()->count('page_url');
+        /** @var CdnAnalyticsService $engine */
+        $engine = app(CdnAnalyticsService::class);
 
-        $topPageRows = (clone $queryBase)
-            ->whereNotNull('page_url')
-            ->selectRaw("page_url,
-                COUNT(*) as total_hits,
-                AVG(duration_seconds) as avg_duration,
-                AVG(max_scroll_depth) as avg_scroll,
-                AVG(click_count) as avg_clicks,
-                SUM(CASE WHEN (gclid IS NOT NULL OR utm_campaign IS NOT NULL OR google_campaign_id IS NOT NULL) THEN 1 ELSE 0 END) as ad_hits,
-                SUM(CASE WHEN created_at >= CURDATE() THEN 1 ELSE 0 END) as today_count,
-                SUM(CASE WHEN created_at >= DATE_SUB(CURDATE(), INTERVAL 1 DAY) AND created_at < CURDATE() THEN 1 ELSE 0 END) as yesterday_count")
-            ->groupBy('page_url')
-            ->orderByDesc('total_hits')
-            ->offset($pagesOffset)
-            ->limit($pagesPerPage)
-            ->get();
+        $cacheKey = CdnAnalyticsService::cacheKey(
+            $orgId,
+            $pixelSiteId,
+            $excludeBots,
+            $pagesPage,
+            $pagesPerPage
+        );
 
-        // 14-day sparkline per top page
-        $fourteenDaysAgo = now()->subDays(13)->startOfDay();
-        $topPageUrls = $topPageRows->pluck('page_url')->toArray();
-
-        // --- Bounce Rate Calculation (SQL subquery, scoped to current page's URLs only) ---
-        // Previously loaded ALL session rows into PHP memory (O(n) on total events), causing
-        // timeouts on large orgs. Now runs a single SQL subquery restricted to the current
-        // page's 10 URLs, keeping the computation inside the database.
-        $bouncesByPage = collect();
-        if (!empty($topPageUrls)) {
-            $bouncesByPage = DB::table(function ($sub) use ($orgId, $request, $thirtyDaysAgo, $topPageUrls) {
-                $sub->from('ad_track_events')
-                    ->selectRaw('page_url, session_id, COUNT(*) as session_count')
-                    ->where('organization_id', $orgId)
-                    ->whereNotNull('page_url')
-                    ->whereIn('page_url', $topPageUrls)
-                    ->where('created_at', '>=', $thirtyDaysAgo)
-                    ->when($request->filled('pixel_site_id'), fn($q) => $q->where('pixel_site_id', $request->pixel_site_id))
-                    ->when($request->boolean('exclude_bots'), fn($q) => $q->where('is_bot', false))
-                    ->groupBy('page_url', 'session_id');
-            }, 'session_counts')
-            ->selectRaw('page_url, COUNT(*) as total_sessions, SUM(CASE WHEN session_count = 1 THEN 1 ELSE 0 END) as bounce_count')
-            ->groupBy('page_url')
-            ->get()
-            ->keyBy('page_url')
-            ->map(fn($r) => $r->total_sessions > 0 ? round(($r->bounce_count / $r->total_sessions) * 100, 1) : 0);
+        // ── 1. Priority: Instant Cache Read ──────────────────────────────────
+        if (Cache::has($cacheKey)) {
+            $data = Cache::get($cacheKey);
+            // If the user requested dynamic ID normalization but the cache doesn't match,
+            // we force a re-compute (rare edge case).
+            if (isset($data['path_intelligence']) && $data['path_intelligence']['collapse_ids_active'] === $normalizeIds) {
+                return response()->json($data);
+            }
         }
 
-        $sparklineRaw = AdTrackEvent::where('organization_id', $orgId)
-            ->when($request->pixel_site_id, fn($q, $id) => $q->where('pixel_site_id', $id))
-            ->whereIn('page_url', $topPageUrls)
-            ->where('created_at', '>=', $fourteenDaysAgo)
-            ->selectRaw("page_url, DATE(created_at) as date, COUNT(*) as cnt")
-            ->groupBy('page_url', 'date')
-            ->get()
-            ->groupBy('page_url');
+        // ── 2. Fallback: On-Demand Computation ────────────────────────────────
+        try {
+            $result = Cache::remember($cacheKey, 600, function () use (
+                $engine, $orgId, $pixelSiteId, $excludeBots, $pagesPage, $pagesPerPage, $normalizeIds
+            ) {
+                $payload = $engine->fetchDataForOrg(
+                    $orgId,
+                    $pixelSiteId,
+                    $excludeBots,
+                    $pagesPage,
+                    $pagesPerPage
+                );
 
-        // Error counts per page (from cdn_errors)
-        $errorsByPage = CdnError::where('organization_id', $orgId)
-            ->when($request->pixel_site_id, fn($q, $id) => $q->where('pixel_site_id', $id))
-            ->whereIn('url', $topPageUrls)
-            ->selectRaw("url, COUNT(*) as error_count, AVG(load_time_ms) as avg_load_time")
-            ->groupBy('url')
-            ->get()
-            ->keyBy('url');
+                // Inject dynamic normalization flag
+                $payload['meta']['normalize_ids'] = $normalizeIds;
 
-        // ── 4. Keyword ↔ Page Intent Linkage ──────────────────────────────
-        $keywords = KeywordResearch::where('organization_id', $orgId)->get();
+                return $engine->analyze($payload);
+            });
 
-        $topPages = $topPageRows->map(function ($row) use ($sparklineRaw, $keywords, $bouncesByPage, $errorsByPage) {
-            $todayC     = (int) $row->today_count;
-            $yesterdayC = (int) $row->yesterday_count;
-            $deltaPct   = $yesterdayC > 0
-                ? round((($todayC - $yesterdayC) / $yesterdayC) * 100, 1)
-                : ($todayC > 0 ? 100 : null);
+            return response()->json($result);
 
-            // ── Engagement Scoring (0-100) ──
-            $avgDuration = $row->avg_duration ?? 0;
-            $avgClicks   = $row->avg_clicks ?? 0;
-            $bounceRate  = $bouncesByPage[$row->page_url] ?? 0;
-            $errorInfo   = $errorsByPage[$row->page_url] ?? null;
-            $errorCount  = $errorInfo ? (int) $errorInfo->error_count : 0;
-            $avgLoadTime = $errorInfo ? round($errorInfo->avg_load_time ?? 0) : 0;
-
-            // Dwell factor (0-30): 60s+ = max
-            $dwellScore = min(($avgDuration / 60) * 30, 30);
-            // Scroll factor (0-30): 100% = max
-            $maxScroll = $row->avg_scroll ?? 0;
-            $scrollScore = ($maxScroll / 100) * 30;
-            // Interaction factor (0-25): 5+ clicks = max
-            $interactionScore = min(($avgClicks / 5) * 25, 25);
-            // Bounce factor (0-15): 0% bounce = 15, 100% bounce = 0
-            $bounceScore = (1 - ($bounceRate / 100)) * 15;
-            
-            $engagementScore = round($dwellScore + $scrollScore + $interactionScore + $bounceScore);
-
-            // ── Bottleneck Score (0-100, higher = more problematic) ──
-            // High bounce + low dwell + errors + slow load = bottleneck
-            $bounceBottleneck    = $bounceRate / 100 * 40;        // 0-40
-            $dwellBottleneck     = max(0, (1 - $avgDuration / 60) * 30); // 0-30 (low dwell is bad)
-            $errorBottleneck     = min($errorCount * 5, 20);       // 0-20 (each error adds 5pts)
-            $loadBottleneck      = $avgLoadTime > 3000 ? 10 : ($avgLoadTime > 1500 ? 5 : 0); // 0-10
-            $bottleneckScore     = round($bounceBottleneck + $dwellBottleneck + $errorBottleneck + $loadBottleneck);
-            $bottleneckSeverity  = $bottleneckScore >= 60 ? 'critical' : ($bottleneckScore >= 35 ? 'warning' : 'good');
-
-            // Build improvement recommendations
-            $recommendations = [];
-            if ($bounceRate > 60)    $recommendations[] = 'High bounce rate — improve page relevance or above-fold content';
-            if ($avgDuration < 20)   $recommendations[] = 'Low dwell time — add engaging content or video';
-            if ($avgClicks < 1)      $recommendations[] = 'Low interaction — add clear CTAs or internal links';
-            if ($errorCount > 0)     $recommendations[] = "$errorCount JS error(s) detected — check browser console";
-            if ($avgLoadTime > 3000) $recommendations[] = 'Slow page load (avg '.round($avgLoadTime/1000, 1).'s) — optimise images & scripts';
-            elseif ($avgLoadTime > 1500) $recommendations[] = 'Moderate load time — consider caching or CDN';
-
-            // Ad Ready if score >= 70 and has decent traffic
-            $isAdReady = $engagementScore >= 70 && $row->total_hits >= 5;
-
-            // Build 14-day series (fill gaps with 0)
-            $seriesMap = collect($sparklineRaw->get($row->page_url, []))->keyBy('date');
-            $series = [];
-            for ($i = 13; $i >= 0; $i--) {
-                $d = now()->subDays($i)->format('Y-m-d');
-                $series[] = (int) ($seriesMap[$d]->cnt ?? 0);
-            }
-
-            // Keyword Matching logic
-            $path = strtolower(parse_url($row->page_url, PHP_URL_PATH) ?: '');
-            $pathNormalized = str_replace(['-', '_', '/'], ' ', $path);
-
-            $matchedKeywords = $keywords->filter(function($k) use ($pathNormalized) {
-                return str_contains($pathNormalized, strtolower($k->query));
-            })->map(function($k) {
-                return [
-                    'query'      => $k->query,
-                    'intent'     => $k->intent,
-                    'is_primary' => false,
-                ];
-            })->values();
-
-            $topIntent = $matchedKeywords->countBy('intent')->sortDesc()->keys()->first();
-
-            return [
-                'page_url'            => $row->page_url,
-                'total_hits'          => (int) $row->total_hits,
-                'ad_hits'             => (int) $row->ad_hits,
-                'avg_duration'        => round($avgDuration),
-                'avg_clicks'          => round($avgClicks, 1),
-                'engagement_score'    => $engagementScore,
-                'is_ad_ready'         => $isAdReady,
-                'today_count'         => $todayC,
-                'yesterday_count'     => $yesterdayC,
-                'delta_pct'           => $deltaPct,
-                'sparkline'           => $series,
-                'matched_keywords'    => $matchedKeywords,
-                'top_intent'          => $topIntent,
-                'bounce_rate'         => $bounceRate,
-                'error_count'         => $errorCount,
-                'avg_load_time'       => $avgLoadTime,
-                'bottleneck_score'    => $bottleneckScore,
-                'bottleneck_severity' => $bottleneckSeverity,
-                'recommendations'     => $recommendations,
-            ];
-        })->values();
-
-        // ── 4. Top referrers ─────────────────────────────────────────────────
-        $topReferrers = AdTrackEvent::where('organization_id', $orgId)
-            ->when($request->pixel_site_id, fn($q, $id) => $q->where('pixel_site_id', $id))
-            ->whereNotNull('referrer')
-            ->where('referrer', '!=', '')
-            ->selectRaw("referrer, COUNT(*) as count")
-            ->groupBy('referrer')
-            ->orderByDesc('count')
-            ->limit(50) // fetch more so we can group by domain below
-            ->get()
-            ->groupBy(fn($r) => strtolower(parse_url($r->referrer, PHP_URL_HOST) ?? $r->referrer))
-            ->map(fn($group) => ['domain' => $group->first()->referrer, 'count' => $group->sum('count')])
-            ->sortByDesc('count')
-            ->take(8)
-            ->values();
-
-        // ── 5. Trend velocity (fastest rising and falling over last 7d vs prev-7d per page) ─
-        $velocityRows = AdTrackEvent::where('organization_id', $orgId)
-            ->when($request->pixel_site_id, fn($q, $id) => $q->where('pixel_site_id', $id))
-            ->whereNotNull('page_url')
-            ->where('created_at', '>=', now()->subDays(13)->startOfDay())
-            ->selectRaw("page_url,
-                SUM(CASE WHEN created_at >= NOW() - INTERVAL 7 DAY THEN 1 ELSE 0 END) as last7,
-                SUM(CASE WHEN created_at < NOW() - INTERVAL 7 DAY THEN 1 ELSE 0 END) as prev7")
-            ->groupBy('page_url')
-            ->having('last7', '>', 0)
-            ->get()
-            ->map(function ($r) {
-                $delta = $r->prev7 > 0
-                    ? round((($r->last7 - $r->prev7) / $r->prev7) * 100, 1)
-                    : ($r->last7 > 0 ? 100 : 0);
-                return ['page_url' => $r->page_url, 'last7' => (int)$r->last7, 'prev7' => (int)$r->prev7, 'delta_pct' => $delta];
-            })
-            ->sortByDesc('delta_pct')
-            ->values();
-
-        $rising  = $velocityRows->filter(fn($r) => $r['delta_pct'] > 0)->take(3)->values();
-        $falling = $velocityRows->filter(fn($r) => $r['delta_pct'] < 0)->sortBy('delta_pct')->take(3)->values();
-
-        // ── 6. Geography & Device Breakdown ──────────────────────────
-        $geoRaw = AdTrackEvent::where('organization_id', $orgId)
-            ->when($request->pixel_site_id, fn($q, $id) => $q->where('pixel_site_id', $id))
-            ->where('created_at', '>=', $thirtyDaysAgo)
-            ->selectRaw("country_code, city, device_type, COUNT(*) as count")
-            ->groupBy('country_code', 'city', 'device_type')
-            ->get();
-
-        $byCountry = $geoRaw->groupBy('country_code')
-            ->map(fn($group, $code) => [
-                'code' => $code ?: 'Unknown',
-                'count' => $group->sum('count')
-            ])->sortByDesc('count')->values()->take(10);
-
-        $byDevice = $geoRaw->groupBy('device_type')
-            ->map(fn($group, $type) => [
-                'name' => $type ?: 'Desktop',
-                'count' => $group->sum('count')
-            ])->sortByDesc('count')->values();
-
-        $byCity = $geoRaw->filter(fn($r) => !empty($r->city))
-            ->groupBy('city')
-            ->map(fn($group, $city) => [
-                'name' => $city,
-                'count' => $group->sum('count')
-            ])->sortByDesc('count')->values()->take(10);
-
-        // ── 7. Site Health (performance + error summary) ───────────────────
-        $last24h = now()->subDay();
-
-        $healthRaw = CdnError::where('organization_id', $orgId)
-            ->when($request->pixel_site_id, fn($q, $id) => $q->where('pixel_site_id', $id))
-            ->selectRaw("url, error_type, AVG(load_time_ms) as avg_load_ms, COUNT(*) as count, MAX(created_at) as last_seen")
-            ->groupBy('url', 'error_type')
-            ->orderByDesc('count')
-            ->get();
-
-        $slowPages = $healthRaw
-            ->where('error_type', 'slow_load')
-            ->sortByDesc('avg_load_ms')
-            ->take(5)
-            ->map(fn($r) => [
-                'url'          => $r->url,
-                'avg_load_ms'  => round($r->avg_load_ms),
-                'count'        => (int) $r->count,
-                'last_seen'    => $r->last_seen,
-            ])->values();
-
-        $errorTypeBreakdown = $healthRaw
-            ->groupBy('error_type')
-            ->map(fn($group, $type) => [
-                'type'  => $type ?: 'js_error',
-                'count' => $group->sum('count'),
-            ])->sortByDesc('count')->values();
-
-        $alertsLast24h = CdnError::where('organization_id', $orgId)
-            ->when($request->pixel_site_id, fn($q, $id) => $q->where('pixel_site_id', $id))
-            ->where('created_at', '>=', $last24h)
-            ->selectRaw("url, error_type, COUNT(*) as count")
-            ->groupBy('url', 'error_type')
-            ->orderByDesc('count')
-            ->limit(5)
-            ->get()
-            ->map(fn($r) => [
-                'url'        => $r->url,
-                'error_type' => $r->error_type ?? 'js_error',
-                'count'      => (int) $r->count,
-            ])->values();
-
-            return response()->json([
-                'daily_history'  => $dailyHistory,
-                'top_pages'      => $topPages,
-                'pages_total'    => $pagesTotal,
-                'pages_page'     => $pagesPage,
-                'pages_per_page' => $pagesPerPage,
-                'top_referrers'  => $topReferrers,
-                'trend_velocity' => ['rising' => $rising, 'falling' => $falling],
-                'by_country'     => $byCountry,
-                'by_device'      => $byDevice,
-                'by_city'        => $byCity,
-                'site_health'    => [
-                    'slow_pages'          => $slowPages,
-                    'error_type_breakdown'=> $errorTypeBreakdown,
-                    'alerts_last_24h'     => $alertsLast24h,
-                ],
-                'summary'        => [
-                    'today_hits'     => $todayHits,
-                    'yesterday_hits' => $yesterdayHits,
-                    'today_delta'    => $todayDelta,
-                    'last7_hits'     => $last7 ?? 0,
-                    'prev7_hits'     => $prev7 ?? 0,
-                    'week_delta'     => $weekDelta,
-                    'last30_hits'    => $geoRaw->sum('count'),
-                ],
+        } catch (\Throwable $e) {
+            Log::error('CDN analytics on-demand failure', [
+                'org_id' => $orgId,
+                'error'  => $e->getMessage()
             ]);
-        });
+            return response()->json(['error' => 'Analytics engine is currently busy. Please try again in a few moments.'], 503);
+        }
     }
+
 
     // -------------------------------------------------------------------------
     // Private helpers

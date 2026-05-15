@@ -16,6 +16,7 @@ Schedule::job(new \App\Jobs\DiscoverTrendingKeywordsJob)->hourly();
 Schedule::job(new \App\Jobs\ProcessAnalyticsJob)->hourly();
 Schedule::command('crawl:run-scheduled')->everyFiveMinutes();
 Schedule::command('pique:run-scheduled')->everyFiveMinutes();
+Schedule::command('cdn:prefetch')->everyTenMinutes();
 
 // ── Background Queue ──────────────────────────────────────────────────────
 // Processes async jobs (like CDN schema generation) every minute.
