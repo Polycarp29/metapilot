@@ -46,9 +46,10 @@ class PrefetchCdnAnalyticsJob implements ShouldQueue
     public int $timeout = 120;
 
     public function __construct(
-        public readonly int  $orgId,
-        public readonly ?int $pixelSiteId = null
+        public int  $orgId,
+        public ?int $pixelSiteId = null
     ) {}
+
 
     public function handle(CdnAnalyticsService $engine): void
     {
