@@ -43,21 +43,29 @@ class CdnPrefetch extends Command
         $this->info("Found {$organizations->count()} organizations to prefetch.");
 
         foreach ($organizations as $org) {
-            $this->info("Dispatching prefetch for Org: {$org->id} ({$org->name})");
+            $this->info("Processing Org: {$org->id} ({$org->name})...");
             
-            // 1. Prefetch aggregate for the whole organization
-            PrefetchCdnAnalyticsJob::dispatch($org->id);
+            try {
+                // 1. Prefetch aggregate for the whole organization
+                $this->line("  -> Dispatching Organization Aggregate...");
+                PrefetchCdnAnalyticsJob::dispatch($org->id);
 
-            // 2. Prefetch for each specific site if they have multiple
-            $sites = $org->pixelSites()->whereNotNull('pixel_verified_at')->get();
-            if ($sites->count() > 1) {
-                foreach ($sites as $site) {
-                    $this->line("  -> Dispatching for Site: {$site->id} ({$site->label})");
-                    PrefetchCdnAnalyticsJob::dispatch($org->id, $site->id);
+                // 2. Prefetch for each specific site if they have multiple
+                $sites = $org->pixelSites()->whereNotNull('pixel_verified_at')->get();
+                if ($sites->count() > 1) {
+                    $this->line("  -> Found {$sites->count()} sites. Dispatching individual site jobs...");
+                    foreach ($sites as $site) {
+                        $this->line("     - Site: {$site->id} ({$site->label})");
+                        PrefetchCdnAnalyticsJob::dispatch($org->id, $site->id);
+                    }
                 }
+                $this->info("  [DONE] Dispatch complete for {$org->name}");
+            } catch (\Exception $e) {
+                $this->error("  [ERROR] Failed to dispatch for {$org->name}: " . $e->getMessage());
             }
         }
 
-        $this->info('All prefetch jobs dispatched successfully.');
+        $this->info('--- All prefetch jobs dispatched ---');
+
     }
 }
