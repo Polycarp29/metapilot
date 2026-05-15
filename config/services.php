@@ -46,7 +46,7 @@ return [
     ],
 
     'python_engine' => [
-        'url' => env('PYTHON_ENGINE_URL', 'http://localhost:8001'),
+        'url' => env('PYTHON_ENGINE_URL', 'http://127.0.0.1:8001'),
     ],
 
     'openai' => [
