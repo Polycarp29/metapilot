@@ -15,8 +15,9 @@ class PythonEngineService
 
     public function __construct()
     {
-        $this->baseUrl = config('services.python_engine.url', 'http://localhost:8001');
+        $this->baseUrl = config('services.python_engine.url', 'http://127.0.0.1:8001');
     }
+
 
     /**
      * Send analytics data to Python Engine for processing.
