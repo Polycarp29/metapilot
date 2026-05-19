@@ -231,6 +231,12 @@ class AnalyticsDashboardController extends Controller
         // This avoids OOM when there are large numbers of pixel events.
         $pixelCampaigns = AdTrackEvent::where('organization_id', $property->organization_id)
             ->whereBetween('created_at', [$startDate . ' 00:00:00', $endDate . ' 23:59:59'])
+            ->where(function($q) {
+                $q->whereNotNull('utm_campaign')
+                  ->orWhereNotNull('google_campaign_id')
+                  ->orWhereNotNull('utm_source')
+                  ->orWhereNotNull('utm_medium');
+            })
             ->select([
                 DB::raw('COALESCE(utm_campaign, google_campaign_id, \'unknown\') as campaign_name'),
                 'utm_source',
