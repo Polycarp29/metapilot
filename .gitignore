@@ -22,7 +22,7 @@ Homestead.json
 Homestead.yaml
 Thumbs.db
 venv
-# /deployment
+/deployment
 debug_tags.py
 start_engine.sh
 start_worker.sh

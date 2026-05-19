@@ -260,4 +260,25 @@ class CdnAnalyticsService
             return false;
         }
     }
+
+    /**
+     * Send raw path-specific CDN data to Python and return the deep analytics payload.
+     */
+    public function analyzePath(array $payload): array
+    {
+        $response = Http::timeout(30)
+            ->withHeaders(['Accept' => 'application/json'])
+            ->post("{$this->baseUrl}/analyze/path", $payload);
+
+        if ($response->successful()) {
+            return $response->json();
+        }
+
+        Log::error('CDN path analytics engine returned error', [
+            'status' => $response->status(),
+            'body'   => substr($response->body(), 0, 500),
+        ]);
+
+        throw new \RuntimeException("Path analytics engine returned HTTP {$response->status()}");
+    }
 }
