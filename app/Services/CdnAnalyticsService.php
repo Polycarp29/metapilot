@@ -105,10 +105,10 @@ class CdnAnalyticsService
 
         // 1. Daily summary
         $dailySummary = (clone $base)
-            ->selectRaw("SUBSTRING(created_at, 1, 10) as date, COUNT(*) as total,
+            ->selectRaw("DATE(created_at) as date, COUNT(*) as total,
                 SUM(CASE WHEN (gclid IS NOT NULL OR utm_campaign IS NOT NULL OR google_campaign_id IS NOT NULL) THEN 1 ELSE 0 END) as ad_hits")
-            ->groupByRaw("SUBSTRING(created_at, 1, 10)")
-            ->orderByRaw("SUBSTRING(created_at, 1, 10)")
+            ->groupByRaw("DATE(created_at)")
+            ->orderByRaw("DATE(created_at)")
             ->get()->toArray();
 
         // 2. Top page stats
@@ -170,6 +170,8 @@ class CdnAnalyticsService
                 SUM(CASE WHEN created_at < NOW() - INTERVAL 7 DAY THEN 1 ELSE 0 END) as prev7")
             ->groupBy('page_url')
             ->having('last7', '>', 0)
+            ->orderByDesc('last7')
+            ->limit(100)
             ->get()->toArray();
 
         // 6. Geo
@@ -178,6 +180,8 @@ class CdnAnalyticsService
             ->where('created_at', '>=', $thirtyDaysAgo)
             ->selectRaw("country_code, city, device_type, COUNT(*) as count")
             ->groupBy('country_code', 'city', 'device_type')
+            ->orderByDesc('count')
+            ->limit(100)
             ->get()->toArray();
 
         // 7. Referrers
@@ -196,6 +200,8 @@ class CdnAnalyticsService
             ->when($pixelSiteId, fn($q, $id) => $q->where('pixel_site_id', $id))
             ->where('created_at', '>=', $thirtyDaysAgo)
             ->select(['url', 'error_type', 'load_time_ms', 'created_at'])
+            ->orderByDesc('created_at')
+            ->limit(200)
             ->get()->toArray();
 
         // 9. Keywords
