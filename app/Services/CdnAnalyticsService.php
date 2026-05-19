@@ -144,6 +144,7 @@ class CdnAnalyticsService
                 ->when($pixelSiteId, fn($q) => $q->where('pixel_site_id', $pixelSiteId))
                 ->when($excludeBots,  fn($q) => $q->where('is_bot', false))
                 ->groupBy('page_url', 'session_id')
+                ->limit(10000)
                 ->get()->toArray();
         }
 
