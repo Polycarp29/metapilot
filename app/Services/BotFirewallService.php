@@ -189,4 +189,113 @@ class BotFirewallService
         }
     }
 
+    // =========================================================================
+    // Per-IP CDN guards — prevents single-IP flooding attacks
+    // =========================================================================
+
+    /**
+     * 10-second burst window.
+     * Returns true if the IP exceeds the burst threshold (default 20 req/10s).
+     */
+    public function checkIpBurst(string $ip): bool
+    {
+        $key   = 'cdn:ip_burst:' . hash('crc32b', $ip);
+        $count = (int) Cache::get($key, 0);
+
+        if ($count === 0) {
+            Cache::put($key, 1, 10); // 10-second TTL
+        } else {
+            Cache::increment($key);
+        }
+
+        $limit = config('security.cdn_ip_burst_limit', 20);
+        return ($count + 1) > $limit;
+    }
+
+    /**
+     * 60-second sliding window per IP.
+     * Returns true if the IP exceeds the per-minute threshold (default 60 req/min).
+     */
+    public function checkIpRateLimit(string $ip): bool
+    {
+        $key   = 'cdn:ip_rate:' . hash('crc32b', $ip);
+        $count = (int) Cache::get($key, 0);
+
+        if ($count === 0) {
+            Cache::put($key, 1, 60); // 60-second TTL
+        } else {
+            Cache::increment($key);
+        }
+
+        $limit = config('security.cdn_ip_rate_limit_rpm', 60);
+        return ($count + 1) > $limit;
+    }
+
+    /**
+     * Record a rate-limit violation for escalating bans.
+     * Violations are tracked with a 24-hour rolling window.
+     *
+     * @return int  Current violation count for this IP.
+     */
+    public function recordIpViolation(string $ip): int
+    {
+        $key   = 'cdn:ip_violations:' . hash('crc32b', $ip);
+        $count = (int) Cache::get($key, 0);
+
+        if ($count === 0) {
+            Cache::put($key, 1, 86400); // 24-hour TTL
+        } else {
+            Cache::increment($key);
+        }
+
+        Log::channel('security')->warning('CDN IP violation', [
+            'ip'         => $ip,
+            'ip_hash'    => hash('crc32b', $ip),
+            'violations' => $count + 1,
+            'timestamp'  => now()->toIso8601String(),
+        ]);
+
+        return $count + 1;
+    }
+
+    /**
+     * Apply an escalating temporary ban based on violation count.
+     *
+     * Schedule:
+     *   1 violation  →  5 minutes
+     *   2 violations → 30 minutes
+     *   3 violations →  3 hours
+     *   4 violations → 24 hours
+     *   5+ violations → 7 days
+     */
+    public function autoBlockIpOnViolation(string $ip, int $violations): void
+    {
+        $schedule = [
+            1 => 5,          // 5 minutes
+            2 => 30,         // 30 minutes
+            3 => 180,        // 3 hours
+            4 => 1440,       // 24 hours
+        ];
+
+        $ttlMinutes = $schedule[$violations] ?? 10080; // 7 days for 5+
+
+        $this->blockIp($ip, $ttlMinutes);
+
+        Log::channel('security')->warning('CDN IP auto-blocked', [
+            'ip'          => $ip,
+            'ip_hash'     => hash('crc32b', $ip),
+            'violations'  => $violations,
+            'blocked_for' => $ttlMinutes . ' minutes',
+            'timestamp'   => now()->toIso8601String(),
+        ]);
+    }
+
+    /**
+     * Get the current violation count for an IP (used by the ip-guard command).
+     */
+    public function getIpViolationCount(string $ip): int
+    {
+        return (int) Cache::get('cdn:ip_violations:' . hash('crc32b', $ip), 0);
+    }
+
 }

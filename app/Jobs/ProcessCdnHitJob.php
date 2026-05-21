@@ -83,7 +83,7 @@ class ProcessCdnHitJob implements ShouldQueue
         $meta = array_map(fn($v) => is_string($v) ? mb_substr($v, 0, 500) : $v, $meta);
         if (isset($this->payload['is_engaged'])) $meta['is_engaged'] = (bool) $this->payload['is_engaged'];
 
-        $pageUrl = $this->payload['page_url'] ?? null;
+        $pageUrl = $this->sanitizePageUrl($this->payload['page_url'] ?? null);
         $urlHash = $pageUrl ? hash('sha256', $this->normalizeUrlForHash($pageUrl)) : null;
 
         $hit = AdTrackEvent::updateOrCreate(
@@ -214,6 +214,29 @@ class ProcessCdnHitJob implements ShouldQueue
             'device_type' => $deviceType,
             'is_bot'      => $isBot
         ];
+    }
+
+    /**
+     * Validate that a page_url is well-formed (has scheme + host).
+     * Returns the cleaned URL or null if malformed.
+     */
+    protected function sanitizePageUrl(?string $url): ?string
+    {
+        if (!$url || !is_string($url)) return null;
+
+        $url = trim($url);
+        if (strlen($url) < 10) return null; // too short to be a real URL
+
+        $parsed = parse_url($url);
+        if (!$parsed || empty($parsed['host']) || empty($parsed['scheme'])) {
+            return null;
+        }
+
+        if (!in_array($parsed['scheme'], ['http', 'https'], true)) {
+            return null;
+        }
+
+        return mb_substr($url, 0, 2048);
     }
 
     protected function normalizeUrlForHash(?string $url): string

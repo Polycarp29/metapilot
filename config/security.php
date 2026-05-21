@@ -56,6 +56,14 @@ return [
     // Set high enough for legitimate SaaS customers (e.g. 1 Million).
     'cdn_max_daily_hits_per_site' => (int) env('CDN_MAX_DAILY_HITS', 1000000),
 
+    // Per-IP rate limit (RPM) for CDN ingestion endpoint.
+    // A real browser fires the tracker once per page load; 60/min is very generous.
+    'cdn_ip_rate_limit_rpm' => (int) env('CDN_IP_RATE_LIMIT_RPM', 60),
+
+    // Per-IP burst limit — max requests allowed within a 10-second window.
+    // Catches rapid-fire scripts before the per-minute counter even kicks in.
+    'cdn_ip_burst_limit' => (int) env('CDN_IP_BURST_LIMIT', 20),
+
     // When true, requests with _sig=nosig are rejected with 403.
     // nosig was a debug fallback; it must never be accepted in production.
     'cdn_reject_nosig' => (bool) env('CDN_REJECT_NOSIG', true),

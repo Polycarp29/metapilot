@@ -20,6 +20,7 @@ class PurgeGarbageCdnData extends Command
         {--all-bots       : Also purge all records where is_bot=true (not just betting referrers)}
         {--schemas        : Also purge orphaned CdnPageSchemas with no associated hits}
         {--errors         : Also purge CdnError records with invalid HMAC (all errors for the site)}
+        {--malformed-urls : Also purge all events where page_url is malformed (e.g. no host or invalid scheme)}
         {--dry-run        : Count rows to be deleted without actually deleting anything}';
 
     /**
@@ -29,10 +30,11 @@ class PurgeGarbageCdnData extends Command
 
     public function handle(): int
     {
-        $days    = (int) $this->option('days');
-        $siteId  = $this->option('site-id') ? (int) $this->option('site-id') : null;
-        $dryRun  = (bool) $this->option('dry-run');
-        $allBots = (bool) $this->option('all-bots');
+        $days          = (int) $this->option('days');
+        $siteId        = $this->option('site-id') ? (int) $this->option('site-id') : null;
+        $dryRun        = (bool) $this->option('dry-run');
+        $allBots       = (bool) $this->option('all-bots');
+        $malformedUrls = (bool) $this->option('malformed-urls');
 
         $cutoff  = now()->subDays($days);
 
@@ -114,12 +116,37 @@ class PurgeGarbageCdnData extends Command
             $this->line("  <fg=red>✗</> cdn_errors (site #{$siteId}, > {$days}d old): <fg=yellow>{$errorsCount} rows</>" . ($dryRun ? '' : ' deleted'));
         }
 
+        // ── 5. Malformed page_url events (--malformed-urls) ───────────────────
+        if ($malformedUrls) {
+            $malformedQuery = AdTrackEvent::where(function ($q) {
+                $q->whereNull('page_url')
+                  ->orWhere('page_url', 'not like', 'http://%')
+                  ->where('page_url', 'not like', 'https://%')
+                  ->orWhere('page_url', '=', 'https:')
+                  ->orWhere('page_url', '=', 'http:');
+            });
+
+            if ($siteId) {
+                $malformedQuery->where('pixel_site_id', $siteId);
+            }
+
+            $malformedCount = $malformedQuery->count();
+
+            if (!$dryRun && $malformedCount > 0) {
+                $malformedQuery->chunkById(500, function ($chunk) {
+                    AdTrackEvent::whereIn('id', $chunk->pluck('id'))->delete();
+                });
+            }
+
+            $this->line("  <fg=red>✗</> ad_track_events (malformed page_url): <fg=yellow>{$malformedCount} rows</>" . ($dryRun ? '' : ' deleted'));
+        }
+
         $this->newLine();
 
         if ($dryRun) {
             $this->warn('Dry run complete. Re-run without --dry-run to apply deletions.');
         } else {
-            $this->info('✅  Purge complete. Run OPTIMIZE TABLE on large tables if needed.');
+            $this->info('   Purge complete. Run OPTIMIZE TABLE on large tables if needed.');
             $this->line('   Example: php artisan tinker --execute="DB::statement(\'OPTIMIZE TABLE ad_track_events\')"');
         }
 

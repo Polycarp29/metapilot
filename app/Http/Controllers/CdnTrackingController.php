@@ -68,9 +68,13 @@ class CdnTrackingController extends Controller
      *
      * Security checks performed (in order):
      * 1. Required fields validation
-     * 2. Valid organization token
-     * 3. Domain pinning — Origin/Referer must match allowed_domain if set
-     * 4. HMAC-SHA256 signature validation with 5-minute replay window
+     * 2. Per-IP block/burst/rate guard (no DB hit)
+     * 3. Valid organization token
+     * 4. Tracking active check
+     * 5. Domain pinning — Origin/Referer must match allowed_domain if set
+     * 6. Per-token rate limit
+     * 7. Daily site cap
+     * 8. HMAC-SHA256 signature validation (in background job)
      */
     public function trackHit(Request $request)
     {
@@ -84,6 +88,21 @@ class CdnTrackingController extends Controller
             '_sig'             => 'required|string',
         ]);
 
+        // ── IP Safety Guard (before any DB query) ────────────────────────────
+        $clientIp = (string) $request->ip();
+        /** @var \App\Services\BotFirewallService $firewall */
+        $firewall = app(\App\Services\BotFirewallService::class);
+
+        if ($firewall->isIpBlocked($clientIp)) {
+            return response()->json(['error' => 'Too many requests'], 429)->withHeaders($this->corsHeaders());
+        }
+
+        if ($firewall->checkIpBurst($clientIp) || $firewall->checkIpRateLimit($clientIp)) {
+            $violations = $firewall->recordIpViolation($clientIp);
+            $firewall->autoBlockIpOnViolation($clientIp, $violations);
+            return response()->json(['error' => 'Too many requests'], 429)->withHeaders($this->corsHeaders());
+        }
+
         $pixelSite = PixelSite::where('ads_site_token', $request->token)->first();
         if (!$pixelSite) {
             return response()->json(['error' => 'Invalid token'], 403)->withHeaders($this->corsHeaders());
@@ -91,6 +110,25 @@ class CdnTrackingController extends Controller
 
         if (!$pixelSite->isTrackingActive()) {
             return response()->json(null, 204)->withHeaders($this->corsHeaders());
+        }
+
+        // ── Domain Pinning Verification ──────────────────────────────────────
+        if ($pixelSite->allowed_domain) {
+            $origin     = strtolower(parse_url($request->header('Origin', ''), PHP_URL_HOST) ?? '');
+            $referer    = strtolower(parse_url($request->header('Referer', ''), PHP_URL_HOST) ?? '');
+            $allowed    = strtolower($pixelSite->allowed_domain);
+            $normalise  = fn($h) => preg_replace('/^www\./', '', $h);
+            $cleanAllowed = $normalise($allowed);
+
+            $checkDomain = function($host) use ($cleanAllowed, $normalise) {
+                if (!$host) return false;
+                $host = $normalise($host);
+                return $host === $cleanAllowed || str_ends_with($host, '.' . $cleanAllowed);
+            };
+
+            if (!$checkDomain($origin) && !$checkDomain($referer)) {
+                return response()->json(['error' => 'Domain not authorised'], 403)->withHeaders($this->corsHeaders());
+            }
         }
 
         /** @var \App\Services\BotFirewallService $firewall */
