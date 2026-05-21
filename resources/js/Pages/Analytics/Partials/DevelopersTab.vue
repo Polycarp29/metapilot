@@ -1290,7 +1290,7 @@ const openHealthModal = (site = null) => {
                                 <td class="py-7 px-10 text-right">
                                     <span class="inline-flex items-center px-3 py-1.5 rounded-xl text-[10px] font-black font-mono shadow-sm"
                                         :class="deltaBadgeClass(page.delta_pct)">
-                                        {{ deltaIcon(page.delta_pct) }}{{ Math.abs(page.delta_pct) }}%
+                                        {{ deltaIcon(page.delta_pct) }}
                                     </span>
                                 </td>
                             </tr>
