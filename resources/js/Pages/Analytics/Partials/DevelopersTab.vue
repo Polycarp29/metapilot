@@ -1171,7 +1171,7 @@ const openHealthModal = (site = null) => {
             <div v-for="page in topPages.filter(p => p.bottleneck_score >= 60).slice(0, 3)" :key="page.page_url"
                 class="group relative flex items-start gap-5 p-8 rounded-[2.5rem] border overflow-hidden cursor-pointer transition-all hover:-translate-y-0.5"
                 :class="page.bottleneck_score >= 80 ? 'bg-rose-50 border-rose-200 hover:shadow-rose-100 hover:shadow-lg' : 'bg-amber-50 border-amber-200 hover:shadow-amber-100 hover:shadow-lg'"
-                @click="drillToPath(page.page_url)"
+                @click="drillToPath(page.display_url)"
             >
                 <div class="absolute -right-6 -bottom-6 w-24 h-24 rounded-full blur-2xl opacity-30 transition-all group-hover:scale-125"
                     :class="page.bottleneck_score >= 80 ? 'bg-rose-400' : 'bg-amber-400'"></div>
@@ -1225,7 +1225,7 @@ const openHealthModal = (site = null) => {
                             <td colspan="7" class="py-16 text-center text-slate-300 text-[10px] font-black uppercase tracking-widest">Loading path data...</td>
                         </tr>
                         <template v-for="(page, idx) in topPages" :key="page.page_url">
-                            <tr @click="drillToPath(page.page_url)"
+                            <tr @click="drillToPath(page.display_url)"
                                 class="group hover:bg-slate-50 cursor-pointer transition-all border-l-4"
                                 :class="pathFilter === page.page_url ? 'bg-indigo-50/20 border-indigo-500' : 'border-transparent'">
                                 <td class="py-7 px-12">
@@ -1397,7 +1397,7 @@ const openHealthModal = (site = null) => {
                     <div class="space-y-4">
                         <div v-if="rising.length === 0" class="text-[10px] text-slate-300 font-black uppercase tracking-widest italic py-4 text-center">Collecting velocity data...</div>
                         <div v-for="page in rising" :key="page.page_url"
-                            @click="drillToPath(page.page_url)"
+                            @click="drillToPath(page.display_url)"
                             class="flex items-center justify-between p-5 bg-emerald-50/50 hover:bg-emerald-50 rounded-2xl border border-emerald-100/50 cursor-pointer transition-all group">
                             <div class="min-w-0 mr-4">
                                 <p class="text-xs font-black text-slate-900 truncate group-hover:text-emerald-700 transition-colors">{{ safePathLabel(page.page_url) }}</p>
@@ -1422,7 +1422,7 @@ const openHealthModal = (site = null) => {
                     <div class="space-y-4">
                         <div v-if="falling.length === 0" class="text-[10px] text-slate-300 font-black uppercase tracking-widest italic py-4 text-center">No declining pages detected.</div>
                         <div v-for="page in falling" :key="page.page_url"
-                            @click="drillToPath(page.page_url)"
+                            @click="drillToPath(page.display_url)"
                             class="flex items-center justify-between p-5 bg-rose-50/30 hover:bg-rose-50/60 rounded-2xl border border-rose-100/50 cursor-pointer transition-all group">
                             <div class="min-w-0 mr-4">
                                 <p class="text-xs font-black text-slate-900 truncate group-hover:text-rose-700 transition-colors">{{ safePathLabel(page.page_url) }}</p>
