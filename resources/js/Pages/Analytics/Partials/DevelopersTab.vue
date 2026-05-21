@@ -134,11 +134,11 @@ const sourceLines = computed(() => {
 
 const autoInjectSchema = async (page) => {
     if (!selectedSiteId.value) return toast.error('Please select a pixel site first.', 'Error')
-    injectingPage.value = page.page_url
+    injectingPage.value = page.display_url
     try {
         const res = await axios.post(route('google-ads.generate-schema'), {
             pixel_site_id: selectedSiteId.value,
-            url: page.page_url
+            url: page.display_url
         })
         toast.success(res.data.message, 'Schema Generated')
         // We might want to refresh analytics if it's not too heavy
@@ -151,10 +151,10 @@ const autoInjectSchema = async (page) => {
 }
 
 const viewPageSource = async (page) => {
-    fetchingSource.value = page.page_url
+    fetchingSource.value = page.display_url
     try {
         const res = await axios.get(route('google-ads.page-source'), {
-            params: { url: page.page_url }
+            params: { url: page.display_url }
         })
         sourceData.value = {
             html: res.data.html,
@@ -1168,7 +1168,7 @@ const openHealthModal = (site = null) => {
 
         <!-- Bottleneck Summary Panel -->
         <div v-if="topPages.filter(p => p.bottleneck_score >= 60).length" class="grid grid-cols-1 md:grid-cols-3 gap-6">
-            <div v-for="page in topPages.filter(p => p.bottleneck_score >= 60).slice(0, 3)" :key="page.page_url"
+            <div v-for="page in topPages.filter(p => p.bottleneck_score >= 60).slice(0, 3)" :key="page.display_url"
                 class="group relative flex items-start gap-5 p-8 rounded-[2.5rem] border overflow-hidden cursor-pointer transition-all hover:-translate-y-0.5"
                 :class="page.bottleneck_score >= 80 ? 'bg-rose-50 border-rose-200 hover:shadow-rose-100 hover:shadow-lg' : 'bg-amber-50 border-amber-200 hover:shadow-amber-100 hover:shadow-lg'"
                 @click="drillToPath(page.display_url)"
@@ -1183,7 +1183,7 @@ const openHealthModal = (site = null) => {
                     <p class="text-[9px] font-black uppercase tracking-widest mb-0.5"
                         :class="page.bottleneck_score >= 80 ? 'text-rose-500' : 'text-amber-600'"
                     >{{ page.bottleneck_score >= 80 ? 'Critical' : 'Warning' }} · Score {{ page.bottleneck_score }}</p>
-                    <p class="text-xs font-black text-slate-900 truncate" :title="page.page_url">{{ safePathLabel(page.page_url) }}</p>
+                    <p class="text-xs font-black text-slate-900 truncate" :title="page.display_url">{{ safePathLabel(page.display_url) }}</p>
                     <div class="flex flex-wrap gap-3 mt-2">
                         <span v-if="page.bounce_rate > 50" class="text-[9px] font-bold text-slate-500">↑ Bounce {{ page.bounce_rate }}%</span>
                         <span v-if="page.avg_load_time > 3000" class="text-[9px] font-bold text-slate-500">⏱ Load {{ (page.avg_load_time / 1000).toFixed(1) }}s</span>
@@ -1224,10 +1224,10 @@ const openHealthModal = (site = null) => {
                         <tr v-if="isLoadingAnalytics && !topPages.length">
                             <td colspan="7" class="py-16 text-center text-slate-300 text-[10px] font-black uppercase tracking-widest">Loading path data...</td>
                         </tr>
-                        <template v-for="(page, idx) in topPages" :key="page.page_url">
+                        <template v-for="(page, idx) in topPages" :key="page.display_url">
                             <tr @click="drillToPath(page.display_url)"
                                 class="group hover:bg-slate-50 cursor-pointer transition-all border-l-4"
-                                :class="pathFilter === page.page_url ? 'bg-indigo-50/20 border-indigo-500' : 'border-transparent'">
+                                :class="pathFilter === page.display_url ? 'bg-indigo-50/20 border-indigo-500' : 'border-transparent'">
                                 <td class="py-7 px-12">
                                     <div class="flex items-center gap-4">
                                         <div class="w-8 h-8 flex items-center justify-center rounded-xl bg-slate-100 text-slate-400 text-[10px] font-black group-hover:bg-indigo-600 group-hover:text-white transition-all shadow-sm">
@@ -1235,14 +1235,14 @@ const openHealthModal = (site = null) => {
                                         </div>
                                         <div class="min-w-0">
                                             <div class="flex items-center gap-2 mb-1">
-                                                <p class="text-[11px] font-black text-slate-900 truncate max-w-xs" :title="page.page_url">
-                                                    {{ safePathLabel(page.page_url) }}
+                                                <p class="text-[11px] font-black text-slate-900 truncate max-w-xs" :title="page.display_url">
+                                                    {{ safePathLabel(page.display_url) }}
                                                 </p>
                                                 <span v-if="page.is_ad_ready" class="px-2 py-0.5 bg-emerald-500 text-white text-[8px] font-black rounded-lg uppercase tracking-tighter shadow-sm">Ad Ready</span>
                                                 <button @click.stop="page.showRecs = !page.showRecs" class="p-1 text-slate-300 hover:text-indigo-600 transition-colors">
                                                     <svg class="w-3.5 h-3.5" :class="{ 'rotate-180': page.showRecs }" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M19 9l-7 7-7-7"/></svg>
                                                 </button>
-                                                <a :href="`/site_analysis?path=${encodeURIComponent(page.page_url)}${selectedSiteId ? '&site_id=' + selectedSiteId : ''}`"
+                                                <a :href="`/site_analysis?path=${encodeURIComponent(page.display_url)}${selectedSiteId ? '&site_id=' + selectedSiteId : ''}`"
                                                    @click.stop
                                                    class="flex items-center gap-1 px-2 py-1 bg-indigo-50 hover:bg-indigo-100 text-indigo-600 text-[8px] font-black rounded-lg border border-indigo-100 transition-all uppercase tracking-tight"
                                                    title="Open per-path deep-dive analysis">
@@ -1252,7 +1252,7 @@ const openHealthModal = (site = null) => {
                                             </div>
                                             <div class="flex items-center gap-2">
                                                 <span v-for="k in page.matched_keywords.slice(0, 3)" :key="k.query" class="text-[8px] font-bold text-slate-400">#{{ k.query.replace(/\s+/g, '') }}</span>
-                                                <span v-if="!page.matched_keywords.length" class="text-[9px] text-slate-300 font-bold truncate max-w-xs">{{ safeHostname(page.page_url) }}</span>
+                                                <span v-if="!page.matched_keywords.length" class="text-[9px] text-slate-300 font-bold truncate max-w-xs">{{ safeHostname(page.display_url) }}</span>
                                             </div>
                                         </div>
                                     </div>
@@ -1320,17 +1320,17 @@ const openHealthModal = (site = null) => {
                                                  <div class="mt-6 flex items-center gap-4">
                                                      <button 
                                                         @click.stop="autoInjectSchema(page)"
-                                                        :disabled="injectingPage === page.page_url"
+                                                        :disabled="injectingPage === page.display_url"
                                                         class="px-4 py-2 bg-indigo-600 text-white text-[9px] font-black rounded-lg uppercase tracking-tight shadow-md hover:bg-indigo-500 transition-all active:scale-95 disabled:opacity-50"
                                                       >
-                                                          {{ injectingPage === page.page_url ? 'Injecting...' : 'Auto-Inject Schema' }}
+                                                          {{ injectingPage === page.display_url ? 'Injecting...' : 'Auto-Inject Schema' }}
                                                       </button>
                                                      <button 
                                                         @click.stop="viewPageSource(page)"
-                                                        :disabled="fetchingSource === page.page_url"
+                                                        :disabled="fetchingSource === page.display_url"
                                                         class="px-4 py-2 bg-white text-slate-600 border border-slate-200 text-[9px] font-black rounded-lg uppercase tracking-tight hover:bg-slate-50 transition-all active:scale-95 disabled:opacity-30"
                                                       >
-                                                          {{ fetchingSource === page.page_url ? 'Fetching...' : 'View Page Source' }}
+                                                          {{ fetchingSource === page.display_url ? 'Fetching...' : 'View Page Source' }}
                                                       </button>
                                                  </div>
                                              </div>
@@ -1396,11 +1396,11 @@ const openHealthModal = (site = null) => {
                     </div>
                     <div class="space-y-4">
                         <div v-if="rising.length === 0" class="text-[10px] text-slate-300 font-black uppercase tracking-widest italic py-4 text-center">Collecting velocity data...</div>
-                        <div v-for="page in rising" :key="page.page_url"
+                        <div v-for="page in rising" :key="page.display_url"
                             @click="drillToPath(page.display_url)"
                             class="flex items-center justify-between p-5 bg-emerald-50/50 hover:bg-emerald-50 rounded-2xl border border-emerald-100/50 cursor-pointer transition-all group">
                             <div class="min-w-0 mr-4">
-                                <p class="text-xs font-black text-slate-900 truncate group-hover:text-emerald-700 transition-colors">{{ safePathLabel(page.page_url) }}</p>
+                                <p class="text-xs font-black text-slate-900 truncate group-hover:text-emerald-700 transition-colors">{{ safePathLabel(page.display_url) }}</p>
                                 <p class="text-[9px] text-slate-400 font-bold mt-0.5">{{ page.last7 }} hits this week</p>
                             </div>
                             <span class="shrink-0 text-[11px] font-black text-emerald-600 bg-white px-3 py-1.5 rounded-xl border border-emerald-200 shadow-sm">
@@ -1421,11 +1421,11 @@ const openHealthModal = (site = null) => {
                     </div>
                     <div class="space-y-4">
                         <div v-if="falling.length === 0" class="text-[10px] text-slate-300 font-black uppercase tracking-widest italic py-4 text-center">No declining pages detected.</div>
-                        <div v-for="page in falling" :key="page.page_url"
+                        <div v-for="page in falling" :key="page.display_url"
                             @click="drillToPath(page.display_url)"
                             class="flex items-center justify-between p-5 bg-rose-50/30 hover:bg-rose-50/60 rounded-2xl border border-rose-100/50 cursor-pointer transition-all group">
                             <div class="min-w-0 mr-4">
-                                <p class="text-xs font-black text-slate-900 truncate group-hover:text-rose-700 transition-colors">{{ safePathLabel(page.page_url) }}</p>
+                                <p class="text-xs font-black text-slate-900 truncate group-hover:text-rose-700 transition-colors">{{ safePathLabel(page.display_url) }}</p>
                                 <p class="text-[9px] text-slate-400 font-bold mt-0.5">{{ page.last7 }} hits this week</p>
                             </div>
                             <span class="shrink-0 text-[11px] font-black text-rose-600 bg-white px-3 py-1.5 rounded-xl border border-rose-200 shadow-sm">
