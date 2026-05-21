@@ -783,13 +783,22 @@ const regenerateToken = async () => {
 
 const isTogglingTracking = ref(false)
 const toggleSiteTracking = async () => {
-    if (!selectedSiteId.value) return
+    if (!selectedSiteId.value || !selectedSite.value) return
     isTogglingTracking.value = true
+    
+    const previousState = selectedSite.value.tracking_enabled
+    // Optimistic UI toggle to make switch feel instant
+    selectedSite.value.tracking_enabled = !previousState
+    
     try {
         const { data } = await axios.patch(route('google-ads.pixel-sites.toggle-tracking', { pixel_site: selectedSiteId.value }))
         toast.success(data.message)
+        // Explicitly set verified value from response
+        selectedSite.value.tracking_enabled = (data.tracking_enabled === true || data.tracking_enabled === 1 || data.tracking_enabled === '1')
         await fetchConnectionStatus()
     } catch (e) {
+        // Rollback state if the API call fails
+        selectedSite.value.tracking_enabled = previousState
         toast.error('Failed to toggle tracking status')
     } finally {
         isTogglingTracking.value = false

@@ -139,6 +139,11 @@ class PixelSiteController extends Controller
         $newState = !$pixelSite->tracking_enabled;
         $pixelSite->update(['tracking_enabled' => $newState]);
 
+        // Invalidate any potential cached representation of the site status
+        \Illuminate\Support\Facades\Cache::forget("pixel_site_{$pixelSite->id}");
+        \Illuminate\Support\Facades\Cache::forget("pixel_site_{$pixelSite->ads_site_token}");
+        \Illuminate\Support\Facades\Cache::forget("pixel_site_active_{$pixelSite->id}");
+
         return response()->json([
             'tracking_enabled' => $newState,
             'message'          => $newState
