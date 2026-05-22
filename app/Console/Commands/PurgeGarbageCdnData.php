@@ -39,7 +39,7 @@ class PurgeGarbageCdnData extends Command
         $cutoff  = now()->subDays($days);
 
         if ($dryRun) {
-            $this->warn('🔍  DRY RUN — no data will be deleted.');
+            $this->warn('DRY RUN — no data will be deleted.');
         }
 
         $this->info("Purging CDN garbage older than {$days} days" . ($siteId ? " for pixel_site #{$siteId}" : ' across all sites') . '...');
