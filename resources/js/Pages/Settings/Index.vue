@@ -9,15 +9,10 @@
 
       <!-- Tabs -->
       <div class="flex flex-wrap gap-1 bg-slate-100/50 p-1.5 rounded-xl w-fit max-w-full">
-        <button 
-          v-for="tab in tabs" 
-          :key="tab.id"
-          @click="activeTab = tab.id"
-          class="px-5 py-2.5 rounded-lg text-sm font-bold transition-all whitespace-nowrap"
-          :class="activeTab === tab.id 
-            ? 'bg-white text-blue-600 shadow-sm' 
-            : 'text-slate-500 hover:text-slate-700 hover:bg-white/50'"
-        >
+        <button v-for="tab in tabs" :key="tab.id" @click="activeTab = tab.id"
+          class="px-5 py-2.5 rounded-lg text-sm font-bold transition-all whitespace-nowrap" :class="activeTab === tab.id
+            ? 'bg-white text-blue-600 shadow-sm'
+            : 'text-slate-500 hover:text-slate-700 hover:bg-white/50'">
           {{ tab.name }}
         </button>
       </div>
@@ -29,20 +24,14 @@
           <form @submit.prevent="updateOrganization" class="space-y-6">
             <div class="space-y-2">
               <label class="text-sm font-bold text-slate-700">Organization Name</label>
-              <input 
-                v-model="orgForm.name"
-                type="text" 
-                class="w-full px-4 py-3 rounded-xl border border-slate-200 focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10 transition-standard outline-none font-medium"
-              >
+              <input v-model="orgForm.name" type="text"
+                class="w-full px-4 py-3 rounded-xl border border-slate-200 focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10 transition-standard outline-none font-medium">
               <div v-if="orgForm.errors.name" class="text-red-500 text-sm font-medium">{{ orgForm.errors.name }}</div>
             </div>
-            
+
             <div class="flex justify-end">
-              <button 
-                type="submit" 
-                :disabled="orgForm.processing"
-                class="bg-slate-900 hover:bg-slate-800 text-white px-6 py-2.5 rounded-xl font-bold transition-standard shadow-lg shadow-slate-200 active:scale-95 disabled:opacity-70"
-              >
+              <button type="submit" :disabled="orgForm.processing"
+                class="bg-slate-900 hover:bg-slate-800 text-white px-6 py-2.5 rounded-xl font-bold transition-standard shadow-lg shadow-slate-200 active:scale-95 disabled:opacity-70">
                 Save Changes
               </button>
             </div>
@@ -54,75 +43,69 @@
       <div v-if="activeTab === 'brand_ai'" class="space-y-6 animate-fade-in">
         <div class="bg-white rounded-[2.5rem] border border-slate-100 shadow-premium p-8">
           <div class="flex items-start justify-between mb-8">
-             <div>
-                <h2 class="text-xl font-bold text-slate-900">Brand & AI Context</h2>
-                <p class="text-slate-500 mt-1">Provide details about your business to help AI generate more accurate recommendations.</p>
-             </div>
-             <div class="bg-blue-50 text-blue-700 px-4 py-2 rounded-xl text-xs font-bold uppercase tracking-wider">
-                AI Knowledge Base
-             </div>
+            <div>
+              <h2 class="text-xl font-bold text-slate-900">Brand & AI Context</h2>
+              <p class="text-slate-500 mt-1">Provide details about your business to help AI generate more accurate
+                recommendations.</p>
+            </div>
+            <div class="bg-blue-50 text-blue-700 px-4 py-2 rounded-xl text-xs font-bold uppercase tracking-wider">
+              AI Knowledge Base
+            </div>
           </div>
-          
+
           <form @submit.prevent="updateOrganization" class="space-y-6">
             <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <!-- Industry -->
-                <div class="space-y-2">
-                  <label class="text-sm font-bold text-slate-700">Industry / Niche</label>
-                  <select 
-                    v-model="orgForm.settings.industry"
-                    class="w-full px-4 py-3 rounded-xl border border-slate-200 focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10 transition-standard outline-none font-medium appearance-none bg-white"
-                  >
-                    <option value="">Select an Industry</option>
-                    <option v-for="industry in industries" :key="industry.slug" :value="industry.slug">
-                      {{ industry.name }}
-                    </option>
-                    <option value="other">Other / General</option>
-                  </select>
-                  <div v-if="orgForm.errors['settings.industry']" class="text-red-500 text-sm font-medium">{{ orgForm.errors['settings.industry'] }}</div>
-                </div>
+              <!-- Industry -->
+              <div class="space-y-2">
+                <label class="text-sm font-bold text-slate-700">Industry / Niche</label>
+                <select v-model="orgForm.settings.industry"
+                  class="w-full px-4 py-3 rounded-xl border border-slate-200 focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10 transition-standard outline-none font-medium appearance-none bg-white">
+                  <option value="">Select an Industry</option>
+                  <option v-for="industry in industries" :key="industry.slug" :value="industry.slug">
+                    {{ industry.name }}
+                  </option>
+                  <option value="other">Other / General</option>
+                </select>
+                <div v-if="orgForm.errors['settings.industry']" class="text-red-500 text-sm font-medium">{{
+                  orgForm.errors['settings.industry'] }}</div>
+              </div>
 
-                <!-- Target Audience -->
-                <div class="space-y-2">
-                  <label class="text-sm font-bold text-slate-700">Target Audience</label>
-                  <input 
-                    v-model="orgForm.settings.business_profile.target_audience"
-                    type="text" 
-                    placeholder="e.g. Small business owners in Florida"
-                    class="w-full px-4 py-3 rounded-xl border border-slate-200 focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10 transition-standard outline-none font-medium"
-                  >
-                  <div v-if="orgForm.errors['settings.business_profile.target_audience']" class="text-red-500 text-sm font-medium">{{ orgForm.errors['settings.business_profile.target_audience'] }}</div>
-                </div>
+              <!-- Target Audience -->
+              <div class="space-y-2">
+                <label class="text-sm font-bold text-slate-700">Target Audience</label>
+                <input v-model="orgForm.settings.business_profile.target_audience" type="text"
+                  placeholder="e.g. Small business owners in Florida"
+                  class="w-full px-4 py-3 rounded-xl border border-slate-200 focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10 transition-standard outline-none font-medium">
+                <div v-if="orgForm.errors['settings.business_profile.target_audience']"
+                  class="text-red-500 text-sm font-medium">{{
+                    orgForm.errors['settings.business_profile.target_audience'] }}</div>
+              </div>
             </div>
 
             <!-- Value Proposition -->
             <div class="space-y-2">
               <label class="text-sm font-bold text-slate-700">Unique Value Proposition</label>
-              <textarea 
-                v-model="orgForm.settings.business_profile.value_proposition"
-                rows="3"
+              <textarea v-model="orgForm.settings.business_profile.value_proposition" rows="3"
                 placeholder="What makes your business different? e.g. Fastest delivery, eco-friendly materials, 24/7 support."
-                class="w-full px-4 py-3 rounded-xl border border-slate-200 focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10 transition-standard outline-none font-medium resize-none"
-              ></textarea>
-              <div v-if="orgForm.errors['settings.business_profile.value_proposition']" class="text-red-500 text-sm font-medium">{{ orgForm.errors['settings.business_profile.value_proposition'] }}</div>
+                class="w-full px-4 py-3 rounded-xl border border-slate-200 focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10 transition-standard outline-none font-medium resize-none"></textarea>
+              <div v-if="orgForm.errors['settings.business_profile.value_proposition']"
+                class="text-red-500 text-sm font-medium">{{
+                  orgForm.errors['settings.business_profile.value_proposition'] }}</div>
             </div>
 
             <!-- Competitors -->
             <div class="space-y-2">
-              <textarea 
-                v-model="orgForm.settings.business_profile.competitors"
-                rows="2"
+              <textarea v-model="orgForm.settings.business_profile.competitors" rows="2"
                 placeholder="List main competitors to help AI understand your market positioning."
-                class="w-full px-4 py-3 rounded-xl border border-slate-200 focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10 transition-standard outline-none font-medium resize-none"
-              ></textarea>
-              <div v-if="orgForm.errors['settings.business_profile.competitors']" class="text-red-500 text-sm font-medium">{{ orgForm.errors['settings.business_profile.competitors'] }}</div>
+                class="w-full px-4 py-3 rounded-xl border border-slate-200 focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10 transition-standard outline-none font-medium resize-none"></textarea>
+              <div v-if="orgForm.errors['settings.business_profile.competitors']"
+                class="text-red-500 text-sm font-medium">{{ orgForm.errors['settings.business_profile.competitors'] }}
+              </div>
             </div>
-            
+
             <div class="flex justify-end pt-4 border-t border-slate-100">
-              <button 
-                type="submit" 
-                :disabled="orgForm.processing"
-                class="bg-blue-600 hover:bg-blue-700 text-white px-6 py-2.5 rounded-xl font-bold transition-standard shadow-lg shadow-blue-200 active:scale-95 disabled:opacity-70"
-              >
+              <button type="submit" :disabled="orgForm.processing"
+                class="bg-blue-600 hover:bg-blue-700 text-white px-6 py-2.5 rounded-xl font-bold transition-standard shadow-lg shadow-blue-200 active:scale-95 disabled:opacity-70">
                 Save Context
               </button>
             </div>
@@ -139,17 +122,23 @@
             <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
               <div class="space-y-2">
                 <label class="text-sm font-bold text-slate-700">Name</label>
-                <input v-model="profileForm.name" type="text" class="w-full px-4 py-3 rounded-xl border border-slate-200 focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10 transition-standard outline-none font-medium">
-                <div v-if="profileForm.errors.name" class="text-red-500 text-sm font-medium">{{ profileForm.errors.name }}</div>
+                <input v-model="profileForm.name" type="text"
+                  class="w-full px-4 py-3 rounded-xl border border-slate-200 focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10 transition-standard outline-none font-medium">
+                <div v-if="profileForm.errors.name" class="text-red-500 text-sm font-medium">{{ profileForm.errors.name
+                  }}</div>
               </div>
               <div class="space-y-2">
                 <label class="text-sm font-bold text-slate-700">Email</label>
-                <input v-model="profileForm.email" type="email" class="w-full px-4 py-3 rounded-xl border border-slate-200 focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10 transition-standard outline-none font-medium">
-                <div v-if="profileForm.errors.email" class="text-red-500 text-sm font-medium">{{ profileForm.errors.email }}</div>
+                <input v-model="profileForm.email" type="email"
+                  class="w-full px-4 py-3 rounded-xl border border-slate-200 focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10 transition-standard outline-none font-medium">
+                <div v-if="profileForm.errors.email" class="text-red-500 text-sm font-medium">{{
+                  profileForm.errors.email }}</div>
               </div>
             </div>
             <div class="flex justify-end">
-              <button type="submit" :disabled="profileForm.processing" class="bg-slate-900 hover:bg-slate-800 text-white px-6 py-2.5 rounded-xl font-bold transition-standard shadow-lg shadow-slate-200 active:scale-95 disabled:opacity-70">Save Profile</button>
+              <button type="submit" :disabled="profileForm.processing"
+                class="bg-slate-900 hover:bg-slate-800 text-white px-6 py-2.5 rounded-xl font-bold transition-standard shadow-lg shadow-slate-200 active:scale-95 disabled:opacity-70">Save
+                Profile</button>
             </div>
           </form>
         </div>
@@ -160,22 +149,29 @@
           <form @submit.prevent="updatePassword" class="space-y-6">
             <div class="space-y-2">
               <label class="text-sm font-bold text-slate-700">Current Password</label>
-              <input v-model="passwordForm.current_password" type="password" class="w-full px-4 py-3 rounded-xl border border-slate-200 focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10 transition-standard outline-none font-medium">
-              <div v-if="passwordForm.errors.current_password" class="text-red-500 text-sm font-medium">{{ passwordForm.errors.current_password }}</div>
+              <input v-model="passwordForm.current_password" type="password"
+                class="w-full px-4 py-3 rounded-xl border border-slate-200 focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10 transition-standard outline-none font-medium">
+              <div v-if="passwordForm.errors.current_password" class="text-red-500 text-sm font-medium">{{
+                passwordForm.errors.current_password }}</div>
             </div>
             <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
               <div class="space-y-2">
                 <label class="text-sm font-bold text-slate-700">New Password</label>
-                <input v-model="passwordForm.password" type="password" class="w-full px-4 py-3 rounded-xl border border-slate-200 focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10 transition-standard outline-none font-medium">
-                 <div v-if="passwordForm.errors.password" class="text-red-500 text-sm font-medium">{{ passwordForm.errors.password }}</div>
+                <input v-model="passwordForm.password" type="password"
+                  class="w-full px-4 py-3 rounded-xl border border-slate-200 focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10 transition-standard outline-none font-medium">
+                <div v-if="passwordForm.errors.password" class="text-red-500 text-sm font-medium">{{
+                  passwordForm.errors.password }}</div>
               </div>
               <div class="space-y-2">
                 <label class="text-sm font-bold text-slate-700">Confirm Password</label>
-                <input v-model="passwordForm.password_confirmation" type="password" class="w-full px-4 py-3 rounded-xl border border-slate-200 focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10 transition-standard outline-none font-medium">
+                <input v-model="passwordForm.password_confirmation" type="password"
+                  class="w-full px-4 py-3 rounded-xl border border-slate-200 focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10 transition-standard outline-none font-medium">
               </div>
             </div>
             <div class="flex justify-end">
-              <button type="submit" :disabled="passwordForm.processing" class="bg-slate-900 hover:bg-slate-800 text-white px-6 py-2.5 rounded-xl font-bold transition-standard shadow-lg shadow-slate-200 active:scale-95 disabled:opacity-70">Update Password</button>
+              <button type="submit" :disabled="passwordForm.processing"
+                class="bg-slate-900 hover:bg-slate-800 text-white px-6 py-2.5 rounded-xl font-bold transition-standard shadow-lg shadow-slate-200 active:scale-95 disabled:opacity-70">Update
+                Password</button>
             </div>
           </form>
         </div>
@@ -186,90 +182,100 @@
         <div class="bg-white rounded-[2.5rem] border border-slate-100 shadow-premium p-8">
           <div class="flex items-center gap-4 mb-6">
             <div class="w-12 h-12 bg-purple-100 rounded-2xl flex items-center justify-center text-purple-600">
-               <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z" />
-               </svg>
+              <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z" />
+              </svg>
             </div>
             <div>
-               <h2 class="text-xl font-bold text-slate-900">AI Configuration</h2>
-               <p class="text-sm text-slate-500">System-wide AI settings are managed by administrators.</p>
+              <h2 class="text-xl font-bold text-slate-900">AI Configuration</h2>
+              <p class="text-sm text-slate-500">System-wide AI settings are managed by administrators.</p>
             </div>
           </div>
-          
+
           <div class="bg-white p-8 rounded-[2.5rem] border border-slate-100 shadow-premium space-y-8">
             <!-- Model Selection -->
             <div class="space-y-4">
               <label class="block font-bold text-slate-700">Generative AI Model</label>
               <div class="relative">
-                 <select v-model="orgForm.settings.ai_model" class="w-full bg-slate-50 border-slate-200 rounded-2xl px-6 py-4 appearance-none font-bold text-slate-700 focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 transition-all">
+                <select v-model="orgForm.settings.ai_model"
+                  class="w-full bg-slate-50 border-slate-200 rounded-2xl px-6 py-4 appearance-none font-bold text-slate-700 focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 transition-all">
                   <template v-if="aiModels && aiModels.length">
-                     <option v-for="model in aiModels" :key="model.id" :value="model.id">{{ model.name }}</option>
+                    <option v-for="model in aiModels" :key="model.id" :value="model.id">{{ model.name }}</option>
                   </template>
                   <template v-else>
-                     <option value="gpt-4o">GPT-4o</option>
-                     <option value="gpt-4">GPT-4</option>
-                     <option value="gpt-3.5-turbo">GPT-3.5 Turbo</option>
+                    <option value="gpt-4o">GPT-4o</option>
+                    <option value="gpt-4">GPT-4</option>
+                    <option value="gpt-3.5-turbo">GPT-3.5 Turbo</option>
                   </template>
                 </select>
                 <div class="absolute right-6 top-1/2 -translate-y-1/2 pointer-events-none text-slate-500">
-                  <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" /></svg>
+                  <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
+                  </svg>
                 </div>
               </div>
-              <p class="text-sm text-slate-500">Select the underlying intelligence engine for your automated schema analysis. 'User Based' configuration applies to this entire organization.</p>
+              <p class="text-sm text-slate-500">Select the underlying intelligence engine for your automated schema
+                analysis. 'User
+                Based' configuration applies to this entire organization.</p>
             </div>
 
             <div class="space-y-4 pt-6 border-t border-slate-100">
-                <div class="flex items-center justify-between">
-                    <div>
-                        <p class="font-bold text-slate-900 text-lg">Enable AI Insights</p>
-                        <p class="text-sm text-slate-500">Automatically generate SEO performance summaries and keyword strategies.</p>
-                    </div>
-                    <button 
-                        type="button"
-                        @click="orgForm.settings.ai_insights_enabled = !orgForm.settings.ai_insights_enabled"
-                        class="relative inline-flex h-7 w-12 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none"
-                        :class="orgForm.settings.ai_insights_enabled ? 'bg-purple-600' : 'bg-slate-200'"
-                    >
-                        <span 
-                            class="pointer-events-none inline-block h-6 w-6 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out"
-                            :class="orgForm.settings.ai_insights_enabled ? 'translate-x-5' : 'translate-x-0'"
-                        />
-                    </button>
+              <div class="flex items-center justify-between">
+                <div>
+                  <p class="font-bold text-slate-900 text-lg">Enable AI Insights</p>
+                  <p class="text-sm text-slate-500">Automatically generate SEO performance summaries and keyword
+                    strategies.</p>
                 </div>
+                <button type="button"
+                  @click="orgForm.settings.ai_insights_enabled = !orgForm.settings.ai_insights_enabled"
+                  class="relative inline-flex h-7 w-12 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none"
+                  :class="orgForm.settings.ai_insights_enabled ? 'bg-purple-600' : 'bg-slate-200'">
+                  <span
+                    class="pointer-events-none inline-block h-6 w-6 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out"
+                    :class="orgForm.settings.ai_insights_enabled ? 'translate-x-5' : 'translate-x-0'" />
+                </button>
+              </div>
             </div>
 
             <!-- Keyword Discovery Frequency -->
             <div class="space-y-4 pt-6 border-t border-slate-100">
-                <label class="block font-bold text-slate-700">Keyword Discovery Frequency</label>
-                <div class="relative">
-                   <select v-model="orgForm.keyword_discovery_frequency" class="w-full bg-slate-50 border-slate-200 rounded-2xl px-6 py-4 appearance-none font-bold text-slate-700 focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 transition-all">
-                      <option :value="3">Every 3 hours</option>
-                      <option :value="6">Every 6 hours</option>
-                      <option :value="12">Every 12 hours</option>
-                      <option :value="24">Every 24 hours (Daily)</option>
-                   </select>
-                   <div class="absolute right-6 top-1/2 -translate-y-1/2 pointer-events-none text-slate-500">
-                     <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" /></svg>
-                   </div>
+              <label class="block font-bold text-slate-700">Keyword Discovery Frequency</label>
+              <div class="relative">
+                <select v-model="orgForm.keyword_discovery_frequency"
+                  class="w-full bg-slate-50 border-slate-200 rounded-2xl px-6 py-4 appearance-none font-bold text-slate-700 focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 transition-all">
+                  <option :value="3">Every 3 hours</option>
+                  <option :value="6">Every 6 hours</option>
+                  <option :value="12">Every 12 hours</option>
+                  <option :value="24">Every 24 hours (Daily)</option>
+                </select>
+                <div class="absolute right-6 top-1/2 -translate-y-1/2 pointer-events-none text-slate-500">
+                  <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
+                  </svg>
                 </div>
-                <p class="text-sm text-slate-500">Determine how often the Smart Engine should scan for new trending keywords tailored to your niche.</p>
+              </div>
+              <p class="text-sm text-slate-500">Determine how often the Smart Engine should scan for new trending
+                keywords tailored
+                to your niche.</p>
             </div>
 
             <div class="p-6 bg-blue-50 rounded-2xl border border-blue-100 flex gap-4">
-               <div class="text-blue-500 shrink-0">
-                 <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
-               </div>
-               <p class="text-sm text-blue-800 leading-relaxed">
-                 <strong>Note:</strong> This setting controls the analysis phase logic. AI Insights require an active OpenAI API key to be configured in the system environment.
-               </p>
+              <div class="text-blue-500 shrink-0">
+                <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                    d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+              </div>
+              <p class="text-sm text-blue-800 leading-relaxed">
+                <strong>Note:</strong> This setting controls the analysis phase logic. AI Insights require an active
+                OpenAI API key
+                to be configured in the system environment.
+              </p>
             </div>
 
             <div class="pt-4 flex justify-end">
-               <button 
-                @click="updateOrganization"
-                :disabled="orgForm.processing"
-                class="bg-slate-900 text-white px-8 py-3 rounded-xl font-bold hover:bg-slate-800 transition-standard shadow-lg active:scale-95 disabled:opacity-50"
-              >
+              <button @click="updateOrganization" :disabled="orgForm.processing"
+                class="bg-slate-900 text-white px-8 py-3 rounded-xl font-bold hover:bg-slate-800 transition-standard shadow-lg active:scale-95 disabled:opacity-50">
                 {{ orgForm.processing ? 'Saving...' : 'Save Configuration' }}
               </button>
             </div>
@@ -277,18 +283,19 @@
         </div>
       </div>
 
-       <!-- Analytics Tab -->
+      <!-- Analytics Tab -->
       <div v-if="activeTab === 'analytics'" class="space-y-6 animate-fade-in">
         <div class="bg-white rounded-[2.5rem] border border-slate-100 shadow-premium p-8">
-           <div class="flex items-center gap-4 mb-6">
+          <div class="flex items-center gap-4 mb-6">
             <div class="w-12 h-12 bg-blue-100 rounded-2xl flex items-center justify-center text-blue-600">
-               <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
-               </svg>
+              <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                  d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+              </svg>
             </div>
             <div>
-               <h2 class="text-xl font-bold text-slate-900">Analytics Settings</h2>
-               <p class="text-sm text-slate-500">Configure how data is reported in your dashboard.</p>
+              <h2 class="text-xl font-bold text-slate-900">Analytics Settings</h2>
+              <p class="text-sm text-slate-500">Configure how data is reported in your dashboard.</p>
             </div>
           </div>
 
@@ -300,32 +307,41 @@
                   <h3 class="text-lg font-bold text-slate-900">Connect GA4 Property</h3>
                   <p class="text-sm text-slate-500 mt-1">Link your website's analytics data to track performance.</p>
                 </div>
-                <a 
-                  :href="route('auth.google', { intent: 'connect' })" 
-                  class="flex items-center justify-center gap-2 bg-white border border-slate-200 px-5 py-3 rounded-xl font-bold hover:shadow-md hover:border-blue-200 transition-all text-sm shrink-0"
-                >
-                  <img src="https://www.gstatic.com/images/branding/product/1x/gsa_512dp.png" class="w-5 h-5" alt="Google">
+                <a :href="route('auth.google', { intent: 'connect' })"
+                  class="flex items-center justify-center gap-2 bg-white border border-slate-200 px-5 py-3 rounded-xl font-bold hover:shadow-md hover:border-blue-200 transition-all text-sm shrink-0">
+                  <i class="fab fa-google text-[#4285F4]"></i>
                   Connect Google Account
                 </a>
               </div>
 
               <!-- Success flash (from OAuth callback redirect) -->
-              <div v-if="$page.props.flash.success" class="mb-6 p-4 bg-green-50 text-green-700 rounded-xl border border-green-200 font-medium text-sm flex items-center gap-3">
-                <svg class="w-5 h-5 shrink-0 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" /></svg>
+              <div v-if="$page.props.flash.success"
+                class="mb-6 p-4 bg-green-50 text-green-700 rounded-xl border border-green-200 font-medium text-sm flex items-center gap-3">
+                <svg class="w-5 h-5 shrink-0 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
+                </svg>
                 {{ $page.props.flash.success }}
               </div>
 
               <!-- Generic message flash -->
-              <div v-if="$page.props.flash.message" class="mb-6 p-4 bg-green-50 text-green-700 rounded-xl border border-green-100 font-medium text-sm">
+              <div v-if="$page.props.flash.message"
+                class="mb-6 p-4 bg-green-50 text-green-700 rounded-xl border border-green-100 font-medium text-sm">
                 {{ $page.props.flash.message }}
               </div>
 
               <!-- Reconnect warning: show if any property has invalid tokens -->
-              <div v-if="hasInvalidTokens" class="mb-6 p-4 bg-amber-50 text-amber-800 rounded-xl border border-amber-200 font-medium text-sm flex items-start gap-3">
-                <svg class="w-5 h-5 shrink-0 text-amber-600 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" /></svg>
+              <div v-if="hasInvalidTokens"
+                class="mb-6 p-4 bg-amber-50 text-amber-800 rounded-xl border border-amber-200 font-medium text-sm flex items-start gap-3">
+                <svg class="w-5 h-5 shrink-0 text-amber-600 mt-0.5" fill="none" stroke="currentColor"
+                  viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                    d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                </svg>
                 <div>
                   <p class="font-bold">Google connection expired</p>
-                  <p class="mt-0.5">One or more of your GA4 properties can't connect to Google. Please reconnect your Google account to restore analytics data.</p>
+                  <p class="mt-0.5">One or more of your GA4 properties can't connect to Google. Please reconnect your
+                    Google
+                    account to restore analytics data.</p>
                 </div>
               </div>
 
@@ -333,23 +349,28 @@
                 <div class="grid grid-cols-1 md:grid-cols-2 gap-5">
                   <div class="space-y-2">
                     <label class="text-sm font-bold text-slate-700">Display Name</label>
-                    <input v-model="propertyForm.name" type="text" placeholder="e.g. My Main Site" class="w-full px-4 py-3 rounded-xl border border-slate-200 focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10 bg-white">
+                    <input v-model="propertyForm.name" type="text" placeholder="e.g. My Main Site"
+                      class="w-full px-4 py-3 rounded-xl border border-slate-200 focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10 bg-white">
                   </div>
                   <div class="space-y-2">
                     <label class="text-sm font-bold text-slate-700">GA4 Property ID</label>
-                    <input v-model="propertyForm.property_id" type="text" placeholder="e.g. 123456789" class="w-full px-4 py-3 rounded-xl border border-slate-200 focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10 bg-white">
+                    <input v-model="propertyForm.property_id" type="text" placeholder="e.g. 123456789"
+                      class="w-full px-4 py-3 rounded-xl border border-slate-200 focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10 bg-white">
                   </div>
                 </div>
                 <div class="space-y-2">
                   <label class="text-sm font-bold text-slate-700">Website URL</label>
-                  <input v-model="propertyForm.website_url" type="url" placeholder="https://example.com" class="w-full px-4 py-3 rounded-xl border border-slate-200 focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10 bg-white">
+                  <input v-model="propertyForm.website_url" type="url" placeholder="https://example.com"
+                    class="w-full px-4 py-3 rounded-xl border border-slate-200 focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10 bg-white">
                 </div>
                 <div class="space-y-2">
                   <label class="text-sm font-bold text-slate-700">Search Console Site URL</label>
-                  <input v-model="propertyForm.gsc_site_url" type="text" placeholder="sc-domain:example.com" class="w-full px-4 py-3 rounded-xl border border-slate-200 focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10 bg-white">
+                  <input v-model="propertyForm.gsc_site_url" type="text" placeholder="sc-domain:example.com"
+                    class="w-full px-4 py-3 rounded-xl border border-slate-200 focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10 bg-white">
                 </div>
                 <div class="flex justify-end pt-2">
-                  <button type="submit" :disabled="propertyForm.processing" class="bg-blue-600 text-white px-8 py-3.5 rounded-2xl font-bold hover:bg-blue-700 transition-all shadow-lg shadow-blue-200 active:scale-95 disabled:opacity-50">
+                  <button type="submit" :disabled="propertyForm.processing"
+                    class="bg-blue-600 text-white px-8 py-3.5 rounded-2xl font-bold hover:bg-blue-700 transition-all shadow-lg shadow-blue-200 active:scale-95 disabled:opacity-50">
                     {{ propertyForm.processing ? 'Connecting...' : 'Connect Property' }}
                   </button>
                 </div>
@@ -360,56 +381,73 @@
             <div class="space-y-6">
               <div class="flex items-center justify-between px-2">
                 <h3 class="text-lg font-bold text-slate-900">Connected GA4 Properties</h3>
-                <span class="text-xs font-bold text-slate-400 uppercase tracking-widest">{{ analyticsProperties.length }} Properties</span>
+                <span class="text-xs font-bold text-slate-400 uppercase tracking-widest">{{ analyticsProperties.length
+                  }}
+                  Properties</span>
               </div>
-              
+
               <div v-if="analyticsProperties.length" class="grid grid-cols-1 gap-4">
-                <div
-                  v-for="prop in analyticsProperties"
-                  :key="prop.id"
+                <div v-for="prop in analyticsProperties" :key="prop.id"
                   class="p-4 md:p-6 bg-white rounded-3xl border flex flex-col md:flex-row md:items-center justify-between gap-4 group transition-all"
-                  :class="prop.google_token_invalid ? 'border-amber-300 bg-amber-50/30' : 'border-slate-100 hover:border-blue-500/30'"
-                >
+                  :class="prop.google_token_invalid ? 'border-amber-300 bg-amber-50/30' : 'border-slate-100 hover:border-blue-500/30'">
                   <div class="flex items-start md:items-center gap-4 md:gap-5">
-                    <div
-                      class="w-12 h-12 rounded-2xl flex shrink-0 items-center justify-center"
-                      :class="prop.google_token_invalid ? 'bg-amber-100 text-amber-600' : 'bg-slate-50 text-slate-400'"
-                    >
+                    <div class="w-12 h-12 rounded-2xl flex shrink-0 items-center justify-center"
+                      :class="prop.google_token_invalid ? 'bg-amber-100 text-amber-600' : 'bg-slate-50 text-slate-400'">
                       <!-- Warning icon for invalid token -->
-                      <svg v-if="prop.google_token_invalid" class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" /></svg>
+                      <svg v-if="prop.google_token_invalid" class="w-6 h-6" fill="none" stroke="currentColor"
+                        viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                          d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                      </svg>
                       <!-- Normal analytics icon -->
-                      <svg v-else class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" /></svg>
+                      <svg v-else class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                          d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+                      </svg>
                     </div>
                     <div class="min-w-0">
                       <p class="font-bold text-slate-900 truncate">{{ prop.name }}</p>
-                      <p class="text-sm text-slate-400 font-medium truncate">GA4: {{ prop.property_id }} • GSC: {{ prop.gsc_site_url || 'Not set' }}</p>
+                      <p class="text-sm text-slate-400 font-medium truncate">GA4: {{ prop.property_id }} • GSC: {{
+                        prop.gsc_site_url || 'Not set' }}</p>
                       <p class="text-xs text-slate-400 break-all">{{ prop.website_url }}</p>
                       <!-- Token invalid inline badge -->
-                      <span v-if="prop.google_token_invalid" class="inline-flex items-center gap-1 mt-1 text-xs font-bold text-amber-700 bg-amber-100 px-2 py-0.5 rounded-full">
-                        <svg class="w-3 h-3" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clip-rule="evenodd" /></svg>
+                      <span v-if="prop.google_token_invalid"
+                        class="inline-flex items-center gap-1 mt-1 text-xs font-bold text-amber-700 bg-amber-100 px-2 py-0.5 rounded-full">
+                        <svg class="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
+                          <path fill-rule="evenodd"
+                            d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z"
+                            clip-rule="evenodd" />
+                        </svg>
                         Token expired — reconnect required
                       </span>
-                      <span v-else-if="prop.has_google_token" class="inline-flex items-center gap-1 mt-1 text-xs font-bold text-green-700 bg-green-100 px-2 py-0.5 rounded-full">
-                        <svg class="w-3 h-3" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd" /></svg>
+                      <span v-else-if="prop.has_google_token"
+                        class="inline-flex items-center gap-1 mt-1 text-xs font-bold text-green-700 bg-green-100 px-2 py-0.5 rounded-full">
+                        <svg class="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
+                          <path fill-rule="evenodd"
+                            d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z"
+                            clip-rule="evenodd" />
+                        </svg>
                         Google connected
                       </span>
                     </div>
                   </div>
-                  <div class="flex items-center gap-4 md:gap-6 pt-3 md:pt-0 border-t md:border-0 border-slate-50 justify-end md:justify-start">
-                    <a
-                      v-if="prop.google_token_invalid"
-                      :href="route('auth.google', { intent: 'connect' })"
-                      class="flex items-center gap-1.5 text-amber-700 hover:text-amber-900 font-bold text-sm transition-colors bg-amber-100 hover:bg-amber-200 px-3 py-1.5 rounded-lg"
-                    >
-                      <img src="https://www.gstatic.com/images/branding/product/1x/gsa_512dp.png" class="w-4 h-4" alt="Google">
+                  <div
+                    class="flex items-center gap-4 md:gap-6 pt-3 md:pt-0 border-t md:border-0 border-slate-50 justify-end md:justify-start">
+                    <a v-if="prop.google_token_invalid" :href="route('auth.google', { intent: 'connect' })"
+                      class="flex items-center gap-1.5 text-amber-700 hover:text-amber-900 font-bold text-sm transition-colors bg-amber-100 hover:bg-amber-200 px-3 py-1.5 rounded-lg">
+                      <img src="https://www.gstatic.com/images/branding/product/1x/gsa_512dp.png" class="w-4 h-4"
+                        alt="Google">
                       Reconnect
                     </a>
-                    <button @click="editProperty(prop)" class="text-slate-400 hover:text-blue-600 font-bold text-sm transition-colors">Edit</button>
-                    <button @click="disconnectProperty(prop.id)" class="text-slate-400 hover:text-red-600 font-bold text-sm transition-colors">Disconnect</button>
+                    <button @click="editProperty(prop)"
+                      class="text-slate-400 hover:text-blue-600 font-bold text-sm transition-colors">Edit</button>
+                    <button @click="disconnectProperty(prop.id)"
+                      class="text-slate-400 hover:text-red-600 font-bold text-sm transition-colors">Disconnect</button>
                   </div>
                 </div>
               </div>
-              <div v-else class="text-center py-12 p-8 bg-slate-50 rounded-[2rem] border-2 border-dashed border-slate-200">
+              <div v-else
+                class="text-center py-12 p-8 bg-slate-50 rounded-[2rem] border-2 border-dashed border-slate-200">
                 <p class="text-slate-500 font-medium">No properties connected yet.</p>
               </div>
             </div>
@@ -419,35 +457,35 @@
               <form @submit.prevent="updateOrganization" class="space-y-6">
                 <div class="space-y-2">
                   <label class="text-sm font-bold text-slate-700">Default Reporting Period</label>
-                  <select v-model="orgForm.settings.analytics_period" class="w-full px-4 py-3 rounded-xl border border-slate-200 focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10 bg-white transition-standard outline-none font-medium">
+                  <select v-model="orgForm.settings.analytics_period"
+                    class="w-full px-4 py-3 rounded-xl border border-slate-200 focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10 bg-white transition-standard outline-none font-medium">
                     <option value="7d">Last 7 Days</option>
                     <option value="30d">Last 30 Days</option>
                     <option value="90d">Last 90 Days</option>
                   </select>
                 </div>
-                
+
                 <div class="space-y-4 pt-4 border-t border-slate-100">
                   <div class="flex items-center justify-between">
-                      <div>
-                          <p class="font-bold text-slate-900">Weekly Email Reports</p>
-                          <p class="text-sm text-slate-500">Receive a summary of your schema performance every Monday.</p>
-                      </div>
-                      <button 
-                          type="button"
-                          @click="orgForm.settings.notifications_enabled = !orgForm.settings.notifications_enabled"
-                          class="relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none"
-                          :class="orgForm.settings.notifications_enabled ? 'bg-blue-600' : 'bg-slate-200'"
-                      >
-                          <span 
-                              class="pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out"
-                              :class="orgForm.settings.notifications_enabled ? 'translate-x-5' : 'translate-x-0'"
-                          />
-                      </button>
+                    <div>
+                      <p class="font-bold text-slate-900">Weekly Email Reports</p>
+                      <p class="text-sm text-slate-500">Receive a summary of your schema performance every Monday.</p>
+                    </div>
+                    <button type="button"
+                      @click="orgForm.settings.notifications_enabled = !orgForm.settings.notifications_enabled"
+                      class="relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none"
+                      :class="orgForm.settings.notifications_enabled ? 'bg-blue-600' : 'bg-slate-200'">
+                      <span
+                        class="pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out"
+                        :class="orgForm.settings.notifications_enabled ? 'translate-x-5' : 'translate-x-0'" />
+                    </button>
                   </div>
                 </div>
 
                 <div class="flex justify-end">
-                  <button type="submit" :disabled="orgForm.processing" class="bg-slate-900 hover:bg-slate-800 text-white px-6 py-2.5 rounded-xl font-bold transition-standard shadow-lg shadow-slate-200 active:scale-95 disabled:opacity-70">Save Preferences</button>
+                  <button type="submit" :disabled="orgForm.processing"
+                    class="bg-slate-900 hover:bg-slate-800 text-white px-6 py-2.5 rounded-xl font-bold transition-standard shadow-lg shadow-slate-200 active:scale-95 disabled:opacity-70">Save
+                    Preferences</button>
                 </div>
               </form>
             </div>
@@ -460,63 +498,58 @@
         <div class="bg-white rounded-[2.5rem] border border-slate-100 shadow-premium p-8">
           <div class="flex items-center gap-4 mb-8">
             <div class="w-12 h-12 bg-blue-100 rounded-2xl flex items-center justify-center text-blue-600">
-               <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-               </svg>
+              <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                  d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
             </div>
             <div>
-               <h2 class="text-xl font-bold text-slate-900">AI Schedules</h2>
-               <p class="text-sm text-slate-500">Manage your automated AI tasks, alerts, and periodic reports.</p>
+              <h2 class="text-xl font-bold text-slate-900">AI Schedules</h2>
+              <p class="text-sm text-slate-500">Manage your automated AI tasks, alerts, and periodic reports.</p>
             </div>
           </div>
 
           <div v-if="piqueScheduledTasks.length" class="grid grid-cols-1 gap-4">
-            <div 
-              v-for="task in piqueScheduledTasks" 
-              :key="task.id"
-              class="group bg-white rounded-3xl border border-slate-100 p-6 flex flex-col md:flex-row md:items-center justify-between gap-6 hover:border-blue-500/30 transition-all hover:shadow-lg hover:shadow-slate-100"
-            >
+            <div v-for="task in piqueScheduledTasks" :key="task.id"
+              class="group bg-white rounded-3xl border border-slate-100 p-6 flex flex-col md:flex-row md:items-center justify-between gap-6 hover:border-blue-500/30 transition-all hover:shadow-lg hover:shadow-slate-100">
               <div class="flex items-center gap-5">
-                <div 
-                  class="w-14 h-14 rounded-2xl flex items-center justify-center shrink-0 shadow-sm"
-                  :class="task.is_active ? 'bg-blue-50 text-blue-600' : 'bg-slate-50 text-slate-400'"
-                >
-                  <svg v-if="task.task_type === 'crawl'" class="w-7 h-7" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                <div class="w-14 h-14 rounded-2xl flex items-center justify-center shrink-0 shadow-sm"
+                  :class="task.is_active ? 'bg-blue-50 text-blue-600' : 'bg-slate-50 text-slate-400'">
+                  <svg v-if="task.task_type === 'crawl'" class="w-7 h-7" fill="none" stroke="currentColor"
+                    viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                      d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
                   </svg>
                   <svg v-else class="w-7 h-7" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                      d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />
                   </svg>
                 </div>
                 <div>
                   <div class="flex items-center gap-2">
                     <h3 class="font-bold text-slate-900 text-lg capitalize">{{ task.task_type }}</h3>
-                    <span 
-                      class="px-2 py-0.5 rounded-full text-[10px] font-black uppercase tracking-widest"
-                      :class="task.is_active ? 'bg-green-100 text-green-700' : 'bg-slate-100 text-slate-500'"
-                    >
+                    <span class="px-2 py-0.5 rounded-full text-[10px] font-black uppercase tracking-widest"
+                      :class="task.is_active ? 'bg-green-100 text-green-700' : 'bg-slate-100 text-slate-500'">
                       {{ task.is_active ? 'Active' : 'Paused' }}
                     </span>
                   </div>
-                  <p class="text-sm text-slate-500 font-medium">Frequency: <span class="text-slate-900 font-bold capitalize">{{ task.frequency }}</span></p>
-                  <p class="text-xs text-slate-400 mt-1">Next Run: <span class="text-slate-600 font-bold">{{ task.next_run_at || 'Never' }}</span></p>
+                  <p class="text-sm text-slate-500 font-medium">Frequency: <span
+                      class="text-slate-900 font-bold capitalize">{{ task.frequency }}</span></p>
+                  <p class="text-xs text-slate-400 mt-1">Next Run: <span class="text-slate-600 font-bold">{{
+                    task.next_run_at
+                      || 'Never' }}</span></p>
                 </div>
               </div>
 
               <div class="flex items-center gap-4 justify-end">
-                <button 
-                  @click="toggleSchedule(task.id)"
-                  class="px-4 py-2 rounded-xl text-sm font-bold transition-all border"
-                  :class="task.is_active 
-                    ? 'border-amber-200 text-amber-700 hover:bg-amber-50' 
-                    : 'border-blue-200 text-blue-700 hover:bg-blue-50'"
-                >
+                <button @click="toggleSchedule(task.id)"
+                  class="px-4 py-2 rounded-xl text-sm font-bold transition-all border" :class="task.is_active
+                    ? 'border-amber-200 text-amber-700 hover:bg-amber-50'
+                    : 'border-blue-200 text-blue-700 hover:bg-blue-50'">
                   {{ task.is_active ? 'Pause' : 'Resume' }}
                 </button>
-                <button 
-                  @click="deleteSchedule(task.id)"
-                  class="px-4 py-2 rounded-xl text-sm font-bold border border-slate-100 text-slate-400 hover:text-red-600 hover:border-red-100 transition-all"
-                >
+                <button @click="deleteSchedule(task.id)"
+                  class="px-4 py-2 rounded-xl text-sm font-bold border border-slate-100 text-slate-400 hover:text-red-600 hover:border-red-100 transition-all">
                   Delete
                 </button>
               </div>
@@ -525,12 +558,15 @@
 
           <div v-else class="text-center py-20 bg-slate-50 rounded-[3rem] border-2 border-dashed border-slate-200">
             <div class="w-20 h-20 bg-white rounded-3xl flex items-center justify-center mx-auto mb-6 shadow-sm">
-                <svg class="w-10 h-10 text-slate-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                </svg>
+              <svg class="w-10 h-10 text-slate-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                  d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+              </svg>
             </div>
             <h3 class="text-xl font-bold text-slate-900 mb-2">No active schedules</h3>
-            <p class="text-slate-500 max-w-sm mx-auto">You can ask Pique to schedule weekly crawls or set up automated alerts in the chat interface.</p>
+            <p class="text-slate-500 max-w-sm mx-auto">You can ask Pique to schedule weekly crawls or set up automated
+              alerts
+              in the chat interface.</p>
           </div>
         </div>
       </div>
@@ -540,158 +576,174 @@
         <div class="bg-white rounded-[2.5rem] border border-slate-100 shadow-premium p-8">
           <div class="flex items-center gap-4 mb-8">
             <div class="w-12 h-12 bg-rose-100 rounded-2xl flex items-center justify-center text-rose-600">
-               <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
-               </svg>
+              <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                  d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
+              </svg>
             </div>
             <div>
-               <h2 class="text-xl font-bold text-slate-900">Security & Infrastructure</h2>
-               <p class="text-sm text-slate-500">Manage your data lifecycle, backups, and bot protection settings.</p>
+              <h2 class="text-xl font-bold text-slate-900">Security & Infrastructure</h2>
+              <p class="text-sm text-slate-500">Manage your data lifecycle, backups, and bot protection settings.</p>
             </div>
           </div>
 
           <div class="grid grid-cols-1 md:grid-cols-2 gap-8">
-             <!-- Database Archiving Card -->
-             <div class="p-8 rounded-3xl border border-slate-100 bg-slate-50/50 flex flex-col justify-between">
-                <div>
-                   <div class="flex items-center gap-3 mb-4">
-                      <div class="w-10 h-10 rounded-xl bg-blue-100 text-blue-600 flex items-center justify-center">
-                         <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 7v10c0 2.21 3.582 4 8 4s8-1.79 8-4V7M4 7c0 2.21 3.582 4 8 4s8-1.79 8-4M4 7c0-2.21 3.582-4 8-4s8 1.79 8 4m0 5c0 2.21-3.582 4-8 4s-8-1.79-8-4" /></svg>
-                      </div>
-                      <h3 class="font-bold text-slate-900">Database Archiving</h3>
-                   </div>
-                   <p class="text-sm text-slate-500 leading-relaxed mb-6">
-                      Historical data older than 90 days is automatically moved to a dedicated storage database every Sunday at 00:30 AM to maintain peak application performance.
-                   </p>
+            <!-- Database Archiving Card -->
+            <div class="p-8 rounded-3xl border border-slate-100 bg-slate-50/50 flex flex-col justify-between">
+              <div>
+                <div class="flex items-center gap-3 mb-4">
+                  <div class="w-10 h-10 rounded-xl bg-blue-100 text-blue-600 flex items-center justify-center">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                        d="M4 7v10c0 2.21 3.582 4 8 4s8-1.79 8-4V7M4 7c0 2.21 3.582 4 8 4s8-1.79 8-4M4 7c0-2.21 3.582-4 8-4s8 1.79 8 4m0 5c0 2.21-3.582 4-8 4s-8-1.79-8-4" />
+                    </svg>
+                  </div>
+                  <h3 class="font-bold text-slate-900">Database Archiving</h3>
                 </div>
-                <Link 
-                   :href="route('organization.archive')"
-                   class="inline-flex items-center justify-center gap-2 bg-white border border-slate-200 px-6 py-3 rounded-xl font-bold text-slate-700 hover:border-blue-500 hover:text-blue-600 transition-all shadow-sm active:scale-95"
-                >
-                   Open Archive Manager
-                   <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14 5l7 7m0 0l-7 7m7-7H3" /></svg>
-                </Link>
-             </div>
+                <p class="text-sm text-slate-500 leading-relaxed mb-6">
+                  Historical data older than 90 days is automatically moved to a dedicated storage database every Sunday
+                  at
+                  00:30 AM to maintain peak application performance.
+                </p>
+              </div>
+              <Link :href="route('organization.archive')"
+                class="inline-flex items-center justify-center gap-2 bg-white border border-slate-200 px-6 py-3 rounded-xl font-bold text-slate-700 hover:border-blue-500 hover:text-blue-600 transition-all shadow-sm active:scale-95">
+                Open Archive Manager
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14 5l7 7m0 0l-7 7m7-7H3" />
+                </svg>
+              </Link>
+            </div>
 
-             <!-- Bot Firewall Card -->
-             <div class="p-8 rounded-3xl border border-slate-100 bg-slate-50/50 flex flex-col justify-between">
-                <div>
-                   <div class="flex items-center gap-3 mb-4">
-                      <div class="w-10 h-10 rounded-xl bg-rose-100 text-rose-600 flex items-center justify-center">
-                         <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 00-2 2z" /></svg>
-                      </div>
-                      <h3 class="font-bold text-slate-900">Bot Firewall</h3>
-                   </div>
-                   <p class="text-sm text-slate-500 leading-relaxed mb-6">
-                      Advanced multi-signal firewall automatically detects and blocks malicious automated scanners and scrapers based on request scoring.
-                   </p>
-                   <div class="flex items-center gap-2 mb-6">
-                      <span class="w-2 h-2 rounded-full bg-green-500 animate-pulse"></span>
-                      <span class="text-xs font-bold text-slate-400 uppercase tracking-widest">Protection Active</span>
-                   </div>
+            <!-- Bot Firewall Card -->
+            <div class="p-8 rounded-3xl border border-slate-100 bg-slate-50/50 flex flex-col justify-between">
+              <div>
+                <div class="flex items-center gap-3 mb-4">
+                  <div class="w-10 h-10 rounded-xl bg-rose-100 text-rose-600 flex items-center justify-center">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                        d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 00-2 2z" />
+                    </svg>
+                  </div>
+                  <h3 class="font-bold text-slate-900">Bot Firewall</h3>
                 </div>
-                <div class="p-3 bg-white border border-slate-100 rounded-xl text-center">
-                   <p class="text-[10px] font-black text-slate-300 uppercase tracking-[0.2em]">Daily Security Log Integrated</p>
+                <p class="text-sm text-slate-500 leading-relaxed mb-6">
+                  Advanced multi-signal firewall automatically detects and blocks malicious automated scanners and
+                  scrapers
+                  based on request scoring.
+                </p>
+                <div class="flex items-center gap-2 mb-6">
+                  <span class="w-2 h-2 rounded-full bg-green-500 animate-pulse"></span>
+                  <span class="text-xs font-bold text-slate-400 uppercase tracking-widest">Protection Active</span>
                 </div>
-             </div>
+              </div>
+              <div class="p-3 bg-white border border-slate-100 rounded-xl text-center">
+                <p class="text-[10px] font-black text-slate-300 uppercase tracking-[0.2em]">Daily Security Log
+                  Integrated</p>
+              </div>
+            </div>
           </div>
         </div>
       </div>
 
       <!-- Team Tab -->
       <div v-if="activeTab === 'team'" class="space-y-6 animate-fade-in">
-         <!-- Existing Team UI -->
-         <div class="flex justify-between items-center bg-blue-50/50 p-6 rounded-3xl border border-blue-100">
-            <div>
-              <h3 class="font-bold text-blue-900">Invite Team Members</h3>
-              <p class="text-sm text-blue-700">Add colleagues to collaborate on schemas.</p>
-            </div>
-            <button 
-              @click="showInviteModal = true"
-              class="bg-blue-600 hover:bg-blue-500 text-white px-6 py-2.5 rounded-xl font-bold transition-standard shadow-lg shadow-blue-500/20 active:scale-95 flex items-center gap-2"
-            >
-              <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
-              </svg>
-              Invite Member
-            </button>
-         </div>
+        <!-- Existing Team UI -->
+        <div class="flex justify-between items-center bg-blue-50/50 p-6 rounded-3xl border border-blue-100">
+          <div>
+            <h3 class="font-bold text-blue-900">Invite Team Members</h3>
+            <p class="text-sm text-blue-700">Add colleagues to collaborate on schemas.</p>
+          </div>
+          <button @click="showInviteModal = true"
+            class="bg-blue-600 hover:bg-blue-500 text-white px-6 py-2.5 rounded-xl font-bold transition-standard shadow-lg shadow-blue-500/20 active:scale-95 flex items-center gap-2">
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
+            </svg>
+            Invite Member
+          </button>
+        </div>
 
-         <!-- Members List -->
-         <div class="bg-white rounded-[2.5rem] border border-slate-100 shadow-premium overflow-hidden">
-            <div class="divide-y divide-slate-100">
-              <div v-for="member in members" :key="member.id" class="p-6 flex items-center justify-between group hover:bg-slate-50 transition-standard">
-                <div class="flex items-center gap-4">
-                   <div class="w-12 h-12 rounded-2xl bg-gradient-to-br from-slate-100 to-slate-200 border border-slate-200 flex items-center justify-center text-slate-500 font-bold text-lg overflow-hidden">
-                    <img v-if="member.avatar_url" :src="member.avatar_url" :alt="member.name" class="w-full h-full object-cover">
-                    <span v-else>{{ member.name.charAt(0) }}</span>
-                  </div>
-                  <div>
-                    <p class="font-bold text-slate-900">{{ member.name }}</p>
-                    <p class="text-sm text-slate-500">{{ member.email }}</p>
-                  </div>
+        <!-- Members List -->
+        <div class="bg-white rounded-[2.5rem] border border-slate-100 shadow-premium overflow-hidden">
+          <div class="divide-y divide-slate-100">
+            <div v-for="member in members" :key="member.id"
+              class="p-6 flex items-center justify-between group hover:bg-slate-50 transition-standard">
+              <div class="flex items-center gap-4">
+                <div
+                  class="w-12 h-12 rounded-2xl bg-gradient-to-br from-slate-100 to-slate-200 border border-slate-200 flex items-center justify-center text-slate-500 font-bold text-lg overflow-hidden">
+                  <img v-if="member.avatar_url" :src="member.avatar_url" :alt="member.name"
+                    class="w-full h-full object-cover">
+                  <span v-else>{{ member.name.charAt(0) }}</span>
                 </div>
-                <div class="flex items-center gap-4">
-                  <span class="px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider bg-slate-100 text-slate-600">
-                    {{ member.role }}
-                  </span>
-                   <button 
-                      v-if="currentUserRole === 'owner' && member.id !== $page.props.auth.user.id"
-                      @click="removeMember(member.id)"
-                      class="text-slate-400 hover:text-red-600 transition-colors p-2"
-                    >
-                      Remove
-                   </button>
+                <div>
+                  <p class="font-bold text-slate-900">{{ member.name }}</p>
+                  <p class="text-sm text-slate-500">{{ member.email }}</p>
                 </div>
               </div>
+              <div class="flex items-center gap-4">
+                <span
+                  class="px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider bg-slate-100 text-slate-600">
+                  {{ member.role }}
+                </span>
+                <button v-if="currentUserRole === 'owner' && member.id !== $page.props.auth.user.id"
+                  @click="removeMember(member.id)" class="text-slate-400 hover:text-red-600 transition-colors p-2">
+                  Remove
+                </button>
+              </div>
             </div>
-         </div>
-         
-         <!-- Pending Invitations -->
-         <div v-if="invitations.length > 0">
-            <h3 class="text-lg font-bold text-slate-900 mb-4 ml-2">Pending Invitations</h3>
-            <div class="bg-white rounded-[2.5rem] border border-slate-100 shadow-premium overflow-hidden">
-                <div class="divide-y divide-slate-100">
-                  <div v-for="invite in invitations" :key="invite.id" class="p-6 flex items-center justify-between">
-                    <div>
-                        <p class="font-bold text-slate-900">{{ invite.email }}</p>
-                        <p class="text-sm text-slate-500">Role: {{ invite.role }}</p>
-                    </div>
-                    <button @click="cancelInvite(invite.id)" class="text-red-600 font-bold text-sm hover:underline">Revoke</button>
-                  </div>
+          </div>
+        </div>
+
+        <!-- Pending Invitations -->
+        <div v-if="invitations.length > 0">
+          <h3 class="text-lg font-bold text-slate-900 mb-4 ml-2">Pending Invitations</h3>
+          <div class="bg-white rounded-[2.5rem] border border-slate-100 shadow-premium overflow-hidden">
+            <div class="divide-y divide-slate-100">
+              <div v-for="invite in invitations" :key="invite.id" class="p-6 flex items-center justify-between">
+                <div>
+                  <p class="font-bold text-slate-900">{{ invite.email }}</p>
+                  <p class="text-sm text-slate-500">Role: {{ invite.role }}</p>
                 </div>
+                <button @click="cancelInvite(invite.id)"
+                  class="text-red-600 font-bold text-sm hover:underline">Revoke</button>
+              </div>
             </div>
-         </div>
+          </div>
+        </div>
       </div>
 
       <!-- Invoke Modals -->
-      <Transition
-        enter-active-class="transition duration-200 ease-out"
-        enter-from-class="transform opacity-0 scale-95"
-        enter-to-class="transform opacity-100 scale-100"
-        leave-active-class="transition duration-75 ease-in"
-        leave-from-class="transform opacity-100 scale-100"
-        leave-to-class="transform opacity-0 scale-95"
-      >
-        <div v-if="showInviteModal" class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm" @click.self="showInviteModal = false">
+      <Transition enter-active-class="transition duration-200 ease-out" enter-from-class="transform opacity-0 scale-95"
+        enter-to-class="transform opacity-100 scale-100" leave-active-class="transition duration-75 ease-in"
+        leave-from-class="transform opacity-100 scale-100" leave-to-class="transform opacity-0 scale-95">
+        <div v-if="showInviteModal"
+          class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm"
+          @click.self="showInviteModal = false">
           <div class="bg-white rounded-3xl p-8 w-full max-w-md shadow-2xl">
             <h3 class="text-2xl font-bold text-slate-900 mb-6">Invite Team Member</h3>
             <form @submit.prevent="submitInvite" class="space-y-6">
               <div class="space-y-2">
                 <label class="text-sm font-bold text-slate-700">Email Address</label>
-                <input v-model="inviteForm.email" type="email" class="w-full px-4 py-3 rounded-xl border border-slate-200 focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10 transition-standard outline-none font-medium">
-                <div v-if="inviteForm.errors.email" class="text-red-500 text-sm font-medium">{{ inviteForm.errors.email }}</div>
+                <input v-model="inviteForm.email" type="email"
+                  class="w-full px-4 py-3 rounded-xl border border-slate-200 focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10 transition-standard outline-none font-medium">
+                <div v-if="inviteForm.errors.email" class="text-red-500 text-sm font-medium">{{ inviteForm.errors.email
+                  }}
+                </div>
               </div>
               <div class="space-y-2">
                 <label class="text-sm font-bold text-slate-700">Role</label>
-                <select v-model="inviteForm.role" class="w-full px-4 py-3 rounded-xl border border-slate-200 focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10 bg-white">
+                <select v-model="inviteForm.role"
+                  class="w-full px-4 py-3 rounded-xl border border-slate-200 focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10 bg-white">
                   <option value="member">Member</option>
                   <option value="admin">Admin</option>
                 </select>
               </div>
               <div class="flex gap-4 pt-2">
-                <button type="button" @click="showInviteModal = false" class="flex-1 px-4 py-3 rounded-xl font-bold text-slate-600 hover:bg-slate-100">Cancel</button>
-                <button type="submit" :disabled="inviteForm.processing" class="flex-1 bg-blue-600 hover:bg-blue-500 text-white px-4 py-3 rounded-xl font-bold shadow-lg shadow-blue-500/20">Send Invite</button>
+                <button type="button" @click="showInviteModal = false"
+                  class="flex-1 px-4 py-3 rounded-xl font-bold text-slate-600 hover:bg-slate-100">Cancel</button>
+                <button type="submit" :disabled="inviteForm.processing"
+                  class="flex-1 bg-blue-600 hover:bg-blue-500 text-white px-4 py-3 rounded-xl font-bold shadow-lg shadow-blue-500/20">Send
+                  Invite</button>
               </div>
             </form>
           </div>
@@ -699,46 +751,45 @@
       </Transition>
 
       <!-- Edit Property Modal -->
-      <Transition
-        enter-active-class="transition duration-200 ease-out"
-        enter-from-class="transform opacity-0 scale-95"
-        enter-to-class="transform opacity-100 scale-100"
-        leave-active-class="transition duration-75 ease-in"
-        leave-from-class="transform opacity-100 scale-100"
-        leave-to-class="transform opacity-0 scale-95"
-      >
-        <div v-if="showEditPropertyModal" class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm" @click.self="showEditPropertyModal = false">
+      <Transition enter-active-class="transition duration-200 ease-out" enter-from-class="transform opacity-0 scale-95"
+        enter-to-class="transform opacity-100 scale-100" leave-active-class="transition duration-75 ease-in"
+        leave-from-class="transform opacity-100 scale-100" leave-to-class="transform opacity-0 scale-95">
+        <div v-if="showEditPropertyModal"
+          class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm"
+          @click.self="showEditPropertyModal = false">
           <div class="bg-white rounded-3xl p-8 w-full max-w-md shadow-2xl">
             <h3 class="text-2xl font-bold text-slate-900 mb-6">Edit Property</h3>
             <form @submit.prevent="submitEditProperty" class="space-y-6">
               <div class="space-y-2">
                 <label class="text-sm font-bold text-slate-700">Property Name</label>
-                <input v-model="editPropertyForm.name" type="text" class="w-full px-4 py-3 rounded-xl border border-slate-200 focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10 transition-standard outline-none font-medium">
-                <div v-if="editPropertyForm.errors.name" class="text-red-500 text-sm font-medium">{{ editPropertyForm.errors.name }}</div>
+                <input v-model="editPropertyForm.name" type="text"
+                  class="w-full px-4 py-3 rounded-xl border border-slate-200 focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10 transition-standard outline-none font-medium">
+                <div v-if="editPropertyForm.errors.name" class="text-red-500 text-sm font-medium">{{
+                  editPropertyForm.errors.name }}</div>
               </div>
               <div class="space-y-2">
                 <label class="text-sm font-bold text-slate-700">Search Console Site URL</label>
-                <input v-model="editPropertyForm.gsc_site_url" type="text" placeholder="https://www.example.com/ or sc-domain:example.com" class="w-full px-4 py-3 rounded-xl border border-slate-200 focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10 transition-standard outline-none font-medium">
-                <div v-if="editPropertyForm.errors.gsc_site_url" class="text-red-500 text-sm font-medium">{{ editPropertyForm.errors.gsc_site_url }}</div>
+                <input v-model="editPropertyForm.gsc_site_url" type="text"
+                  placeholder="https://www.example.com/ or sc-domain:example.com"
+                  class="w-full px-4 py-3 rounded-xl border border-slate-200 focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10 transition-standard outline-none font-medium">
+                <div v-if="editPropertyForm.errors.gsc_site_url" class="text-red-500 text-sm font-medium">{{
+                  editPropertyForm.errors.gsc_site_url }}</div>
                 <p class="text-xs text-slate-500">Copy the property URL exactly as shown in Google Search Console.</p>
               </div>
               <div class="flex gap-4 pt-2">
-                <button type="button" @click="showEditPropertyModal = false" class="flex-1 px-4 py-3 rounded-xl font-bold text-slate-600 hover:bg-slate-100">Cancel</button>
-                <button type="submit" :disabled="editPropertyForm.processing" class="flex-1 bg-blue-600 hover:bg-blue-500 text-white px-4 py-3 rounded-xl font-bold shadow-lg shadow-blue-500/20">Save Changes</button>
+                <button type="button" @click="showEditPropertyModal = false"
+                  class="flex-1 px-4 py-3 rounded-xl font-bold text-slate-600 hover:bg-slate-100">Cancel</button>
+                <button type="submit" :disabled="editPropertyForm.processing"
+                  class="flex-1 bg-blue-600 hover:bg-blue-500 text-white px-4 py-3 rounded-xl font-bold shadow-lg shadow-blue-500/20">Save
+                  Changes</button>
               </div>
             </form>
           </div>
         </div>
       </Transition>
 
-      <ConfirmationModal 
-        :show="showConfirmModal"
-        :title="confirmTitle"
-        :message="confirmMessage"
-        :confirm-text="confirmButtonText"
-        @close="showConfirmModal = false"
-        @confirm="executeConfirm"
-      />
+      <ConfirmationModal :show="showConfirmModal" :title="confirmTitle" :message="confirmMessage"
+        :confirm-text="confirmButtonText" @close="showConfirmModal = false" @confirm="executeConfirm" />
 
     </div>
   </AppLayout>
@@ -785,11 +836,11 @@ const hasInvalidTokens = computed(() =>
 )
 
 onMounted(() => {
-    const params = new URLSearchParams(window.location.search)
-    const tab = params.get('tab')
-    if (tab && tabs.find(t => t.id === tab)) {
-        activeTab.value = tab
-    }
+  const params = new URLSearchParams(window.location.search)
+  const tab = params.get('tab')
+  if (tab && tabs.find(t => t.id === tab)) {
+    activeTab.value = tab
+  }
 })
 const showInviteModal = ref(false)
 const showEditPropertyModal = ref(false)
@@ -802,21 +853,21 @@ const confirmMessage = ref('')
 const confirmAction = ref(null)
 const confirmButtonText = ref('Confirm')
 
-    // Organization Form
+// Organization Form
 const orgForm = useForm({
   name: props.organization.name,
   keyword_discovery_frequency: props.organization.keyword_discovery_frequency || 24,
   settings: {
-     ai_model: props.organization.settings?.ai_model || 'gpt-4',
-     ai_insights_enabled: props.organization.settings?.ai_insights_enabled !== false,
-     industry: props.organization.settings?.industry || '',
-     business_profile: {
-        target_audience: props.organization.settings?.business_profile?.target_audience || '',
-        value_proposition: props.organization.settings?.business_profile?.value_proposition || '',
-        competitors: props.organization.settings?.business_profile?.competitors || '',
-     },
-     analytics_period: props.organization.settings?.analytics_period || '30d',
-     notifications_enabled: props.organization.settings?.notifications_enabled || false
+    ai_model: props.organization.settings?.ai_model || 'gpt-4',
+    ai_insights_enabled: props.organization.settings?.ai_insights_enabled !== false,
+    industry: props.organization.settings?.industry || '',
+    business_profile: {
+      target_audience: props.organization.settings?.business_profile?.target_audience || '',
+      value_proposition: props.organization.settings?.business_profile?.value_proposition || '',
+      competitors: props.organization.settings?.business_profile?.competitors || '',
+    },
+    analytics_period: props.organization.settings?.analytics_period || '30d',
+    notifications_enabled: props.organization.settings?.notifications_enabled || false
   }
 })
 
@@ -853,9 +904,9 @@ const passwordForm = useForm({
 })
 
 const updateOrganization = () => {
-    orgForm.put(route('organization.update'), {
-        preserveScroll: true
-    })
+  orgForm.put(route('organization.update'), {
+    preserveScroll: true
+  })
 }
 
 // Account Logic
@@ -881,19 +932,19 @@ const updatePassword = () => {
 }
 
 const addProperty = () => {
-    propertyForm.post(route('analytics.properties.store'), {
-        onSuccess: () => propertyForm.reset(),
-        preserveScroll: true
-    })
+  propertyForm.post(route('analytics.properties.store'), {
+    onSuccess: () => propertyForm.reset(),
+    preserveScroll: true
+  })
 }
 
 const disconnectProperty = (id) => {
-    openConfirmModal(
-        'Disconnect GA4 Property',
-        'Are you sure you want to disconnect this GA4 property? Historical data will remain but no new data will be fetched.',
-        () => router.delete(route('analytics.properties.destroy', id)),
-        'Disconnect Property'
-    )
+  openConfirmModal(
+    'Disconnect GA4 Property',
+    'Are you sure you want to disconnect this GA4 property? Historical data will remain but no new data will be fetched.',
+    () => router.delete(route('analytics.properties.destroy', id)),
+    'Disconnect Property'
+  )
 }
 
 const editProperty = (property) => {
