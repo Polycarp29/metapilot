@@ -27,11 +27,11 @@ class SecurityHeadersMiddleware
         // Content Security Policy (CSP) - Preventing Crypto-miners and unauthorized scripts
         // Allows scripts from same origin, inline scripts (needed for Vite/Ziggy), and trusted CDNs if any.
         $csp = "default-src 'self'; ";
-        $csp .= "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://www.googletagmanager.com; ";
+        $csp .= "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://www.googletagmanager.com https://www.google-analytics.com; ";
         $csp .= "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://fonts.bunny.net https://cdnjs.cloudflare.com; ";
         $csp .= "img-src 'self' data: https:; ";
         $csp .= "font-src 'self' https://fonts.gstatic.com https://fonts.bunny.net https://cdnjs.cloudflare.com; ";
-        $csp .= "connect-src 'self' https://vitals.vercel-insights.com; ";
+        $csp .= "connect-src 'self' https://vitals.vercel-insights.com https://www.google-analytics.com; ";
         $csp .= "frame-src 'self'; ";
         $csp .= "object-src 'none'; ";
         $csp .= "base-uri 'self'; ";
