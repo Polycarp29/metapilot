@@ -58,18 +58,18 @@
     "/build/assets/LegalLayout-BnzYVRNu.css"
   ],
   "resources/js/Pages/Analytics/Dashboard.vue": [
-    "/build/assets/Dashboard-BlcWJFfk.js",
-    "/build/assets/Dashboard-Cb8T0Alf.css"
+    "/build/assets/Dashboard-DcwmPbeu.js",
+    "/build/assets/Dashboard-STQdoPYX.css"
   ],
-  "resources/js/Pages/Analytics/Dashboard.vue?vue&type=style&index=0&scoped=3f602d42&lang.css": [
-    "/build/assets/Dashboard-BlcWJFfk.js",
-    "/build/assets/Dashboard-Cb8T0Alf.css"
+  "resources/js/Pages/Analytics/Dashboard.vue?vue&type=style&index=0&scoped=8bc4f26f&lang.css": [
+    "/build/assets/Dashboard-DcwmPbeu.js",
+    "/build/assets/Dashboard-STQdoPYX.css"
   ],
   "resources/js/Pages/Analytics/Partials/AdPredictionsCard.vue": [
     "/build/assets/AdPredictionsCard-MdOBVO9n.js"
   ],
   "resources/js/Pages/Analytics/Partials/DevelopersTab.vue": [
-    "/build/assets/DevelopersTab-Dy3JdOJn.js"
+    "/build/assets/DevelopersTab-CyWHdb2G.js"
   ],
   "resources/js/Pages/Analytics/Partials/PredictionsTab.vue": [
     "/build/assets/PredictionsTab-B6PRzrRH.js",
