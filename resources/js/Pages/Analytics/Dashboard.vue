@@ -689,7 +689,7 @@ onUnmounted(() => {
   <Head title="Analytics Dashboard" />
 
   <AppLayout>
-    <div class="max-w-[1400px] mx-auto p-6 lg:p-10 space-y-10">
+    <div class="max-w-[1400px] min-h-screen overflow-auto mx-auto p-6 lg:p-10 space-y-10">
       <!-- Header -->
       <div class="flex flex-col md:flex-row md:items-center justify-between gap-6">
         <div>
