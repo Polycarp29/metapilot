@@ -36,6 +36,8 @@ class SecurityHeadersMiddleware
         $csp .= "object-src 'none'; ";
         $csp .= "base-uri 'self'; ";
         $csp .= "form-action 'self';";
+        $csp .= "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://fonts.bunny.net https://cdnjs.cloudflare.com; ";
+        $csp .= "font-src 'self' https://fonts.gstatic.com https://fonts.bunny.net https://cdnjs.cloudflare.com; ";
 
         $response->headers->set('Content-Security-Policy', $csp);
 
