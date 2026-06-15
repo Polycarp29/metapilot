@@ -907,26 +907,37 @@ const startLiveListener = () => {
     if (isListening.value) return
     isListening.value = true
     lastHeardSignal.value = null
-    
-    // Simple polling listener for the health modal
+
+    // Record precisely when the scan started so we can compare event timestamps
+    // against this fixed point rather than recalculating "now - 10s" on every tick.
+    const scanStartedAt = Date.now() - 5000 // 5s grace for in-flight events
+
+    // Lightweight poller — hits the cheap pixelHeartbeat endpoint instead of the
+    // full paginated events() endpoint. Interval increased to 5 s to halve
+    // server load compared to the old 2 s loop on the heavy endpoint.
+    let pollTimer = null
     const checkSignal = async () => {
         if (!isListening.value) return
         try {
-            const r = await axios.get(route('google-ads.pixel-events'), {
-                params: { pixel_site_id: healthModalSite.value?.id, per_page: 1 }
+            const r = await axios.get(route('google-ads.pixel-heartbeat'), {
+                params: { pixel_site_id: healthModalSite.value?.id }
             })
-            const latest = r.data.data?.[0]
+            const latest = r.data?.latest_event
             if (latest) {
                 const latestTime = new Date(latest.created_at).getTime()
-                const modalOpenTime = new Date().getTime() - 10000 // 10s grace
-                if (latestTime > modalOpenTime) {
+                if (latestTime >= scanStartedAt) {
                     lastHeardSignal.value = latest
+                    isListening.value = false // stop polling — signal confirmed
                     toast.success('Live signal detected! Connection verified.')
+                    return
                 }
             }
-        } catch (e) {}
-        if (isListening.value && !lastHeardSignal.value) {
-            setTimeout(checkSignal, 2000)
+        } catch (e) {
+            // Silently absorb network errors — the modal UI shows the elapsed time
+            // so the user knows the scan is still running.
+        }
+        if (isListening.value) {
+            pollTimer = setTimeout(checkSignal, 5000)
         }
     }
     checkSignal()
@@ -2296,20 +2307,20 @@ const openHealthModal = (site = null) => {
                                 
                                 <div class="w-full bg-slate-900 rounded-3xl p-8 text-left space-y-4 border border-white/5">
                                     <div class="flex items-center justify-between">
-                                        <span class="text-[10px] font-black text-slate-500 uppercase">Device</span>
-                                        <span class="text-xs font-bold text-white">{{ lastHeardSignal.browser }} / {{ lastHeardSignal.platform }}</span>
+                                        <span class="text-[10px] font-black text-slate-500 uppercase">Device Type</span>
+                                        <span class="text-xs font-bold text-white capitalize">{{ lastHeardSignal.device_type || '—' }}</span>
+                                    </div>
+                                    <div class="flex items-center justify-between">
+                                        <span class="text-[10px] font-black text-slate-500 uppercase">Country</span>
+                                        <span class="text-xs font-bold text-white">{{ lastHeardSignal.country || '—' }}</span>
                                     </div>
                                     <div class="flex items-center justify-between">
                                         <span class="text-[10px] font-black text-slate-500 uppercase">Source Path</span>
-                                        <span class="text-xs font-bold text-indigo-300 truncate max-w-[200px]">{{ lastHeardSignal.page_url }}</span>
+                                        <span class="text-xs font-bold text-indigo-300 truncate max-w-[200px]">{{ lastHeardSignal.page_url || '—' }}</span>
                                     </div>
-                                    <div class="flex items-center justify-between">
-                                        <span class="text-[10px] font-black text-slate-500 uppercase">Attribution ID</span>
-                                        <span class="text-xs font-bold text-emerald-400">{{ lastHeardSignal.google_campaign_id || 'System Default' }}</span>
-                                    </div>
-                                    <div v-if="lastHeardSignal.metadata?.is_engaged || lastHeardSignal.duration_seconds >= 30" class="flex items-center justify-between pt-2 border-t border-white/5">
-                                        <span class="text-[10px] font-black text-slate-500 uppercase">Qualitative Status</span>
-                                        <span class="px-2 py-0.5 bg-indigo-500 text-white text-[9px] font-black rounded uppercase tracking-widest animate-pulse">Engaged Lead</span>
+                                    <div class="flex items-center justify-between pt-2 border-t border-white/5">
+                                        <span class="text-[10px] font-black text-slate-500 uppercase">Signal Time</span>
+                                        <span class="text-xs font-bold text-emerald-400">{{ new Date(lastHeardSignal.created_at).toLocaleTimeString() }}</span>
                                     </div>
                                 </div>
 

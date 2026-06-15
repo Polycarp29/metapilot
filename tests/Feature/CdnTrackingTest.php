@@ -99,7 +99,11 @@ class CdnTrackingTest extends TestCase
 
         $response = $this->postJson('/cdn/ad-hit', $payload);
 
-        $response->assertStatus(403);
+        $response->assertStatus(204);
+
+        $this->assertDatabaseMissing('ad_track_events', [
+            'page_view_id' => 'test-pv-123',
+        ]);
     }
 
     public function test_multiple_pixel_sites_hits_are_separated()
@@ -166,7 +170,25 @@ class CdnTrackingTest extends TestCase
         $this->actingAs($user);
 
         // Mock Http for the internal generateSchemaForPage logic which might call OpenAI or Scraper
-        \Illuminate\Support\Facades\Http::fake();
+        \Illuminate\Support\Facades\Http::fake([
+            'api.openai.com/*' => \Illuminate\Support\Facades\Http::response([
+                'choices' => [
+                    [
+                        'message' => [
+                            'content' => json_encode([
+                                'type' => 'Product',
+                                'data' => [
+                                    '@context' => 'https://schema.org',
+                                    '@type' => 'Product',
+                                    'name' => 'Test Product',
+                                ],
+                            ]),
+                        ],
+                    ],
+                ],
+            ], 200),
+            '*' => \Illuminate\Support\Facades\Http::response('<html></html>', 200),
+        ]);
         
         // We also need to satisfy the organization check in controller
         $response = $this->postJson(route('google-ads.generate-schema'), [
@@ -174,11 +196,11 @@ class CdnTrackingTest extends TestCase
             'url' => 'https://example.com/test-page'
         ]);
 
-        if ($response->status() !== 200) {
+        if ($response->status() !== 202) {
             dump($response->json());
         }
 
-        $response->assertStatus(200)
+        $response->assertStatus(202)
             ->assertJson([
                 'success' => true
             ]);
@@ -221,5 +243,96 @@ class CdnTrackingTest extends TestCase
                 'html' => $htmlContent,
                 'url' => 'https://example.com/test-page'
             ]);
+    }
+
+    // ── Pixel Heartbeat ──────────────────────────────────────────────────────
+
+    public function test_pixel_heartbeat_returns_null_when_no_events()
+    {
+        $user = User::factory()->create();
+        $org  = Organization::factory()->create();
+        $user->organizations()->attach($org, ['role' => 'admin']);
+        $user->update(['current_organization_id' => $org->id]);
+
+        $pixelSite = PixelSite::create([
+            'organization_id' => $org->id,
+            'label'           => 'Heartbeat Site',
+        ]);
+
+        $this->actingAs($user);
+
+        $response = $this->getJson(route('google-ads.pixel-heartbeat', [
+            'pixel_site_id' => $pixelSite->id,
+        ]));
+
+        $response->assertStatus(200)
+            ->assertJson([
+                'ok'           => true,
+                'pixel_site_id' => $pixelSite->id,
+                'latest_event' => null,
+            ]);
+    }
+
+    public function test_pixel_heartbeat_returns_latest_event()
+    {
+        $user = User::factory()->create();
+        $org  = Organization::factory()->create();
+        $user->organizations()->attach($org, ['role' => 'admin']);
+        $user->update(['current_organization_id' => $org->id]);
+
+        $pixelSite = PixelSite::create([
+            'organization_id' => $org->id,
+            'label'           => 'Heartbeat Site',
+        ]);
+
+        // Seed a tracking event for this site
+        \App\Models\AdTrackEvent::create([
+            'organization_id' => $org->id,
+            'pixel_site_id'   => $pixelSite->id,
+            'site_token'      => $pixelSite->ads_site_token,
+            'page_view_id'    => 'hb-test-pv-1',
+            'page_url'        => 'https://example.com/heartbeat',
+            'device_type'     => 'desktop',
+            'country_code'    => 'US',
+            'ip_hash'         => hash('sha256', '127.0.0.1'),
+        ]);
+
+        $this->actingAs($user);
+
+        $response = $this->getJson(route('google-ads.pixel-heartbeat', [
+            'pixel_site_id' => $pixelSite->id,
+        ]));
+
+        $response->assertStatus(200)
+            ->assertJsonStructure([
+                'ok',
+                'pixel_site_id',
+                'latest_event' => ['id', 'created_at', 'page_url', 'device_type', 'country'],
+            ])
+            ->assertJson([
+                'ok'           => true,
+                'pixel_site_id' => $pixelSite->id,
+                'latest_event' => [
+                    'page_url'    => 'https://example.com/heartbeat',
+                    'device_type' => 'desktop',
+                    'country'     => 'US',
+                ],
+            ]);
+    }
+
+    public function test_pixel_heartbeat_requires_authentication()
+    {
+        $org       = Organization::factory()->create();
+        $pixelSite = PixelSite::create([
+            'organization_id' => $org->id,
+            'label'           => 'Heartbeat Site',
+        ]);
+
+        // No actingAs — should redirect to login
+        $response = $this->getJson(route('google-ads.pixel-heartbeat', [
+            'pixel_site_id' => $pixelSite->id,
+        ]));
+
+        $response->assertStatus(401);
     }
 }

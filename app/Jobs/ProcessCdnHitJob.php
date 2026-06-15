@@ -117,6 +117,10 @@ class ProcessCdnHitJob implements ShouldQueue
 
         $this->processModules($pixelSite, $this->payload, $urlHash, $meta);
 
+        if (!$pixelSite->pixel_verified_at) {
+            $pixelSite->update(['pixel_verified_at' => now()]);
+        }
+
         if ($urlHash && $pageUrl && !$isBot) {
             $discoveryCacheKey = "cdn_seen_{$pixelSite->id}_{$urlHash}";
             if (!Cache::has($discoveryCacheKey)) {

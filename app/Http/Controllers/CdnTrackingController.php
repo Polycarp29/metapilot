@@ -1300,6 +1300,49 @@ class CdnTrackingController extends Controller
 
 
     /**
+     * Lightweight pixel heartbeat for the Live Scan modal in DevelopersTab.vue.
+     *
+     * Returns only the ID and timestamp of the most recent event for the given
+     * pixel site — bypassing all reporting filters, pagination, and the costly
+     * returning-user bulk ip_hash lookup used by events().
+     *
+     * The frontend polls this endpoint every 5 s (down from 2 s on the heavy
+     * events endpoint) and compares the event timestamp against the time the
+     * scan was started to confirm a live signal arrived.
+     */
+    public function pixelHeartbeat(Request $request)
+    {
+        $organization = $request->user()?->currentOrganization();
+        if (!$organization) {
+            return response()->json(['error' => 'Organization not found'], 404);
+        }
+
+        $request->validate([
+            'pixel_site_id' => 'required|integer',
+        ]);
+
+        // Verify ownership before querying
+        $pixelSite = $organization->pixelSites()->findOrFail($request->pixel_site_id);
+
+        $latest = AdTrackEvent::where('pixel_site_id', $pixelSite->id)
+            ->select('id', 'created_at', 'page_url', 'device_type', 'country_code')
+            ->orderByDesc('created_at')
+            ->first();
+
+        return response()->json([
+            'ok'             => true,
+            'pixel_site_id'  => $pixelSite->id,
+            'latest_event'   => $latest ? [
+                'id'          => $latest->id,
+                'created_at'  => $latest->created_at->toIso8601String(),
+                'page_url'    => $latest->page_url,
+                'device_type' => $latest->device_type,
+                'country'     => $latest->country_code,
+            ] : null,
+        ]);
+    }
+
+    /**
      * Normalize a URL for consistent hashing (strips scheme, lowercases, trims trailing slash).
      */
     private function normalizeUrlForHash(?string $url): string

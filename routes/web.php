@@ -207,6 +207,10 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::get('/pixel-events/csv', [\App\Http\Controllers\CdnTrackingController::class, 'downloadCsv'])->name('pixel-events.csv');
         Route::get('/pixel-errors', [\App\Http\Controllers\CdnTrackingController::class, 'errors'])->name('pixel-errors');
 
+        // Lightweight live-scan heartbeat — used by DevelopersTab.vue Live Scan modal only.
+        // Much cheaper than polling pixel-events: one indexed SELECT with 5 narrow columns.
+        Route::get('/pixel-heartbeat', [\App\Http\Controllers\CdnTrackingController::class, 'pixelHeartbeat'])->name('pixel-heartbeat');
+
         // Path intelligence & trend analytics
         Route::get('/analytics', [\App\Http\Controllers\CdnTrackingController::class, 'analytics'])->name('analytics');
         Route::get('/web-analysis', [\App\Http\Controllers\CdnTrackingController::class, 'webAnalysis'])->name('web-analysis');
