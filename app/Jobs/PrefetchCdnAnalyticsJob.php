@@ -87,8 +87,38 @@ class PrefetchCdnAnalyticsJob implements ShouldQueue
             );
 
         } catch (\Throwable $e) {
-            Log::error("[CDN Prefetch] Failed for {$label}: " . $e->getMessage());
+            // ── Graceful degradation for Python engine being down ─────────────
+            // When the engine is simply unreachable (cURL error 7, connection
+            // refused, etc.) we log a warning and return cleanly — no failed_jobs
+            // entry. The scheduler dispatches a fresh job every 10 minutes, so
+            // recovery is fully automatic once the engine comes back up.
+            if ($this->isPythonEngineDown($e)) {
+                Log::warning("[CDN Prefetch] Python engine unreachable for {$label} — skipping (auto-retries next cycle).", [
+                    'error' => $e->getMessage(),
+                ]);
+                return;
+            }
+
+            // Unexpected errors (DB failures, code bugs) still go to failed_jobs
+            // so they can be investigated.
+            Log::error("[CDN Prefetch] Unexpected failure for {$label}: " . $e->getMessage());
             $this->fail($e);
         }
+    }
+
+    /**
+     * Detect Python engine connectivity failures vs. real application errors.
+     * cURL error 7 = "Failed to connect" (connection refused / server not up).
+     */
+    private function isPythonEngineDown(\Throwable $e): bool
+    {
+        $msg = strtolower($e->getMessage());
+
+        return str_contains($msg, 'curl error 7')
+            || str_contains($msg, 'failed to connect')
+            || str_contains($msg, 'connection refused')
+            || str_contains($msg, "couldn't connect to server")
+            || str_contains($msg, 'analytics engine is unavailable')
+            || str_contains($msg, 'analytics engine is currently busy');
     }
 }
