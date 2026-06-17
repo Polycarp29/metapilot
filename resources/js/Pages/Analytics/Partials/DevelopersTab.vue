@@ -903,6 +903,23 @@ watch(activeTab, (val) => {
 })
 watch(pathFilter, () => { if (!pathFilter.value) fetchEvents() })
 
+const isSimulatingHit = ref(false)
+
+const simulateTestHit = async () => {
+    if (!healthModalSite.value) return
+    isSimulatingHit.value = true
+    try {
+        await axios.post(route('google-ads.simulate-connection'), {
+            pixel_site_id: healthModalSite.value.id
+        })
+        toast.success('Connection simulation hit dispatched!')
+    } catch (e) {
+        toast.error('Failed to simulate connection hit.')
+    } finally {
+        isSimulatingHit.value = false
+    }
+}
+
 const startLiveListener = () => {
     if (isListening.value) return
     isListening.value = true
@@ -911,6 +928,13 @@ const startLiveListener = () => {
     // Record precisely when the scan started so we can compare event timestamps
     // against this fixed point rather than recalculating "now - 10s" on every tick.
     const scanStartedAt = Date.now() - 5000 // 5s grace for in-flight events
+
+    // Automatically trigger a simulated connection hit after a short delay
+    setTimeout(() => {
+        if (isListening.value) {
+            simulateTestHit()
+        }
+    }, 1000)
 
     // Lightweight poller — hits the cheap pixelHeartbeat endpoint instead of the
     // full paginated events() endpoint. Interval increased to 5 s to halve
@@ -2241,9 +2265,9 @@ const openHealthModal = (site = null) => {
                             <div class="space-y-8">
                                 <div>
                                     <label class="text-[9px] font-black text-slate-400 uppercase tracking-widest block mb-1.5 ml-1">Traffic Domain Pinning</label>
-                                    <div class="relative group/pin">
-                                        <input v-model="allowedDomainInput" placeholder="e.g. site.com" class="w-full bg-white border-slate-200 rounded-2xl py-3.5 px-5 text-sm font-bold focus:ring-0 focus:border-indigo-500 shadow-sm" />
-                                        <button @click="saveAllowedDomain" class="absolute right-2 top-2 p-1.5 bg-slate-900 text-white rounded-lg text-[9px] font-black uppercase tracking-widest opacity-0 group-hover/pin:opacity-100 transition-opacity">Update</button>
+                                    <div class="relative flex items-center">
+                                        <input v-model="allowedDomainInput" placeholder="e.g. site.com" class="w-full bg-white border-slate-200 rounded-2xl py-3.5 pl-5 pr-24 text-sm font-bold focus:ring-0 focus:border-indigo-500 shadow-sm" />
+                                        <button @click="saveAllowedDomain" class="absolute right-2 px-3 py-2 bg-slate-900 hover:bg-slate-800 text-white rounded-xl text-[9px] font-black uppercase tracking-widest transition-colors">Update</button>
                                     </div>
                                     <p class="text-[9px] text-slate-400 font-medium mt-2 leading-relaxed italic">Signals from domains not matching this pattern will be rejected (403).</p>
                                 </div>
@@ -2273,7 +2297,7 @@ const openHealthModal = (site = null) => {
                                 </div>
                                 <div class="max-w-xs">
                                     <h4 class="text-xl font-black text-slate-900">Live Connection Test</h4>
-                                    <p class="text-sm text-slate-400 font-medium mt-2">Open your website in another tab once the listener is active to verify real-time tracking.</p>
+                                    <p class="text-sm text-slate-400 font-medium mt-2">Verify real-time tracking. Starting live verification will automatically simulate an incoming signal hit.</p>
                                 </div>
                                 <button @click="startLiveListener" class="px-8 py-4 bg-indigo-600 text-white rounded-2xl text-xs font-black uppercase tracking-widest shadow-xl shadow-indigo-100 hover:-translate-y-0.5 active:translate-y-0 transition-all">
                                     Start Live Verification
@@ -2293,8 +2317,14 @@ const openHealthModal = (site = null) => {
                                     <h4 class="text-2xl font-black text-slate-900">Listening for signals...</h4>
                                     <p class="text-sm text-indigo-500 font-bold uppercase tracking-widest animate-pulse">Waiting for hit from {{ healthModalSite.allowed_domain || 'any domain' }}</p>
                                 </div>
-                                <p class="text-[10px] text-slate-400 font-medium max-w-xs mt-4">Tip: Refresh your website or click a link to trigger a tracking event.</p>
-                                <button @click="isListening = false" class="text-[10px] font-black text-slate-400 uppercase tracking-widest hover:text-slate-600">Cancel Test</button>
+                                <p class="text-[10px] text-slate-400 font-medium max-w-xs mt-4">Simulated hit dispatched automatically. Click below to fire another simulated hit manually if needed.</p>
+                                
+                                <div class="flex items-center justify-center gap-4 mt-2">
+                                    <button @click="simulateTestHit" :disabled="isSimulatingHit" class="px-5 py-2.5 bg-slate-900 hover:bg-slate-800 text-white rounded-xl text-[10px] font-black uppercase tracking-widest shadow-md transition-all active:scale-95 disabled:opacity-50">
+                                        {{ isSimulatingHit ? 'Simulating...' : 'Simulate Test Hit' }}
+                                    </button>
+                                    <button @click="isListening = false" class="px-5 py-2.5 text-[10px] font-black text-slate-400 uppercase tracking-widest hover:text-slate-600 transition-colors">Cancel Test</button>
+                                </div>
                             </div>
 
                             <!-- Success State -->
@@ -2324,7 +2354,13 @@ const openHealthModal = (site = null) => {
                                     </div>
                                 </div>
 
-                                <button @click="lastHeardSignal = null; startLiveListener()" class="mt-8 text-[11px] font-black text-indigo-600 uppercase tracking-widest hover:underline">Run Another Test</button>
+                                <div class="flex items-center justify-center gap-6 mt-8">
+                                    <button @click="lastHeardSignal = null; startLiveListener()" class="text-[11px] font-black text-indigo-600 uppercase tracking-widest hover:underline">Restart Connection / Re-Scan</button>
+                                    <span class="text-slate-300">|</span>
+                                    <button @click="simulateTestHit" :disabled="isSimulatingHit" class="text-[11px] font-black text-slate-700 hover:text-slate-900 uppercase tracking-widest disabled:opacity-50">
+                                        {{ isSimulatingHit ? 'Simulating...' : 'Simulate Another Hit' }}
+                                    </button>
+                                </div>
                             </div>
                         </div>
                     </div>

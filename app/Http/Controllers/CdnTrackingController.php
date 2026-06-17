@@ -1352,4 +1352,53 @@ class CdnTrackingController extends Controller
         $normalized = ($parsed['host'] ?? '') . ($parsed['path'] ?? '');
         return strtolower(rtrim($normalized, '/'));
     }
+
+    /**
+     * Simulate an incoming tracking connection (pixel hit) from the dashboard UI.
+     * This bypasses the browser/network layers and places a simulated hit directly into the ingestion queue.
+     * It respects domain pinning by utilizing the site's allowed_domain as the Origin/page_url.
+     */
+    public function simulateConnection(Request $request)
+    {
+        $organization = $request->user()?->currentOrganization();
+        if (!$organization) {
+            return response()->json(['error' => 'Organization not found'], 404);
+        }
+
+        $request->validate([
+            'pixel_site_id' => 'required|integer',
+        ]);
+
+        $pixelSite = $organization->pixelSites()->findOrFail($request->pixel_site_id);
+
+        $testDomain = $pixelSite->allowed_domain ? preg_replace('/^www\./', '', $pixelSite->allowed_domain) : 'test-diagnostic.metapilot.internal';
+        $testUrl = "https://{$testDomain}/test-simulation";
+
+        $payload = [
+            'token'        => $pixelSite->ads_site_token,
+            'page_view_id' => 'sim-' . uniqid(),
+            'page_url'     => $testUrl,
+            '_ts'          => time(),
+            '_sig'         => 'nosig',
+        ];
+
+        $headers = [
+            'cf-ipcountry' => 'KE',
+            'origin'       => "https://{$testDomain}",
+            'referer'      => "https://{$testDomain}/",
+        ];
+
+        \App\Jobs\ProcessCdnHitJob::dispatch(
+            $payload,
+            $headers,
+            '127.0.0.1',
+            'Mozilla/5.0 (MetaPilot Connection Simulator)'
+        )->onQueue('cdn-ingestion');
+
+        return response()->json([
+            'ok'      => true,
+            'message' => 'Simulated hit dispatched to ingestion queue.',
+            'payload' => $payload,
+        ]);
+    }
 }
