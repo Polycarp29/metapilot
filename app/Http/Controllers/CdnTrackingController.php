@@ -114,9 +114,9 @@ class CdnTrackingController extends Controller
 
         // ── Domain Pinning Verification ──────────────────────────────────────
         if ($pixelSite->allowed_domain) {
-            $origin     = strtolower(parse_url($request->header('Origin', ''), PHP_URL_HOST) ?? '');
-            $referer    = strtolower(parse_url($request->header('Referer', ''), PHP_URL_HOST) ?? '');
-            $allowed    = strtolower($pixelSite->allowed_domain);
+            $origin   = strtolower(parse_url($request->header('Origin', ''), PHP_URL_HOST) ?? '');
+            $referer  = strtolower(parse_url($request->header('Referer', ''), PHP_URL_HOST) ?? '');
+            $allowed  = strtolower($pixelSite->allowed_domain);
             $normalise  = fn($h) => preg_replace('/^www\./', '', $h);
             $cleanAllowed = $normalise($allowed);
 
@@ -126,8 +126,19 @@ class CdnTrackingController extends Controller
                 return $host === $cleanAllowed || str_ends_with($host, '.' . $cleanAllowed);
             };
 
-            if (!$checkDomain($origin) && !$checkDomain($referer)) {
-                return response()->json(['error' => 'Domain not authorised'], 403)->withHeaders($this->corsHeaders());
+            $headerMatch = $checkDomain($origin) || $checkDomain($referer);
+
+            if (!$headerMatch) {
+                // Fallback: when sendBeacon or a strict Referer-Policy strips headers,
+                // the tracker always embeds page_url = window.location.href in the body.
+                // Use that as a secondary structural check — the HMAC is the real gate.
+                $bodyPageUrl = $request->input('page_url', '');
+                $bodyHost    = strtolower(parse_url($bodyPageUrl, PHP_URL_HOST) ?? '');
+                $bodyMatch   = $checkDomain($bodyHost);
+
+                if (!$bodyMatch) {
+                    return response()->json(['error' => 'Domain not authorised'], 403)->withHeaders($this->corsHeaders());
+                }
             }
         }
 
@@ -1375,11 +1386,12 @@ class CdnTrackingController extends Controller
         $testUrl = "https://{$testDomain}/test-simulation";
 
         $payload = [
-            'token'        => $pixelSite->ads_site_token,
-            'page_view_id' => 'sim-' . uniqid(),
-            'page_url'     => $testUrl,
-            '_ts'          => time(),
-            '_sig'         => 'nosig',
+            'token'         => $pixelSite->ads_site_token,
+            'page_view_id'  => 'sim-' . uniqid(),
+            'page_url'      => $testUrl,
+            '_ts'           => time(),
+            '_sig'          => 'nosig',
+            'is_simulation' => true,  // prevents pixel_verified_at being set by the job
         ];
 
         $headers = [

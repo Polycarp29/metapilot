@@ -78,10 +78,13 @@ class ProcessCdnHitJob implements ShouldQueue
                        Cache::get("geoip_country_{$this->ip}");
         $city = Cache::get("geoip_city_{$this->ip}");
 
+        $isSimulation = !empty($this->payload['is_simulation']);
+
         $meta = $this->payload['metadata'] ?? [];
         if (!is_array($meta)) $meta = [];
         $meta = array_map(fn($v) => is_string($v) ? mb_substr($v, 0, 500) : $v, $meta);
         if (isset($this->payload['is_engaged'])) $meta['is_engaged'] = (bool) $this->payload['is_engaged'];
+        if ($isSimulation) $meta['_simulated'] = true;
 
         $pageUrl = $this->sanitizePageUrl($this->payload['page_url'] ?? null);
         $urlHash = $pageUrl ? hash('sha256', $this->normalizeUrlForHash($pageUrl)) : null;
@@ -117,7 +120,9 @@ class ProcessCdnHitJob implements ShouldQueue
 
         $this->processModules($pixelSite, $this->payload, $urlHash, $meta);
 
-        if (!$pixelSite->pixel_verified_at) {
+        // Only mark the site as verified when a real browser hit arrives,
+        // not when a dashboard-triggered simulation fires.
+        if (!$isSimulation && !$pixelSite->pixel_verified_at) {
             $pixelSite->update(['pixel_verified_at' => now()]);
         }
 
