@@ -222,6 +222,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
         // Manual Diagnostic Actions
         Route::post('/generate-schema', [\App\Http\Controllers\CdnTrackingController::class, 'generateSchemaForUrl'])->name('generate-schema');
         Route::get('/page-source', [\App\Http\Controllers\CdnTrackingController::class, 'getPageSource'])->name('page-source');
+        Route::post('/simulate-connection', [\App\Http\Controllers\CdnTrackingController::class, 'simulateConnection'])->name('simulate-connection');
 
         // Multi-Site Pixel Management
         // Extra action routes MUST be declared before apiResource so that
