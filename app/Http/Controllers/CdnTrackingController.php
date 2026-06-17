@@ -57,9 +57,14 @@ class CdnTrackingController extends Controller
                 ->withHeaders($this->corsHeaders());
         }
 
-        return response()->file($path, array_merge([
+        $content = File::get($path);
+        // Replace dynamic variables with the server's correct absolute root URL
+        $serverUrl = rtrim(config('app.url', url('/')), '/');
+        $content   = str_replace('__METAPILOT_SERVER_URL__', $serverUrl, $content);
+
+        return response($content, 200, array_merge([
             'Content-Type'  => 'application/javascript',
-            'Cache-Control' => 'public, max-age=86400', // 24h cache (shorter so updates propagate)
+            'Cache-Control' => 'public, max-age=3600', // 1h cache (allows quick updates to propagate)
         ], $this->corsHeaders()));
     }
 

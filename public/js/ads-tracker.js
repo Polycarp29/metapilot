@@ -15,7 +15,12 @@
     if (window.__metapilot_loaded) return;
     window.__metapilot_loaded = true;
 
-    const script = document.currentScript;
+    let script = document.currentScript;
+    if (!script) {
+        // Fallback for async/defer or dynamic script loaders (like GTM)
+        script = document.querySelector('script[src*="ads-tracker.js"]');
+    }
+
     const siteToken = script ? script.getAttribute('data-token') : null;
     const campaignId = script ? script.getAttribute('data-campaign') : null;
     const requestedModules = script ? (script.getAttribute('data-modules') || 'click').split(',') : ['click'];
@@ -25,8 +30,12 @@
         return;
     }
 
-    // Derive the server base URL from where this script was loaded from.
-    const serverBase = script.src ? script.src.split('/cdn/')[0] : window.location.origin;
+    // Dynamic Server URL injected at serve-time, fallback to script source or origin
+    const injectedServerUrl = '__METAPILOT_SERVER_URL__';
+    const serverBase = (injectedServerUrl.indexOf('__METAPILOT_SERVER_') === -1) 
+        ? injectedServerUrl 
+        : (script && script.src ? script.src.split('/cdn/')[0] : window.location.origin);
+
     const hitEndpoint = serverBase + '/cdn/ad-hit';
     const verifyEndpoint = serverBase + '/cdn/verify-connection';
     const errorEndpoint = serverBase + '/cdn/error';
