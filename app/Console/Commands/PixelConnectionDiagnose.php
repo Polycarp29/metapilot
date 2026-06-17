@@ -190,12 +190,19 @@ class PixelConnectionDiagnose extends Command
                 // Step A: Verify connection handshake
                 $challenge = bin2hex(random_bytes(8));
                 $verifyUrl = url('/cdn/verify-connection');
+
+                // Determine appropriate test origin/referer based on the site's allowed_domain
+                $testDomain = $site->allowed_domain ? preg_replace('/^www\./', '', $site->allowed_domain) : 'test-diagnostic.metapilot.internal';
+                $testOrigin = "https://{$testDomain}";
+                $testReferer = "https://{$testDomain}/";
+
                 $this->line("  → Calling: GET {$verifyUrl}?token=...&challenge={$challenge}");
+                $this->line("  → Simulated Origin: {$testOrigin}");
 
                 try {
                     $res = Http::withHeaders([
-                        'Origin'  => 'https://test-diagnostic.metapilot.internal',
-                        'Referer' => 'https://test-diagnostic.metapilot.internal/',
+                        'Origin'  => $testOrigin,
+                        'Referer' => $testReferer,
                     ])->get($verifyUrl, [
                         'token'     => $site->ads_site_token,
                         'challenge' => $challenge,
@@ -224,13 +231,13 @@ class PixelConnectionDiagnose extends Command
                 try {
                     $res = Http::withHeaders([
                         'Content-Type' => 'application/json',
-                        'Origin'       => 'https://test-diagnostic.metapilot.internal',
-                        'Referer'      => 'https://test-diagnostic.metapilot.internal/test',
+                        'Origin'       => $testOrigin,
+                        'Referer'      => "{$testReferer}test",
                         'User-Agent'   => 'Mozilla/5.0 (MetaPilot Diagnostic Tool)',
                     ])->post($hitUrl, [
                         'token'        => $site->ads_site_token,
                         'page_view_id' => $pageViewId,
-                        'page_url'     => 'https://test-diagnostic.metapilot.internal/test',
+                        'page_url'     => "{$testReferer}test",
                         '_ts'          => $ts,
                         '_sig'         => 'nosig',
                     ]);
