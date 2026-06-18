@@ -78,6 +78,21 @@ class ProcessCdnHitJob implements ShouldQueue
                        Cache::get("geoip_country_{$this->ip}");
         $city = Cache::get("geoip_city_{$this->ip}");
 
+        // ── GeoIP fallback: resolve via ip-api.com when CDN headers are absent ──
+        // ip-api.com is free for <45 req/min, no API key needed.
+        // Results are cached 24 h so each unique IP is only looked up once.
+        if (!$countryCode && $this->isRoutableIp($this->ip)) {
+            $geo = $this->resolveGeoIp($this->ip);
+            if (!empty($geo['country'])) {
+                $countryCode = $geo['country'];
+                $city        = $geo['city'] ?? null;
+                Cache::put("geoip_country_{$this->ip}", $countryCode, 86400);
+                if ($city) {
+                    Cache::put("geoip_city_{$this->ip}", $city, 86400);
+                }
+            }
+        }
+
         $isSimulation = !empty($this->payload['is_simulation']);
 
         $meta = $this->payload['metadata'] ?? [];
@@ -254,5 +269,42 @@ class ProcessCdnHitJob implements ShouldQueue
         $parsed = parse_url($url);
         $normalized = ($parsed['host'] ?? '') . ($parsed['path'] ?? '');
         return strtolower(rtrim($normalized, '/'));
+    }
+
+    /**
+     * Check if IP is a routable (non-private, non-loopback) address
+     * worth sending to a GeoIP service.
+     */
+    protected function isRoutableIp(string $ip): bool
+    {
+        if (empty($ip) || $ip === '127.0.0.1' || $ip === '::1') return false;
+        // filter_var returns false for private/reserved ranges
+        return (bool) filter_var($ip, FILTER_VALIDATE_IP,
+            FILTER_FLAG_NO_PRIV_RANGE | FILTER_FLAG_NO_RES_RANGE);
+    }
+
+    /**
+     * Resolve country code and city from ip-api.com.
+     * Free tier: up to 45 requests/minute, no key required.
+     * Returns ['country' => 'KE', 'city' => 'Nairobi'] or [].
+     */
+    protected function resolveGeoIp(string $ip): array
+    {
+        try {
+            $response = \Illuminate\Support\Facades\Http::timeout(3)
+                ->get("http://ip-api.com/json/{$ip}", [
+                    'fields' => 'status,countryCode,city',
+                ]);
+
+            if ($response->successful() && $response->json('status') === 'success') {
+                return [
+                    'country' => $response->json('countryCode'),
+                    'city'    => $response->json('city'),
+                ];
+            }
+        } catch (\Throwable) {
+            // GeoIP failure must never crash the tracking pipeline
+        }
+        return [];
     }
 }
