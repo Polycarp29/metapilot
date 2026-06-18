@@ -167,7 +167,7 @@ class CdnTrackingTest extends TestCase
             'ads_site_token' => (string) \Illuminate\Support\Str::uuid()
         ]);
         
-        $this->actingAs($user);
+        $this->actingAs($user)->withoutMiddleware(\App\Http\Middleware\VerifyCsrfToken::class);
 
         // Mock Http for the internal generateSchemaForPage logic which might call OpenAI or Scraper
         \Illuminate\Support\Facades\Http::fake([
@@ -197,6 +197,7 @@ class CdnTrackingTest extends TestCase
         ]);
 
         if ($response->status() !== 202) {
+            dump("Generate schema response status: " . $response->status());
             dump($response->json());
         }
 

@@ -67,8 +67,14 @@ class PrefetchCdnAnalyticsJob implements ShouldQueue
                 pagesPerPage: 10
             );
 
+            // Campaign attribution is pure SQL — Python doesn't process it.
+            // Extract before sending to Python, then re-merge after.
+            $campaignAttribution = $payload['campaign_attribution'] ?? [];
+            unset($payload['campaign_attribution']);
+
             // ── Call Python analytics engine ──────────────────────────────────
             $result = $engine->analyze($payload);
+            $result['campaign_attribution'] = $campaignAttribution;
 
             // ── Store in Redis with a 65-min TTL ─────────────────────────────
             // 65 minutes > 10-minute re-schedule interval, so the cache is

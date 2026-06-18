@@ -209,6 +209,64 @@ class CdnAnalyticsService
             ->select(['query', 'intent'])
             ->get()->toArray();
 
+        // 10. Campaign Attribution ─────────────────────────────────────────────
+        // Aggregated in PHP/SQL — Python engine does not process these, so the
+        // controller extracts and re-merges them around the analyze() call.
+
+        // 10a. Per-campaign breakdown (utm_campaign as primary key)
+        $campaignStats = \App\Models\AdTrackEvent::where('organization_id', $orgId)
+            ->when($pixelSiteId, fn($q, $id) => $q->where('pixel_site_id', $id))
+            ->where('created_at', '>=', $thirtyDaysAgo)
+            ->whereNotNull('utm_campaign')
+            ->selectRaw("
+                utm_campaign        AS campaign,
+                utm_source          AS source,
+                utm_medium          AS medium,
+                COUNT(*)            AS hits,
+                SUM(CASE WHEN gclid IS NOT NULL THEN 1 ELSE 0 END) AS gclid_hits,
+                ROUND(AVG(duration_seconds), 1)                    AS avg_dwell,
+                ROUND(AVG(click_count), 2)                         AS avg_clicks,
+                SUM(CASE WHEN (gclid IS NOT NULL OR google_campaign_id IS NOT NULL) THEN 1 ELSE 0 END) AS ad_hits
+            ")
+            ->groupBy('utm_campaign', 'utm_source', 'utm_medium')
+            ->orderByDesc('hits')
+            ->limit(20)
+            ->get()->toArray();
+
+        // 10b. Source / Medium breakdown (for all tracked traffic)
+        $sourceBreakdown = \App\Models\AdTrackEvent::where('organization_id', $orgId)
+            ->when($pixelSiteId, fn($q, $id) => $q->where('pixel_site_id', $id))
+            ->where('created_at', '>=', $thirtyDaysAgo)
+            ->whereNotNull('utm_source')
+            ->selectRaw("
+                utm_source AS source,
+                utm_medium AS medium,
+                COUNT(*) AS hits,
+                SUM(CASE WHEN gclid IS NOT NULL THEN 1 ELSE 0 END) AS gclid_hits
+            ")
+            ->groupBy('utm_source', 'utm_medium')
+            ->orderByDesc('hits')
+            ->limit(15)
+            ->get()->toArray();
+
+        // 10c. GCLID summary — confirmed Google Ads clicks (no utm_ required)
+        $gclidRow = \App\Models\AdTrackEvent::where('organization_id', $orgId)
+            ->when($pixelSiteId, fn($q, $id) => $q->where('pixel_site_id', $id))
+            ->where('created_at', '>=', $thirtyDaysAgo)
+            ->whereNotNull('gclid')
+            ->selectRaw("
+                COUNT(*)                    AS total_gclid_hits,
+                COUNT(DISTINCT gclid)       AS unique_gclids,
+                COUNT(DISTINCT session_id)  AS unique_sessions,
+                ROUND(AVG(duration_seconds), 1) AS avg_dwell,
+                ROUND(AVG(click_count), 2)      AS avg_clicks
+            ")
+            ->first();
+
+        $gclidSummary = $gclidRow
+            ? array_map(fn($v) => $v ?? 0, (array) $gclidRow->toArray())
+            : null;
+
         return [
             'org_id'         => $orgId,
             'site_id'        => $pixelSiteId,
@@ -221,6 +279,12 @@ class CdnAnalyticsService
             'referrers'      => $referrers,
             'errors'         => $errors,
             'keywords'       => $keywords,
+            // Campaign attribution is extracted by the controller BEFORE going to Python
+            'campaign_attribution' => [
+                'campaigns'    => $campaignStats,
+                'by_source'    => $sourceBreakdown,
+                'gclid_summary' => $gclidSummary,
+            ],
             'meta'           => [
                 'today'          => now()->format('Y-m-d'),
                 'yesterday'      => now()->subDay()->format('Y-m-d'),
@@ -243,7 +307,7 @@ class CdnAnalyticsService
         int  $page        = 1,
         int  $perPage     = 10
     ): string {
-        return "cdn_analytics_v4_{$orgId}_site_" . ($siteId ?? 'all') . '_' .
+        return "cdn_analytics_v5_{$orgId}_site_" . ($siteId ?? 'all') . '_' .
                ($excludeBots ? 'nobots' : 'all') . "_p{$page}_pp{$perPage}";
     }
 

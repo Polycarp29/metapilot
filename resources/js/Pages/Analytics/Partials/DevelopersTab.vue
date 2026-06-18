@@ -433,6 +433,17 @@ const rising     = computed(() => analyticsData.value?.trend_velocity?.rising  ?
 const falling    = computed(() => analyticsData.value?.trend_velocity?.falling ?? [])
 const siteHealth = computed(() => analyticsData.value?.site_health ?? null)
 
+// ── Campaign Attribution (from campaign_attribution key in analytics payload) ──
+const campaignAttribution = computed(() => analyticsData.value?.campaign_attribution ?? null)
+const topCampaigns   = computed(() => campaignAttribution.value?.campaigns    ?? [])
+const sourceBreakdown = computed(() => campaignAttribution.value?.by_source   ?? [])
+const gclidSummary   = computed(() => campaignAttribution.value?.gclid_summary ?? null)
+const hasCampaignData = computed(() =>
+    topCampaigns.value.length > 0 ||
+    sourceBreakdown.value.length > 0 ||
+    (gclidSummary.value?.total_gclid_hits ?? 0) > 0
+)
+
 // Session lead qualification
 const sessionIsLead = computed(() => {
     if (!selectedSession.value) return false
@@ -647,7 +658,7 @@ const fetchErrors = async () => {
     if (!selectedSiteId.value) return
     isLoadingErrors.value = true
     try {
-        const { data } = await axios.get(route('pixel-errors'), {
+        const { data } = await axios.get(route('google-ads.pixel-errors'), {
             params: {
                 ...errorFilters.value,
                 pixel_site_id: selectedSiteId.value
@@ -1196,6 +1207,131 @@ const openHealthModal = (site = null) => {
                     <p class="text-[11px] font-black uppercase tracking-widest text-slate-300">Computing history...</p>
                 </div>
                 <Bar v-if="analyticsData" :data="historyChartData" :options="historyChartOptions" />
+            </div>
+        </div>
+
+        <!-- ══ Campaign Attribution Intelligence ════════════════════════ -->
+        <div v-if="hasCampaignData" class="bg-white shadow-premium rounded-[3.5rem] border border-slate-100/50 overflow-hidden">
+            <!-- Header -->
+            <div class="px-12 pt-12 pb-8 flex items-center justify-between border-b border-slate-50">
+                <div>
+                    <h3 class="text-2xl font-black text-slate-900 tracking-tight flex items-center gap-4">
+                        Campaign Attribution
+                        <span class="px-3 py-1 bg-amber-50 text-amber-600 text-[9px] font-black rounded-full uppercase tracking-widest border border-amber-100">30 Days</span>
+                    </h3>
+                    <p class="text-slate-400 text-xs font-medium mt-1">UTM campaign tracking · Google Ads GCLID attribution · Source / medium breakdown</p>
+                </div>
+                <!-- GCLID hero stat -->
+                <div v-if="gclidSummary?.total_gclid_hits > 0"
+                    class="flex-shrink-0 flex flex-col items-center justify-center px-8 py-5 bg-gradient-to-br from-amber-400 to-orange-500 rounded-3xl text-white shadow-lg shadow-amber-200">
+                    <p class="text-[9px] font-black uppercase tracking-widest text-amber-100 mb-0.5">Google Ads Confirmed</p>
+                    <p class="text-3xl font-black tracking-tight leading-none">{{ gclidSummary.total_gclid_hits.toLocaleString() }}</p>
+                    <p class="text-[9px] font-bold text-amber-100 mt-1">{{ gclidSummary.unique_gclids }} unique GCLIDs · {{ gclidSummary.unique_sessions }} sessions</p>
+                </div>
+            </div>
+
+            <!-- GCLID engagement mini-cards -->
+            <div v-if="gclidSummary?.total_gclid_hits > 0" class="grid grid-cols-2 md:grid-cols-4 gap-4 px-12 pt-8">
+                <div class="p-5 bg-amber-50/50 rounded-2xl border border-amber-100/60">
+                    <p class="text-[9px] font-black text-amber-500 uppercase tracking-widest mb-1">Avg Dwell (Ads)</p>
+                    <p class="text-2xl font-black text-slate-900">{{ gclidSummary.avg_dwell }}<small class="text-sm font-bold text-slate-400 ml-1">s</small></p>
+                </div>
+                <div class="p-5 bg-amber-50/50 rounded-2xl border border-amber-100/60">
+                    <p class="text-[9px] font-black text-amber-500 uppercase tracking-widest mb-1">Avg Clicks (Ads)</p>
+                    <p class="text-2xl font-black text-slate-900">{{ gclidSummary.avg_clicks }}</p>
+                </div>
+                <div class="p-5 bg-indigo-50/50 rounded-2xl border border-indigo-100/60">
+                    <p class="text-[9px] font-black text-indigo-400 uppercase tracking-widest mb-1">Total Campaigns</p>
+                    <p class="text-2xl font-black text-slate-900">{{ topCampaigns.length }}</p>
+                </div>
+                <div class="p-5 bg-slate-50 rounded-2xl border border-slate-100">
+                    <p class="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1">Traffic Sources</p>
+                    <p class="text-2xl font-black text-slate-900">{{ sourceBreakdown.length }}</p>
+                </div>
+            </div>
+
+            <!-- Campaign table -->
+            <div v-if="topCampaigns.length > 0" class="px-12 pt-8 pb-4">
+                <h4 class="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-4">Campaign Performance</h4>
+                <div class="overflow-x-auto">
+                    <table class="w-full text-left min-w-[700px]">
+                        <thead>
+                            <tr class="bg-slate-50/60">
+                                <th class="py-4 px-6 text-[9px] font-black text-slate-400 uppercase tracking-widest rounded-l-2xl">Campaign</th>
+                                <th class="py-4 px-6 text-[9px] font-black text-slate-400 uppercase tracking-widest text-center">Source / Medium</th>
+                                <th class="py-4 px-6 text-[9px] font-black text-slate-400 uppercase tracking-widest text-center">Total Hits</th>
+                                <th class="py-4 px-6 text-[9px] font-black text-slate-400 uppercase tracking-widest text-center">GCLID Hits</th>
+                                <th class="py-4 px-6 text-[9px] font-black text-slate-400 uppercase tracking-widest text-center">Avg Dwell</th>
+                                <th class="py-4 px-6 text-[9px] font-black text-slate-400 uppercase tracking-widest text-center rounded-r-2xl">Avg Clicks</th>
+                            </tr>
+                        </thead>
+                        <tbody class="divide-y divide-slate-50">
+                            <tr v-for="(camp, idx) in topCampaigns" :key="camp.campaign"
+                                class="group hover:bg-slate-50/80 transition-all">
+                                <td class="py-5 px-6">
+                                    <div class="flex items-center gap-3">
+                                        <div class="w-7 h-7 rounded-xl flex items-center justify-center text-[10px] font-black text-white"
+                                            :class="idx === 0 ? 'bg-amber-500' : idx === 1 ? 'bg-indigo-500' : 'bg-slate-300'">
+                                            {{ idx + 1 }}
+                                        </div>
+                                        <div class="min-w-0">
+                                            <p class="text-[11px] font-black text-slate-900 truncate max-w-[180px]" :title="camp.campaign">{{ camp.campaign }}</p>
+                                        </div>
+                                    </div>
+                                </td>
+                                <td class="py-5 px-6 text-center">
+                                    <div class="inline-flex flex-col items-center gap-1">
+                                        <span v-if="camp.source" class="px-2 py-0.5 bg-indigo-50 text-indigo-600 rounded-md text-[9px] font-black border border-indigo-100">{{ camp.source }}</span>
+                                        <span v-if="camp.medium" class="px-2 py-0.5 bg-slate-100 text-slate-500 rounded-md text-[9px] font-black">{{ camp.medium }}</span>
+                                        <span v-if="!camp.source && !camp.medium" class="text-[9px] text-slate-300 italic">—</span>
+                                    </div>
+                                </td>
+                                <td class="py-5 px-6 text-center">
+                                    <span class="text-sm font-black text-slate-900">{{ camp.hits.toLocaleString() }}</span>
+                                </td>
+                                <td class="py-5 px-6 text-center">
+                                    <span v-if="camp.gclid_hits > 0"
+                                        class="inline-flex items-center gap-1.5 px-3 py-1 bg-amber-50 text-amber-700 rounded-lg text-[10px] font-black border border-amber-100">
+                                        <svg class="w-3 h-3" fill="currentColor" viewBox="0 0 24 24"><path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4"/><path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/><path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" fill="#FBBC05"/><path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335"/></svg>
+                                        {{ camp.gclid_hits.toLocaleString() }}
+                                    </span>
+                                    <span v-else class="text-[9px] text-slate-300 font-bold">—</span>
+                                </td>
+                                <td class="py-5 px-6 text-center">
+                                    <span class="text-[11px] font-black text-slate-700">{{ camp.avg_dwell }}s</span>
+                                </td>
+                                <td class="py-5 px-6 text-center">
+                                    <span class="text-[11px] font-black text-slate-700">{{ camp.avg_clicks }}</span>
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- Source / Medium chips -->
+            <div v-if="sourceBreakdown.length > 0" class="px-12 pt-6 pb-10 border-t border-slate-50 mt-4">
+                <h4 class="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-4">Traffic Sources</h4>
+                <div class="flex flex-wrap gap-3">
+                    <div v-for="src in sourceBreakdown" :key="src.source + src.medium"
+                        class="group flex items-center gap-3 px-4 py-2.5 bg-slate-50 hover:bg-indigo-50 rounded-2xl border border-slate-100 hover:border-indigo-200 transition-all cursor-default">
+                        <div class="flex flex-col">
+                            <span class="text-[10px] font-black text-slate-800">{{ src.source }}
+                                <span v-if="src.medium" class="text-slate-400 font-bold"> / {{ src.medium }}</span>
+                            </span>
+                        </div>
+                        <span class="px-2.5 py-1 bg-white text-indigo-600 rounded-lg text-[9px] font-black border border-indigo-100 shadow-sm">{{ src.hits.toLocaleString() }}</span>
+                        <span v-if="src.gclid_hits > 0"
+                            class="w-5 h-5 rounded-full bg-amber-400 flex items-center justify-center text-[8px] font-black text-white" title="Google Ads confirmed">
+                            G
+                        </span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Empty state -->
+            <div v-if="!topCampaigns.length && !sourceBreakdown.length" class="px-12 py-16 text-center">
+                <p class="text-slate-300 text-[11px] font-black uppercase tracking-widest italic">No campaign parameters detected yet — add UTM tags or enable Google Ads auto-tagging on your campaigns.</p>
             </div>
         </div>
 
