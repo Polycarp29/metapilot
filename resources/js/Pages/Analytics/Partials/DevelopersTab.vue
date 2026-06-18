@@ -278,11 +278,34 @@ const hitsChartData = computed(() => {
 })
 
 const topCountries = computed(() => {
-    if (analyticsData.value?.by_country) return analyticsData.value.by_country
+    // Must check .length — an empty array [] is truthy and would short-circuit
+    // to a blank list without ever trying the chartEvents fallback.
+    if (analyticsData.value?.by_country?.length) {
+        // Push 'Unknown' entries to the end so real countries appear first
+        const list = [...analyticsData.value.by_country]
+        list.sort((a, b) => {
+            if (a.code === 'Unknown') return 1
+            if (b.code === 'Unknown') return -1
+            return b.count - a.count
+        })
+        return list
+    }
+    // Fallback: build from raw event log when the pre-computed analytics
+    // response has no country data (e.g. first load before prefetch job runs)
     const c = {}
-    chartEvents.value.forEach(e => { if (e.country_code) c[e.country_code] = (c[e.country_code] || 0) + 1 })
-    return Object.entries(c).map(([code, count]) => ({ code, count }))
-        .sort((a, b) => b.count - a.count).slice(0, 8)
+    chartEvents.value.forEach(e => {
+        const code = e.country_code || 'Unknown'
+        c[code] = (c[code] || 0) + 1
+    })
+    if (!Object.keys(c).length) return []
+    return Object.entries(c)
+        .map(([code, count]) => ({ code, count }))
+        .sort((a, b) => {
+            if (a.code === 'Unknown') return 1
+            if (b.code === 'Unknown') return -1
+            return b.count - a.count
+        })
+        .slice(0, 8)
 })
 
 const deviceBreakdown = computed(() => {
@@ -1120,21 +1143,38 @@ const openHealthModal = (site = null) => {
                     </div>
                     
                     <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
-                        <div v-for="geo in topCountries" :key="geo.code" 
-                            class="p-4 bg-slate-50/50 rounded-2xl border border-slate-100/50 hover:bg-white hover:shadow-premium hover:border-indigo-100/50 transition-all group">
-                            <div class="flex items-center justify-between mb-3">
-                                <span class="text-2xl group-hover:scale-110 transition-transform">{{ getCountryFlag(geo.code) }}</span>
-                                <span class="text-[9px] font-black text-slate-400 uppercase tracking-widest">
-                                    {{ Math.round((geo.count / (analyticsData?.summary?.last30_hits || chartEvents.length || 1)) * 100) }}%
-                                </span>
+                        <template v-for="geo in topCountries" :key="geo.code">
+                            <!-- Known country card -->
+                            <div v-if="geo.code !== 'Unknown'"
+                                class="p-4 bg-slate-50/50 rounded-2xl border border-slate-100/50 hover:bg-white hover:shadow-premium hover:border-indigo-100/50 transition-all group">
+                                <div class="flex items-center justify-between mb-3">
+                                    <span class="text-2xl group-hover:scale-110 transition-transform">{{ getCountryFlag(geo.code) }}</span>
+                                    <span class="text-[9px] font-black text-slate-400 uppercase tracking-widest">
+                                        {{ Math.round((geo.count / (analyticsData?.summary?.last30_hits || chartEvents.length || 1)) * 100) }}%
+                                    </span>
+                                </div>
+                                <p class="text-[10px] font-black text-slate-900 leading-tight line-clamp-2 h-7" :title="getCountryName(geo.code)">{{ getCountryName(geo.code) }}</p>
+                                <p class="text-[9px] font-black text-indigo-500 uppercase mt-0.5">{{ geo.count.toLocaleString() }} <span class="text-slate-400">Signals</span></p>
                             </div>
-                            <p class="text-[10px] font-black text-slate-900 leading-tight line-clamp-2 h-7" :title="getCountryName(geo.code)">{{ getCountryName(geo.code) }}</p>
-                            <p class="text-[9px] font-black text-indigo-500 uppercase mt-0.5">{{ geo.count.toLocaleString() }} <span class="text-slate-400">Signals</span></p>
-                        </div>
+                            <!-- Unknown / unresolved country card (dimmed style) -->
+                            <div v-else
+                                class="p-4 bg-slate-50/30 rounded-2xl border border-dashed border-slate-200 opacity-60 group"
+                                title="Visitors whose country could not be resolved — typically direct IPs not yet looked up by GeoIP">
+                                <div class="flex items-center justify-between mb-3">
+                                    <span class="text-2xl">🌍</span>
+                                    <span class="text-[9px] font-black text-slate-300 uppercase tracking-widest">
+                                        {{ Math.round((geo.count / (analyticsData?.summary?.last30_hits || chartEvents.length || 1)) * 100) }}%
+                                    </span>
+                                </div>
+                                <p class="text-[10px] font-black text-slate-400 leading-tight h-7">Unresolved</p>
+                                <p class="text-[9px] font-black text-slate-400 uppercase mt-0.5">{{ geo.count.toLocaleString() }} <span class="text-slate-300">Signals</span></p>
+                            </div>
+                        </template>
                         <div v-if="topCountries.length === 0" class="col-span-full py-12 text-center text-slate-300 italic text-[11px] border-2 border-dashed border-slate-100 rounded-2xl">
                             Intelligence gathering in progress...
                         </div>
                     </div>
+
                 </div>
 
                 <!-- Device Breakdown (Doughnut) -->
