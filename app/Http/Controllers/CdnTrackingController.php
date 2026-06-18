@@ -664,10 +664,17 @@ class CdnTrackingController extends Controller
                     $pagesPerPage
                 );
 
+                // Campaign attribution is pure SQL — Python doesn't process it.
+                // Extract before sending to Python, then re-merge after.
+                $campaignAttribution = $payload['campaign_attribution'] ?? [];
+                unset($payload['campaign_attribution']);
+
                 // Inject dynamic normalization flag
                 $payload['meta']['normalize_ids'] = $normalizeIds;
 
-                return $engine->analyze($payload);
+                $result = $engine->analyze($payload);
+                $result['campaign_attribution'] = $campaignAttribution;
+                return $result;
             });
 
             return response()->json($result);
