@@ -762,7 +762,7 @@ const updateSnippet = () => {
     const base = window.location.origin
     const camp = selectedCampaignId.value ? ` data-campaign="${selectedCampaignId.value}"` : ''
     const mods = selectedModules.value.length ? ` data-modules="${selectedModules.value.join(',')}"` : ''
-    snippet.value = `<script src="${base}/cdn/ads-tracker.js" data-token="${selectedSite.value.ads_site_token}"${camp}${mods} async><\/script>`
+    snippet.value = `<script src="${base}/cdn/ads-tracker" data-token="${selectedSite.value.ads_site_token}"${camp}${mods} async><\/script>`
 }
 
 const regenerateToken = async () => {

@@ -268,6 +268,7 @@ Route::prefix('cdn')->name('cdn.')->middleware([
     'throttle:60,1',
     \App\Http\Middleware\BotProtectionMiddleware::class
 ])->group(function () {
+    Route::get('/ads-tracker', [\App\Http\Controllers\CdnTrackingController::class, 'serveScript'])->name('serve-script-no-ext');
     Route::get('/ads-tracker.js', [\App\Http\Controllers\CdnTrackingController::class, 'serveScript'])->name('serve-script');
     Route::post('/ad-hit', [\App\Http\Controllers\CdnTrackingController::class, 'trackHit'])->name('track-hit');
     Route::get('/verify-connection', [\App\Http\Controllers\CdnTrackingController::class, 'verifyConnection'])->name('verify-connection');

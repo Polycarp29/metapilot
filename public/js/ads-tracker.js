@@ -18,7 +18,7 @@
     let script = document.currentScript;
     if (!script) {
         // Fallback for async/defer or dynamic script loaders (like GTM)
-        script = document.querySelector('script[src*="ads-tracker.js"]');
+        script = document.querySelector('script[src*="ads-tracker"]');
     }
 
     const siteToken = script ? script.getAttribute('data-token') : null;
